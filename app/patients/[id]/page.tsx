@@ -44,7 +44,7 @@ export default function PatientDetailPage({ params }: Props) {
   }, [params])
 
   useEffect(() => {
-    if (!patientId || !user?.uid) return
+    if (!patientId || !user?.uid || !db) return
 
     setLoading(true)
     const unsubscribers: (() => void)[] = []

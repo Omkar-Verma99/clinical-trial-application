@@ -115,7 +115,7 @@ export default function DashboardPage() {
   }, [user, loading, router])
 
   useEffect(() => {
-    if (!user) return
+    if (!user || !db) return
 
     // Set up real-time listener for patients with optimized query
     const q = query(

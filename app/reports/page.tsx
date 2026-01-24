@@ -25,7 +25,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     const fetchReportData = async () => {
-      if (!user) return
+      if (!user || !db) return
 
       try {
         // Fetch all patients for this doctor

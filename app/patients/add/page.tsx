@@ -134,7 +134,14 @@ export default function AddPatientPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!user) return
+    if (!user || !db) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "Firebase is not initialized. Please refresh the page.",
+      })
+      return
+    }
 
     // Check network connectivity
     if (!isOnline) {
