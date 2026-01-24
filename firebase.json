@@ -5,5 +5,13 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "apphosting": {
+    "backends": [
+      {
+        "codebase": "default",
+        "name": "app"
+      }
+    ]
   }
 }

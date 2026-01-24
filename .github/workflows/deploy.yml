@@ -33,9 +33,6 @@ jobs:
         run: pnpm build
 
       - name: Deploy to Firebase App Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-          projectId: 'kollectcare-rwe-study'
-          channelId: live
+        run: firebase deploy --only apphosting
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
