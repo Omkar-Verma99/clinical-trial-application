@@ -3,10 +3,26 @@
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
   },
-  "apphosting": [
-    {
-      "codebase": "default",
-      "backendId": "app"
-    }
-  ]
+  "apphosting": {
+    "backends": [
+      {
+        "codebase": "default",
+        "backendId": "app",
+        "ignore": [
+          "node_modules",
+          ".next",
+          ".git",
+          ".gitignore",
+          "*.log",
+          ".DS_Store",
+          ".env.local",
+          ".vercel",
+          ".venv",
+          ".vscode",
+          ".zencoder",
+          ".zenflow"
+        ]
+      }
+    ]
+  }
 }
