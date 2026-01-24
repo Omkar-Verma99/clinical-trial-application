@@ -11,7 +11,7 @@ let db: any = null
 // Firebase initialization - only runs in browser
 if (typeof window !== "undefined") {
   // Firebase configuration - loaded from environment variables at build time
-  // These values are compiled into the bundle, not stored as plain text in source
+  // GitHub Actions injects these from GitHub Secrets
   const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
