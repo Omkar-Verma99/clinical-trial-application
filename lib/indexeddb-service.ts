@@ -462,13 +462,15 @@ class IndexedDBService {
         formRequest.onsuccess = () => {
           stats.totalForms = formRequest.result
 
-          // Use getAllKeys with a range for boolean index queries
-          const draftRequest = formStore.index('isDraft').getAll(true)
+          // Query drafts using proper IDBKeyRange - only booleans need conversion
+          const draftRange = IDBKeyRange.only(true as unknown as IDBValidKey)
+          const draftRequest = formStore.index('isDraft').getAll(draftRange)
           draftRequest.onsuccess = () => {
             stats.drafts = (draftRequest.result as StoredFormData[]).length
 
-            // Use getAllKeys with a range for string index queries
-            const syncRequest = syncStore.index('status').getAll('pending')
+            // Query pending items using proper IDBKeyRange
+            const pendingRange = IDBKeyRange.only('pending' as unknown as IDBValidKey)
+            const syncRequest = syncStore.index('status').getAll(pendingRange)
             syncRequest.onsuccess = () => {
               stats.pendingSync = (syncRequest.result as SyncQueueItem[]).length
               resolve(stats)
