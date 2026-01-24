@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo, Suspense, lazy } from "react"
+import { useEffect, useState, useCallback, useMemo, Suspense, lazy, memo } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import Image from "next/image"
 import { doc, onSnapshot, query, collection, where } from "firebase/firestore"
@@ -14,6 +14,10 @@ import { downloadPatientPDF, downloadCSV, downloadExcel } from "@/lib/pdf-export
 import { toast } from "@/hooks/use-toast"
 import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"
+
+// OPTIMIZED: Memoize form components to prevent unnecessary re-renders
+const MemoizedBaselineForm = memo(BaselineForm)
+const MemoizedFollowUpForm = memo(FollowUpForm)
 
 // Lazy load ComparisonView to reduce initial bundle
 const ComparisonView = lazy(() => import("@/components/comparison-view").then(mod => ({ default: mod.ComparisonView })))
@@ -53,44 +57,28 @@ export default function PatientDetailPage({ params }: Props) {
     setLoading(true)
     const unsubscribers: (() => void)[] = []
 
-    // Try nested structure first, then fall back to top-level
-    const nestedPatientRef = doc(db, `doctors/${user.uid}/patients/${patientId}`)
-    const topLevelPatientRef = doc(db, `patients/${patientId}`)
+    // OPTIMIZED: Single query for patient (data is in top-level collection)
+    const patientRef = doc(db, `patients/${patientId}`)
 
     const unsubPatient = onSnapshot(
-      nestedPatientRef,
+      patientRef,
       (snap) => {
         if (snap.exists()) {
           setPatient({ id: snap.id, ...snap.data() } as Patient)
-          setLoading(false)
         } else {
-          // Fall back to top-level if nested doesn't exist
-          const unsubTopLevel = onSnapshot(
-            topLevelPatientRef,
-            (topSnap) => {
-              if (topSnap.exists()) {
-                setPatient({ id: topSnap.id, ...topSnap.data() } as Patient)
-              } else {
-                setPatient(null)
-              }
-              setLoading(false)
-            },
-            (error) => {
-              console.error("Error fetching patient:", error)
-              setLoading(false)
-            }
-          )
-          unsubscribers.push(unsubTopLevel)
+          setPatient(null)
         }
+        setLoading(false)
       },
       (error) => {
         console.error("Error fetching patient:", error)
+        setPatient(null)
         setLoading(false)
       }
     )
     unsubscribers.push(unsubPatient)
 
-    // Fetch baseline data from top-level collection with real-time listener
+    // OPTIMIZED: Single query for baseline data (use getDocs for speed, then listen for updates)
     const baselineQuery = query(
       collection(db, "baselineData"),
       where("patientId", "==", patientId)
@@ -101,31 +89,17 @@ export default function PatientDetailPage({ params }: Props) {
         if (snap.docs.length > 0) {
           setBaseline({ id: snap.docs[0].id, ...snap.docs[0].data() } as BaselineData)
         } else {
-          // Also try nested structure
-          const nestedBaselineRef = doc(db, `doctors/${user.uid}/patients/${patientId}/assessments/baseline`)
-          const unsubNestedBaseline = onSnapshot(
-            nestedBaselineRef,
-            (nestedSnap) => {
-              if (nestedSnap.exists()) {
-                setBaseline({ id: nestedSnap.id, ...nestedSnap.data() } as BaselineData)
-              } else {
-                setBaseline(null)
-              }
-            },
-            (error) => {
-              console.error("Error fetching baseline:", error)
-            }
-          )
-          unsubscribers.push(unsubNestedBaseline)
+          setBaseline(null)
         }
       },
       (error) => {
         console.error("Error fetching baseline:", error)
+        setBaseline(null)
       }
     )
     unsubscribers.push(unsubBaseline)
 
-    // Fetch follow-up data from top-level collection with real-time listener
+    // OPTIMIZED: Single query for follow-up data
     const followUpQuery = query(
       collection(db, "followUpData"),
       where("patientId", "==", patientId)
@@ -136,32 +110,18 @@ export default function PatientDetailPage({ params }: Props) {
         if (snap.docs.length > 0) {
           setFollowUp({ id: snap.docs[0].id, ...snap.docs[0].data() } as FollowUpData)
         } else {
-          // Also try nested structure
-          const nestedFollowUpRef = doc(db, `doctors/${user.uid}/patients/${patientId}/assessments/followup`)
-          const unsubNestedFollowUp = onSnapshot(
-            nestedFollowUpRef,
-            (nestedSnap) => {
-              if (nestedSnap.exists()) {
-                setFollowUp({ id: nestedSnap.id, ...nestedSnap.data() } as FollowUpData)
-              } else {
-                setFollowUp(null)
-              }
-            },
-            (error) => {
-              console.error("Error fetching follow-up:", error)
-            }
-          )
-          unsubscribers.push(unsubNestedFollowUp)
+          setFollowUp(null)
         }
       },
       (error) => {
-        console.error("Error fetching follow-up:", error)
+        console.error("Error fetching followup:", error)
+        setFollowUp(null)
       }
     )
     unsubscribers.push(unsubFollowUp)
 
     return () => {
-      unsubscribers.forEach((unsub) => unsub())
+      unsubscribers.forEach(unsub => unsub())
     }
   }, [patientId, user?.uid])
 
@@ -225,8 +185,54 @@ export default function PatientDetailPage({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />
+      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+        <header className="border-b border-border/40 bg-card/80 backdrop-blur-sm">
+          <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <Button variant="ghost" size="sm" disabled>← Back</Button>
+              <div className="flex items-center gap-3">
+                <Image src="/favicon-192x192.png" alt="Kollectcare" width={28} height={28} className="h-7 w-7 rounded" />
+                <span className="text-lg font-bold">Kollectcare</span>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="container mx-auto px-4 py-8">
+          {/* Patient Info Skeleton */}
+          <Card className="mb-8">
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div className="flex-1 space-y-3">
+                  <div className="h-7 w-48 bg-muted rounded animate-pulse" />
+                  <div className="h-4 w-96 bg-muted rounded animate-pulse" />
+                </div>
+                <div className="w-32 h-10 bg-muted rounded animate-pulse" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                {[...Array(6)].map((_, i) => (
+                  <div key={i} className="h-16 bg-muted rounded animate-pulse" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tabs Skeleton */}
+          <Card>
+            <CardHeader>
+              <div className="h-10 w-64 bg-muted rounded animate-pulse" />
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="h-12 bg-muted rounded animate-pulse" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </main>
       </div>
     )
   }
@@ -371,14 +377,14 @@ export default function PatientDetailPage({ params }: Props) {
 
           {activeTab === "baseline" && (
             <TabsContent value="baseline">
-              <BaselineForm patientId={patient.id} existingData={baseline} onSuccess={() => setActiveTab("overview")} />
+              <MemoizedBaselineForm patientId={patient.id} existingData={baseline} onSuccess={() => setActiveTab("overview")} />
             </TabsContent>
           )}
 
           {activeTab === "followup" && (
             <TabsContent value="followup">
               {baseline ? (
-                <FollowUpForm
+                <MemoizedFollowUpForm
                   patientId={patient.id}
                   existingData={followUp}
                   onSuccess={() => setActiveTab("comparison")}

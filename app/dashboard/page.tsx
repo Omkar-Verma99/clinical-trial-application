@@ -107,7 +107,36 @@ export default function DashboardPage() {
   const router = useRouter()
   const [patients, setPatients] = useState<PatientWithStatus[]>([])
   const [loadingPatients, setLoadingPatients] = useState(true)
+  const [pagination, setPagination] = useState({ offset: 0, limit: 50, hasMore: false })
+  const [paginationLoading, setPaginationLoading] = useState(false)
+  const [indexedDBReady, setIndexedDBReady] = useState(false)
 
+  // Debounced pagination handler
+  const debounce = (func: Function, delay: number) => {
+    let timeoutId: NodeJS.Timeout
+    return (...args: any[]) => {
+      clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => func(...args), delay)
+    }
+  }
+
+  const debouncedPaginationChange = useMemo(
+    () => debounce((newOffset: number) => {
+      setPaginationLoading(true)
+      setPagination(prev => ({ ...prev, offset: newOffset }))
+    }, 300),
+    []
+  )
+
+  const handleNextPage = useCallback(() => {
+    debouncedPaginationChange(pagination.offset + pagination.limit)
+  }, [pagination, debouncedPaginationChange])
+
+  const handlePrevPage = useCallback(() => {
+    debouncedPaginationChange(Math.max(0, pagination.offset - pagination.limit))
+  }, [pagination, debouncedPaginationChange])
+
+  // Initialize patient list with pagination from optimized IndexedDB
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login")
@@ -117,7 +146,55 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user || !db) return
 
-    // Set up real-time listener for patients with optimized query
+    // OPTIMIZED: First load from IndexedDB for instant UI
+    const loadPatientListFromIndexedDB = async () => {
+      try {
+        const { indexedDBService } = require('@/lib/indexeddb-service')
+        const cachedPatients = await indexedDBService.getPatientList(user.uid, pagination.limit, pagination.offset)
+        
+        // Get form status for cached patients
+        if (cachedPatients.length > 0) {
+          const patientIds = cachedPatients.map((p: any) => p.id)
+          const baselineQuery = query(
+            collection(db, "baselineData"),
+            where("patientId", "in", patientIds)
+          )
+          const followUpQuery = query(
+            collection(db, "followUpData"),
+            where("patientId", "in", patientIds)
+          )
+
+          const [baselineSnaps, followUpSnaps] = await Promise.all([
+            getDocs(baselineQuery).catch(() => ({ docs: [] })),
+            getDocs(followUpQuery).catch(() => ({ docs: [] }))
+          ])
+
+          const baselineMap = new Map(baselineSnaps.docs.map(doc => [doc.data().patientId, true]))
+          const followUpMap = new Map(followUpSnaps.docs.map(doc => [doc.data().patientId, true]))
+
+          const patientsWithStatus = cachedPatients.map((p: any) => ({
+            ...p,
+            hasBaseline: baselineMap.has(p.id),
+            hasFollowUp: followUpMap.has(p.id),
+          } as PatientWithStatus))
+
+          setPatients(patientsWithStatus)
+          setIndexedDBReady(true)
+        }
+
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`✓ Loaded ${cachedPatients.length} patients from IndexedDB (pagination: offset=${pagination.offset}, limit=${pagination.limit})`)
+        }
+      } catch (error) {
+        console.error('IndexedDB patient list error:', error)
+      } finally {
+        setLoadingPatients(false)
+      }
+    }
+
+    loadPatientListFromIndexedDB()
+
+    // Set up real-time listener for real-time updates (continues running)
     const q = query(
       collection(db, "patients"),
       where("doctorId", "==", user.uid),
@@ -132,10 +209,9 @@ export default function DashboardPage() {
           const baselineMap = new Map()
           const followUpMap = new Map()
 
-          // Only batch fetch if we have patients
+          // Batch fetch form data
           const patientIds = querySnapshot.docs.map(d => d.id)
           if (patientIds.length > 0) {
-            // Batch fetch baseline and follow-up data
             const baselineQuery = query(collection(db, "baselineData"), where("patientId", "in", patientIds))
             const followUpQuery = query(collection(db, "followUpData"), where("patientId", "in", patientIds))
 
@@ -148,7 +224,8 @@ export default function DashboardPage() {
             followUpSnaps.docs.forEach(doc => followUpMap.set(doc.data().patientId, true))
           }
 
-          for (const doc of querySnapshot.docs) {
+          // Build patient list with pagination
+          for (const doc of querySnapshot.docs.slice(pagination.offset, pagination.offset + pagination.limit)) {
             const patientData = doc.data() as Omit<Patient, 'id'>
             patientsData.push({
               ...patientData,
@@ -159,20 +236,24 @@ export default function DashboardPage() {
           }
 
           setPatients(patientsData)
+          setPagination(prev => ({
+            ...prev,
+            hasMore: querySnapshot.docs.length > pagination.offset + pagination.limit
+          }))
+          setPaginationLoading(false)
         } catch (error) {
           console.error("Error fetching patient details:", error)
-        } finally {
-          setLoadingPatients(false)
+          setPaginationLoading(false)
         }
       },
       (error) => {
         console.error("Error setting up real-time listener:", error)
-        setLoadingPatients(false)
+        setPaginationLoading(false)
       }
     )
 
     return unsubscribe
-  }, [user])
+  }, [user, pagination.offset])
 
   const getNextStatus = useCallback((patient: PatientWithStatus) => {
     if (!patient.hasBaseline) {
@@ -299,7 +380,41 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">{patientsList}</div>
+          <div className="space-y-6">
+            <div className="grid gap-4">{patientsList}</div>
+            
+            {/* PAGINATION CONTROLS - WITH LOADING STATE */}
+            <div className="flex items-center justify-between py-4 px-4 border-t border-border/40">
+              <div className="text-sm text-muted-foreground">
+                {paginationLoading ? (
+                  <>Updating...</>
+                ) : (
+                  <>
+                    Showing patients {pagination.offset + 1} to {Math.min(pagination.offset + pagination.limit, pagination.offset + patients.length)} 
+                    {pagination.hasMore && ` (more available)`}
+                  </>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={handlePrevPage}
+                  disabled={pagination.offset === 0 || paginationLoading}
+                  className="bg-transparent"
+                >
+                  {paginationLoading ? "..." : "Previous"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleNextPage}
+                  disabled={!pagination.hasMore || patients.length < pagination.limit || paginationLoading}
+                  className="bg-transparent"
+                >
+                  {paginationLoading ? "..." : "Next"}
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
     </div>

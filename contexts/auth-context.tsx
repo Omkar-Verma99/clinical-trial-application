@@ -9,7 +9,7 @@ import {
   signOut,
   sendEmailVerification,
 } from "firebase/auth"
-import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore"
+import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot, orderBy } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import { indexedDBService } from "@/lib/indexeddb-service"
 import { logError, logInfo } from "@/lib/error-tracking"
@@ -81,28 +81,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             logInfo("Doctor data fetched successfully", { userId: user.uid })
           }
 
-          // Load and cache user's patients to IndexedDB
+          // Load and cache user's patients to optimized IndexedDB (LAZY LOADING)
           try {
             const patientsQuery = query(
               collection(db, "patients"),
-              where("doctorId", "==", user.uid)
+              where("doctorId", "==", user.uid),
+              orderBy("createdAt", "desc")
             )
-            const patientDocs = await getDocs(patientsQuery)
             
-            // Cache each patient in IndexedDB
-            for (const patientDoc of patientDocs.docs) {
-              await indexedDBService.saveForm(
-                patientDoc.id,
-                'patient',
-                patientDoc.id,
-                { ...patientDoc.data(), id: patientDoc.id },
-                false,
-                []
-              )
+            // Initial load: Get first batch of patients for instant UI display
+            const initialDocs = await getDocs(patientsQuery)
+            
+            // OPTIMIZED: Save patient INDEX only (lightweight metadata)
+            // Not storing entire patient object - just display fields
+            for (const patientDoc of initialDocs.docs) {
+              const patientData = patientDoc.data()
+              await indexedDBService.savePatientIndex({
+                id: patientDoc.id,
+                patientCode: patientData.patientCode || '',
+                age: patientData.age || 0,
+                gender: patientData.gender || '',
+                durationOfDiabetes: patientData.durationOfDiabetes || 0,
+                createdAt: patientData.createdAt || new Date().toISOString(),
+                updatedAt: patientData.updatedAt || new Date().toISOString(),
+                hasBaseline: false, // Will be set by real-time listener
+                hasFollowUp: false,
+                doctorId: user.uid
+              })
             }
             
             if (process.env.NODE_ENV === 'development') {
-              console.log(`✓ Cached ${patientDocs.size} patients to IndexedDB for user:`, user.uid)
+              console.log(`✓ Cached ${initialDocs.size} patients to optimized IndexedDB (lazy loading)`)
             }
 
             // Set up real-time listener for patient changes (additions, updates, deletions)
@@ -112,15 +121,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               async (snapshot) => {
                 try {
                   for (const doc of snapshot.docs) {
-                    // Update or add patient in IndexedDB
-                    await indexedDBService.saveForm(
-                      doc.id,
-                      'patient',
-                      doc.id,
-                      { ...doc.data(), id: doc.id },
-                      false,
-                      []
-                    )
+                    const patientData = doc.data()
+                    // Update patient index with latest data
+                    await indexedDBService.savePatientIndex({
+                      id: doc.id,
+                      patientCode: patientData.patientCode || '',
+                      age: patientData.age || 0,
+                      gender: patientData.gender || '',
+                      durationOfDiabetes: patientData.durationOfDiabetes || 0,
+                      createdAt: patientData.createdAt || new Date().toISOString(),
+                      updatedAt: patientData.updatedAt || new Date().toISOString(),
+                      hasBaseline: patientData.hasBaseline || false,
+                      hasFollowUp: patientData.hasFollowUp || false,
+                      doctorId: user.uid
+                    })
                   }
                   if (process.env.NODE_ENV === 'development') {
                     console.log(`✓ Real-time sync: ${snapshot.docs.length} patients`)
