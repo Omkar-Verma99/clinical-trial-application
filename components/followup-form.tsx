@@ -200,7 +200,9 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
       onSuccess()
     } catch (error) {
-      console.error("Error saving follow-up data:", error)
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Error saving follow-up data:", error)
+      }
       toast({
         variant: "destructive",
         title: "Error saving data",

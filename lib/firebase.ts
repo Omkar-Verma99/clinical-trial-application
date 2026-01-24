@@ -21,27 +21,21 @@ if (typeof window !== "undefined") {
 
   if (missingKeys.length > 0) {
     console.error("❌ Missing Firebase configuration keys:", missingKeys)
-    console.log("Available config:", firebaseConfig)
-  } else {
-    console.log("✓ Firebase configuration loaded successfully")
   }
 
   // Initialize Firebase
   if (firebaseConfig && Object.values(firebaseConfig).every(v => v)) {
     try {
-      console.log("Initializing Firebase...")
       firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp()
       auth = getAuth(firebaseApp)
       db = getFirestore(firebaseApp)
-      console.log("✓ Firebase initialized successfully with project:", firebaseConfig.projectId)
 
       // Initialize Analytics only in browser environment
       try {
         getAnalytics(firebaseApp)
       } catch (e) {
-        console.warn("Analytics initialization failed:", e)
+        // Analytics init failures are non-critical
       }
-      console.log("✓ Firebase initialized successfully")
     } catch (error) {
       console.error("❌ Firebase initialization failed:", error)
     }

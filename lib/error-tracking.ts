@@ -36,7 +36,9 @@ export const logError = (
   
   // Console logging in development
   if (process.env.NODE_ENV === 'development') {
-    console.error('[Error]', errorLog)
+    if (process.env.NODE_ENV === 'development') {
+      console.error('[Error]', errorLog)
+    }
   }
   
   // TODO: Send to error tracking service in production
@@ -61,7 +63,9 @@ export const logWarning = (message: string, context?: ErrorContext): void => {
   }
   
   if (process.env.NODE_ENV === 'development') {
-    console.warn('[Warning]', warningLog)
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[Warning]', warningLog)
+    }
   }
 }
 
@@ -80,7 +84,9 @@ export const logInfo = (message: string, context?: ErrorContext): void => {
   }
   
   if (process.env.NODE_ENV === 'development') {
-    console.log('[Info]', infoLog)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[Info]', infoLog)
+    }
   }
 }
 
