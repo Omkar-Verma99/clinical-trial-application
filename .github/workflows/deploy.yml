@@ -47,8 +47,9 @@ jobs:
         run: npm install -g firebase-tools@latest
 
       - name: Create environment file for build
+        shell: bash
         run: |
-          cat > .env.production << 'EOF'
+          tee .env.local .env.production > /dev/null << 'EOF'
           NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyDAn3llTqhmCmysQ0_lcX79RvuJsQMB2ks
           NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=kollectcare-rwe-study.firebaseapp.com
           NEXT_PUBLIC_FIREBASE_PROJECT_ID=kollectcare-rwe-study
