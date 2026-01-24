@@ -63,7 +63,8 @@ export const calculateGlycemicResponse = (
  * Calculate weight outcome category
  * CRF Criteria:
  * - Gain: ≥3 kg increase
- * - Neutral: -3 to +3 kg change
+ * - Gain 1-2.9 kg: 1-2.9 kg increase
+ * - Neutral: -1 to <1 kg change
  * - Loss 1-2.9 kg: 1-2.9 kg reduction
  * - Loss ≥3 kg: ≥3 kg reduction
  */
@@ -77,12 +78,15 @@ export const calculateWeightOutcome = (baselineWeight: number, followUpWeight: n
     category = "Gain"
   } else if (change >= 1 && change < 3) {
     category = "Gain 1-2.9 kg"
-  } else if (change >= -3 && change < 1) {
+  } else if (change > -1 && change < 1) {
     category = "Neutral"
-  } else if (change > -3 && change <= 0) {
+  } else if (change <= -1 && change > -3) {
     category = "Loss 1-2.9 kg"
-  } else {
+  } else if (change <= -3) {
     category = "Loss ≥3 kg"
+  } else {
+    // Fallback for edge cases
+    category = "Neutral"
   }
 
   return {

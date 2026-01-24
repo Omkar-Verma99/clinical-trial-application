@@ -36,16 +36,15 @@ export const logError = (
   
   // Console logging in development
   if (process.env.NODE_ENV === 'development') {
-    if (process.env.NODE_ENV === 'development') {
-      console.error('[Error]', errorLog)
-    }
+    console.error('[Error]', errorLog)
   }
   
-  // TODO: Send to error tracking service in production
-  // Example:
-  // if (typeof window !== 'undefined' && window.Sentry) {
-  //   window.Sentry.captureException(error, { extra: context })
-  // }
+  // Production error tracking (can be extended)
+  // In production, errors are logged but not exposed to console
+  // For production error tracking, integrate with:
+  // - Sentry: window.Sentry?.captureException(error, { extra: context })
+  // - DataDog: window.DD_RUM?.addError(error)
+  // - LogRocket: window.LogRocket?.captureException(error)
 }
 
 /**
