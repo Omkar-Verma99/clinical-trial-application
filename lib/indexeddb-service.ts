@@ -457,24 +457,48 @@ class IndexedDBService {
 
       let stats = { totalForms: 0, drafts: 0, pendingSync: 0 }
 
-      const formRequest = formStore.count()
-      formRequest.onsuccess = () => {
-        stats.totalForms = formRequest.result
+      try {
+        const formRequest = formStore.count()
+        formRequest.onsuccess = () => {
+          stats.totalForms = formRequest.result
 
-        const draftRequest = formStore.index('isDraft').count(IDBKeyRange.only(true))
-        draftRequest.onsuccess = () => {
-          stats.drafts = draftRequest.result
+          // Use getAllKeys with a range for boolean index queries
+          const draftRequest = formStore.index('isDraft').getAll(true)
+          draftRequest.onsuccess = () => {
+            stats.drafts = (draftRequest.result as StoredFormData[]).length
 
-          const syncRequest = syncStore.index('status').count(IDBKeyRange.only('pending'))
-          syncRequest.onsuccess = () => {
-            stats.pendingSync = syncRequest.result
-            resolve(stats)
+            // Use getAllKeys with a range for string index queries
+            const syncRequest = syncStore.index('status').getAll('pending')
+            syncRequest.onsuccess = () => {
+              stats.pendingSync = (syncRequest.result as SyncQueueItem[]).length
+              resolve(stats)
+            }
+            syncRequest.onerror = () => {
+              if (process.env.NODE_ENV === 'development') {
+                console.error('Failed to count pending sync:', syncRequest.error?.message)
+              }
+              resolve({ ...stats, pendingSync: 0 })
+            }
           }
-          syncRequest.onerror = () => reject(new Error('Failed to count pending sync'))
+          draftRequest.onerror = () => {
+            if (process.env.NODE_ENV === 'development') {
+              console.error('Failed to count drafts:', draftRequest.error?.message)
+            }
+            resolve({ ...stats, drafts: 0 })
+          }
         }
-        draftRequest.onerror = () => reject(new Error('Failed to count drafts'))
+        formRequest.onerror = () => {
+          if (process.env.NODE_ENV === 'development') {
+            console.error('Failed to count forms:', formRequest.error?.message)
+          }
+          resolve(stats)
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Error getting sync stats:', error)
+        }
+        resolve(stats)
       }
-      formRequest.onerror = () => reject(new Error('Failed to count forms'))
     })
   }
 }
