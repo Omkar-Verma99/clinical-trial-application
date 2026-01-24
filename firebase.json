@@ -7,7 +7,7 @@
     "backends": [
       {
         "codebase": "default",
-        "name": "app"
+        "backendId": "app"
       }
     ]
   }
