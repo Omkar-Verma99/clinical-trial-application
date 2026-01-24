@@ -78,9 +78,6 @@ if (typeof window !== "undefined" && firebaseConfig && Object.values(firebaseCon
 } else if (typeof window !== "undefined") {
   console.warn("Firebase config is incomplete or missing, deferring initialization")
 }
-    console.error("Firebase initialization error:", error)
-  }
-}
 
 export { firebaseApp, auth, db }
 
