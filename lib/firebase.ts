@@ -8,9 +8,12 @@ let firebaseConfig: any = null
 
 if (typeof window !== "undefined") {
   // Check if FIREBASE_WEBAPP_CONFIG is available (Firebase App Hosting)
-  if (process.env.NEXT_PUBLIC_FIREBASE_WEBAPP_CONFIG) {
+  const webappConfigStr = typeof window !== "undefined" ? window.env?.NEXT_PUBLIC_FIREBASE_WEBAPP_CONFIG || process.env.NEXT_PUBLIC_FIREBASE_WEBAPP_CONFIG : process.env.NEXT_PUBLIC_FIREBASE_WEBAPP_CONFIG
+  
+  if (webappConfigStr) {
     try {
-      firebaseConfig = JSON.parse(process.env.NEXT_PUBLIC_FIREBASE_WEBAPP_CONFIG)
+      firebaseConfig = JSON.parse(webappConfigStr)
+      console.log("✓ Using FIREBASE_WEBAPP_CONFIG from Firebase App Hosting")
     } catch (e) {
       console.warn("Could not parse FIREBASE_WEBAPP_CONFIG, falling back to individual env vars")
     }
@@ -27,6 +30,7 @@ if (typeof window !== "undefined") {
       appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
       measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
     }
+    console.log("✓ Using individual NEXT_PUBLIC_FIREBASE_* env vars")
   }
 }
 
