@@ -9,8 +9,9 @@ import {
   signOut,
   sendEmailVerification,
 } from "firebase/auth"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, collection, query, where, getDocs, onSnapshot } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
+import { indexedDBService } from "@/lib/indexeddb-service"
 import { logError, logInfo } from "@/lib/error-tracking"
 import { networkDetector } from "@/lib/network"
 import type { Doctor } from "@/lib/types"
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [loading, setLoading] = useState(true)
   const [networkOnline, setNetworkOnline] = useState(typeof window !== "undefined" ? navigator.onLine : true)
+  const unsubscribePatientsRef = { current: null as (() => void) | null }
 
   // Monitor network connectivity
   useEffect(() => {
@@ -57,14 +59,98 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user)
 
+      // Clean up previous real-time listeners when user changes
+      if (unsubscribePatientsRef.current) {
+        unsubscribePatientsRef.current()
+        unsubscribePatientsRef.current = null
+      }
+
       if (user) {
         try {
+          // Initialize IndexedDB for this user
+          await indexedDBService.initialize()
+          if (process.env.NODE_ENV === 'development') {
+            console.log('✓ IndexedDB initialized on login for user:', user.uid)
+          }
+
           // Fetch doctor data
           const doctorDoc = await getDoc(doc(db, "doctors", user.uid))
           if (doctorDoc.exists()) {
             const docData = doctorDoc.data()
             setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
             logInfo("Doctor data fetched successfully", { userId: user.uid })
+          }
+
+          // Load and cache user's patients to IndexedDB
+          try {
+            const patientsQuery = query(
+              collection(db, "patients"),
+              where("doctorId", "==", user.uid)
+            )
+            const patientDocs = await getDocs(patientsQuery)
+            
+            // Cache each patient in IndexedDB
+            for (const patientDoc of patientDocs.docs) {
+              await indexedDBService.saveForm(
+                patientDoc.id,
+                'patient',
+                patientDoc.id,
+                { ...patientDoc.data(), id: patientDoc.id },
+                false,
+                []
+              )
+            }
+            
+            if (process.env.NODE_ENV === 'development') {
+              console.log(`✓ Cached ${patientDocs.size} patients to IndexedDB for user:`, user.uid)
+            }
+
+            // Set up real-time listener for patient changes (additions, updates, deletions)
+            // CRITICAL: Store the unsubscribe function for cleanup
+            unsubscribePatientsRef.current = onSnapshot(
+              patientsQuery,
+              async (snapshot) => {
+                try {
+                  for (const doc of snapshot.docs) {
+                    // Update or add patient in IndexedDB
+                    await indexedDBService.saveForm(
+                      doc.id,
+                      'patient',
+                      doc.id,
+                      { ...doc.data(), id: doc.id },
+                      false,
+                      []
+                    )
+                  }
+                  if (process.env.NODE_ENV === 'development') {
+                    console.log(`✓ Real-time sync: ${snapshot.docs.length} patients`)
+                  }
+                } catch (syncError) {
+                  logError(syncError as Error, {
+                    action: "realtimeSyncPatients",
+                    userId: user.uid,
+                    severity: "medium"
+                  })
+                }
+              },
+              (error) => {
+                if (process.env.NODE_ENV === 'development') {
+                  console.error('Patient real-time sync error:', error)
+                }
+                logError(error as Error, {
+                  action: "patientsListener",
+                  userId: user.uid,
+                  severity: "medium"
+                })
+              }
+            )
+          } catch (cacheError) {
+            // Don't fail auth if caching fails
+            logError(cacheError as Error, {
+              action: "cachePatientData",
+              userId: user.uid,
+              severity: "low"
+            })
           }
         } catch (error) {
           logError(error as Error, {
@@ -80,7 +166,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    return unsubscribe
+    return () => {
+      unsubscribe()
+      // Clean up real-time listeners on unmount
+      if (unsubscribePatientsRef.current) {
+        unsubscribePatientsRef.current()
+        unsubscribePatientsRef.current = null
+      }
+    }
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {

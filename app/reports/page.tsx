@@ -36,19 +36,24 @@ export default function ReportsPage() {
         // Fetch baseline and follow-up data for each patient
         const reports = await Promise.all(
           patients.map(async (patient) => {
-            const baselineQuery = query(collection(db, "baselineData"), where("patientId", "==", patient.id))
-            const baselineSnapshot = await getDocs(baselineQuery)
-            const baseline = baselineSnapshot.empty
-              ? null
-              : ({ ...baselineSnapshot.docs[0].data(), id: baselineSnapshot.docs[0].id } as any)
+            try {
+              const baselineQuery = query(collection(db, "baselineData"), where("patientId", "==", patient.id))
+              const baselineSnapshot = await getDocs(baselineQuery)
+              const baseline = baselineSnapshot.empty
+                ? null
+                : ({ ...baselineSnapshot.docs[0].data(), id: baselineSnapshot.docs[0].id } as any)
 
-            const followUpQuery = query(collection(db, "followUpData"), where("patientId", "==", patient.id))
-            const followUpSnapshot = await getDocs(followUpQuery)
-            const followUp = followUpSnapshot.empty
-              ? null
-              : ({ ...followUpSnapshot.docs[0].data(), id: followUpSnapshot.docs[0].id } as any)
+              const followUpQuery = query(collection(db, "followUpData"), where("patientId", "==", patient.id))
+              const followUpSnapshot = await getDocs(followUpQuery)
+              const followUp = followUpSnapshot.empty
+                ? null
+                : ({ ...followUpSnapshot.docs[0].data(), id: followUpSnapshot.docs[0].id } as any)
 
-            return { patient, baseline, followUp }
+              return { patient, baseline, followUp }
+            } catch (patientError) {
+              console.error(`Error fetching data for patient ${patient.id}:`, patientError)
+              return { patient, baseline: null, followUp: null }
+            }
           }),
         )
 
@@ -60,7 +65,9 @@ export default function ReportsPage() {
       }
     }
 
-    fetchReportData()
+    fetchReportData().catch((error) => {
+      console.error("Uncaught error in fetchReportData:", error)
+    })
   }, [user])
 
   const exportExcel = () => {

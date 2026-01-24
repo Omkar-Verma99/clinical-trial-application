@@ -2,7 +2,7 @@ import { initializeApp, getApps, getApp } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
 import { getAnalytics } from "firebase/analytics"
-import { firebaseConfig as defaultConfig } from "./firebase-config"
+import { firebaseConfig } from "./firebase-config"
 
 // Initialize Firebase only in browser environment
 let firebaseApp: any = null
@@ -11,8 +11,8 @@ let db: any = null
 
 // Firebase initialization - only runs in browser
 if (typeof window !== "undefined") {
-  // Firebase configuration - use default hardcoded config
-  const firebaseConfig = defaultConfig
+  // Firebase configuration - using hardcoded values from firebase-config.ts
+  // This ensures the config is always available and included in the bundle
 
   // Validate Firebase config
   const missingKeys = Object.entries(firebaseConfig || {})

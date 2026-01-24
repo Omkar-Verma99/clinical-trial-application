@@ -40,7 +40,11 @@ export default function PatientDetailPage({ params }: Props) {
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
-    params.then((p) => setPatientId(p.id))
+    params
+      .then((p) => setPatientId(p.id))
+      .catch((error) => {
+        console.error("Failed to extract patient ID from params:", error)
+      })
   }, [params])
 
   useEffect(() => {

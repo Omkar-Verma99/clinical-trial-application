@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
+import { useIndexedDBSync } from "@/hooks/use-indexed-db-sync"
 import { Textarea } from "@/components/ui/textarea"
 
 interface FollowUpFormProps {
@@ -23,6 +24,7 @@ interface FollowUpFormProps {
 
 export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess }: FollowUpFormProps) {
   const { toast } = useToast()
+  const { saveFormData } = useIndexedDBSync(patientId)
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -92,11 +94,63 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     Unknown: existingData?.outcome?.includes("Unknown") || false,
   })
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
     e.preventDefault()
     setLoading(true)
 
     try {
+      // VALIDATION PHASE 1: Check required fields
+      const validationErrors: string[] = []
+      
+      if (!formData.visitDate) validationErrors.push("Visit date is required")
+      if (!formData.hba1c) validationErrors.push("HbA1c is required")
+      if (!formData.fpg) validationErrors.push("FPG is required")
+      if (!formData.weight) validationErrors.push("Weight is required")
+      if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
+      if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
+      if (!formData.hba1cResponse) validationErrors.push("HbA1c response category is required")
+      if (!formData.patientContinuingTreatment && !formData.discontinuationReason) validationErrors.push("Please specify discontinuation reason")
+      if (!formData.missedDoses && formData.missedDoses !== "0") validationErrors.push("Missed doses information is required")
+      if (!formData.overallEfficacy) validationErrors.push("Overall efficacy is required")
+      if (!formData.overallTolerability) validationErrors.push("Overall tolerability is required")
+      if (!formData.complianceJudgment) validationErrors.push("Compliance judgment is required")
+      if (!formData.overallSatisfaction) validationErrors.push("Overall satisfaction is required")
+
+      if (!saveAsDraft && validationErrors.length > 0) {
+        setLoading(false)
+        toast({
+          variant: "destructive",
+          title: "Missing required fields",
+          description: validationErrors.slice(0, 3).join(", ") + (validationErrors.length > 3 ? ` and ${validationErrors.length - 3} more` : ""),
+        })
+        return
+      }
+
+      // VALIDATION PHASE 2: Parse and validate numeric ranges
+      const hba1c = Number.parseFloat(formData.hba1c)
+      const fpg = Number.parseFloat(formData.fpg)
+      const weight = Number.parseFloat(formData.weight)
+      const bpSystolic = Number.parseInt(formData.bloodPressureSystolic)
+      const bpDiastolic = Number.parseInt(formData.bloodPressureDiastolic)
+
+      const rangeErrors: string[] = []
+      
+      if (formData.hba1c && (isNaN(hba1c) || hba1c < 4 || hba1c > 15)) rangeErrors.push("HbA1c must be between 4-15%")
+      if (formData.fpg && (isNaN(fpg) || fpg < 50 || fpg > 500)) rangeErrors.push("FPG must be between 50-500 mg/dL")
+      if (formData.weight && (isNaN(weight) || weight < 30 || weight > 200)) rangeErrors.push("Weight must be between 30-200 kg")
+      if (formData.bloodPressureSystolic && (isNaN(bpSystolic) || bpSystolic < 70 || bpSystolic > 200)) rangeErrors.push("BP Systolic must be between 70-200 mmHg")
+      if (formData.bloodPressureDiastolic && (isNaN(bpDiastolic) || bpDiastolic < 40 || bpDiastolic > 130)) rangeErrors.push("BP Diastolic must be between 40-130 mmHg")
+
+      if (!saveAsDraft && rangeErrors.length > 0) {
+        setLoading(false)
+        toast({
+          variant: "destructive",
+          title: "Invalid Values",
+          description: rangeErrors.join(", "),
+        })
+        return
+      }
+
       const sanitizeObject = (obj: Record<string, any>, fieldsToSanitize: string[]) => {
         const sanitized = { ...obj }
         fieldsToSanitize.forEach((field) => {
@@ -112,12 +166,12 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       const data = {
         patientId,
         visitDate: formData.visitDate,
-        hba1c: Number.parseFloat(formData.hba1c),
-        fpg: Number.parseFloat(formData.fpg),
+        hba1c: formData.hba1c ? Number.parseFloat(formData.hba1c) : null,
+        fpg: formData.fpg ? Number.parseFloat(formData.fpg) : null,
         ppg: formData.ppg ? Number.parseFloat(formData.ppg) : null,
-        weight: Number.parseFloat(formData.weight),
-        bloodPressureSystolic: Number.parseInt(formData.bloodPressureSystolic),
-        bloodPressureDiastolic: Number.parseInt(formData.bloodPressureDiastolic),
+        weight: formData.weight ? Number.parseFloat(formData.weight) : null,
+        bloodPressureSystolic: formData.bloodPressureSystolic ? Number.parseInt(formData.bloodPressureSystolic) : null,
+        bloodPressureDiastolic: formData.bloodPressureDiastolic ? Number.parseInt(formData.bloodPressureDiastolic) : null,
         serumCreatinine: formData.serumCreatinine ? Number.parseFloat(formData.serumCreatinine) : null,
         egfr: formData.egfr ? Number.parseFloat(formData.egfr) : null,
         urinalysis: formData.urinalysisType === "Abnormal" && sanitizedFormData.urinalysisSpecify ? 
@@ -183,30 +237,71 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           confirmationCheckbox: formData.physicianConfirmation,
         },
         comments: formData.additionalComments,
+        isDraft: saveAsDraft,
         createdAt: existingData?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
 
-      if (existingData && (existingData as any).id) {
-        await updateDoc(doc(db, "followUpData", (existingData as any).id), data)
-      } else {
-        await addDoc(collection(db, "followUpData"), data)
+      // CRITICAL: Save to IndexedDB FIRST (immediate, offline-safe)
+      const formId = (existingData as any)?.id || `followup-${patientId}-${Date.now()}`
+      const idbResult = await saveFormData(
+        formId,
+        'followup',
+        data,
+        saveAsDraft,
+        saveAsDraft ? [] : validationErrors
+      )
+
+      if (!idbResult.success) {
+        setLoading(false)
+        toast({
+          variant: "destructive",
+          title: "Error saving locally",
+          description: idbResult.error || "Failed to save to local storage",
+        })
+        return
+      }
+
+      // Only submit to Firebase if not draft (background sync will handle it)
+      if (!saveAsDraft) {
+        try {
+          if (existingData && (existingData as any).id) {
+            await updateDoc(doc(db, "followUpData", (existingData as any).id), data)
+          } else {
+            const docRef = await addDoc(collection(db, "followUpData"), data)
+            // Store Firebase ID for future updates
+            await saveFormData(
+              formId,
+              'followup',
+              { ...data, firebaseId: docRef.id },
+              false,
+              validationErrors
+            )
+          }
+        } catch (firebaseError) {
+          // Don't fail - already saved locally, will sync in background
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Firebase save failed, will retry:', firebaseError)
+          }
+        }
       }
 
       toast({
-        title: "Follow-up data saved",
-        description: "Week 12 assessment has been recorded.",
+        title: saveAsDraft ? "✓ Saved as draft" : "✓ Follow-up assessment saved",
+        description: saveAsDraft ? "You can continue editing later." : "Week 12 assessment has been recorded.",
       })
 
+      setLoading(false)
       onSuccess()
     } catch (error) {
+      setLoading(false)
       if (process.env.NODE_ENV === 'development') {
         console.error("Error saving follow-up data:", error)
       }
       toast({
         variant: "destructive",
         title: "Error saving data",
-        description: "Please try again.",
+        description: error instanceof Error ? error.message : "Please try again.",
       })
     } finally {
       setLoading(false)
@@ -1148,9 +1243,18 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
             </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-4 border-t">
             <Button type="submit" disabled={loading} className="flex-1">
               {loading ? "Saving..." : "Save Follow-up Assessment"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={(e) => handleSubmit(e as any, true)}
+              disabled={loading}
+              className="flex-1 bg-transparent"
+            >
+              Save as Draft
             </Button>
           </div>
         </form>

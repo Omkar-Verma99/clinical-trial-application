@@ -12,9 +12,9 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
+import { useIndexedDBSync } from "@/hooks/use-indexed-db-sync"
 import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
-import { useNetworkStatus } from "@/lib/network"
 
 interface BaselineFormProps {
   patientId: string
@@ -24,7 +24,7 @@ interface BaselineFormProps {
 
 export const BaselineForm = memo(function BaselineForm({ patientId, existingData, onSuccess }: BaselineFormProps) {
   const { toast } = useToast()
-  const isOnline = useNetworkStatus()
+  const { saveFormData } = useIndexedDBSync(patientId)
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -56,58 +56,85 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
   const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
     e.preventDefault()
 
-    // Check network connectivity
-    if (!isOnline && !saveAsDraft) {
-      toast({
-        variant: "destructive",
-        title: "No Connection",
-        description: "Please check your internet connection to save the data.",
-      })
-      return
-    }
-
+    // Show loading immediately
     setLoading(true)
 
+    // Define validationErrors outside conditional so it's always available
+    const validationErrors: string[] = []
+
     try {
-      // Validate required fields
-      if (!formData.hba1c || !formData.fpg || !formData.weight || !formData.bloodPressureSystolic || !formData.bloodPressureDiastolic) {
-        toast({
-          variant: "destructive",
-          title: "Missing required fields",
-          description: "Please fill in all required clinical parameters.",
-        })
-        setLoading(false)
-        return
-      }
+      // SKIP VALIDATION FOR DRAFTS - user can save incomplete forms
+      if (!saveAsDraft) {
+        // VALIDATION PHASE 1: Check required fields (only for final submission)
+        
+        if (!formData.hba1c) validationErrors.push("HbA1c is required")
+        if (!formData.fpg) validationErrors.push("FPG is required")
+        if (!formData.weight) validationErrors.push("Weight is required")
+        if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
+        if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
+        if (!formData.dosePrescribed) validationErrors.push("Dose prescribed is required")
+        if (!formData.treatmentInitiationDate) validationErrors.push("Treatment initiation date is required")
 
-      // Validate field ranges
-      const hba1c = Number.parseFloat(formData.hba1c)
-      const fpg = Number.parseFloat(formData.fpg)
-      const weight = Number.parseFloat(formData.weight)
+        if (validationErrors.length > 0) {
+          setLoading(false)
+          toast({
+            variant: "destructive",
+            title: "Missing required fields",
+            description: validationErrors.join(", "),
+          })
+          return
+        }
 
-      if (hba1c < 4 || hba1c > 15 || fpg < 50 || fpg > 500 || weight < 30 || weight > 200) {
-        toast({
-          variant: "destructive",
-          title: "Invalid Values",
-          description: "Please check the entered values - they appear to be out of normal range.",
-        })
-        setLoading(false)
-        return
+        // VALIDATION PHASE 2: Parse and validate numeric ranges (only for final submission)
+        const hba1c = Number.parseFloat(formData.hba1c)
+        const fpg = Number.parseFloat(formData.fpg)
+        const weight = Number.parseFloat(formData.weight)
+        const bpSystolic = Number.parseInt(formData.bloodPressureSystolic)
+        const bpDiastolic = Number.parseInt(formData.bloodPressureDiastolic)
+
+        const rangeErrors: string[] = []
+        
+        if (isNaN(hba1c) || hba1c < 4 || hba1c > 15) rangeErrors.push("HbA1c must be between 4-15%")
+        if (isNaN(fpg) || fpg < 50 || fpg > 500) rangeErrors.push("FPG must be between 50-500 mg/dL")
+        if (isNaN(weight) || weight < 30 || weight > 200) rangeErrors.push("Weight must be between 30-200 kg")
+        if (isNaN(bpSystolic) || bpSystolic < 70 || bpSystolic > 200) rangeErrors.push("BP Systolic must be between 70-200 mmHg")
+        if (isNaN(bpDiastolic) || bpDiastolic < 40 || bpDiastolic > 130) rangeErrors.push("BP Diastolic must be between 40-130 mmHg")
+
+        if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify) {
+          rangeErrors.push("Please specify abnormality for urinalysis")
+        }
+
+        if (rangeErrors.length > 0) {
+          setLoading(false)
+          toast({
+            variant: "destructive",
+            title: "Invalid Values",
+            description: rangeErrors.join(", "),
+          })
+          return
+        }
       }
 
       // Sanitize text inputs
       const sanitizedFormData = sanitizeObject(formData, ['dosePrescribed', 'urinalysisSpecify'])
 
+      // Parse numeric values
+      const hba1cValue = Number.parseFloat(formData.hba1c)
+      const fpgValue = Number.parseFloat(formData.fpg)
+      const weightValue = Number.parseFloat(formData.weight)
+      const bpSystolicValue = Number.parseInt(formData.bloodPressureSystolic)
+      const bpDiastolicValue = Number.parseInt(formData.bloodPressureDiastolic)
+
       const data = {
         patientId,
         
         // Clinical Parameters
-        hba1c,
-        fpg: Number.parseFloat(formData.fpg),
+        hba1c: hba1cValue,
+        fpg: fpgValue,
         ppg: formData.ppg ? Number.parseFloat(formData.ppg) : null,
-        weight: Number.parseFloat(formData.weight),
-        bloodPressureSystolic: Number.parseInt(formData.bloodPressureSystolic),
-        bloodPressureDiastolic: Number.parseInt(formData.bloodPressureDiastolic),
+        weight: weightValue,
+        bloodPressureSystolic: bpSystolicValue,
+        bloodPressureDiastolic: bpDiastolicValue,
         heartRate: formData.heartRate ? Number.parseInt(formData.heartRate) : null,
         serumCreatinine: formData.serumCreatinine ? Number.parseFloat(formData.serumCreatinine) : null,
         egfr: formData.egfr ? Number.parseFloat(formData.egfr) : null,
@@ -131,21 +158,61 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
         updatedAt: new Date().toISOString(),
       }
 
-      const docRef = existingData && (existingData as any).id 
-        ? await updateDoc(doc(db, "baselineData", (existingData as any).id), data)
-        : await addDoc(collection(db, "baselineData"), data)
+      // CRITICAL: Save to IndexedDB FIRST (immediate, offline-safe)
+      // Then sync to Firebase in background
+      const formId = (existingData as any)?.id || `baseline-${patientId}-${Date.now()}`
+      const idbResult = await saveFormData(
+        formId,
+        'baseline',
+        data,
+        saveAsDraft,
+        saveAsDraft ? [] : validationErrors
+      )
 
-      if (!docRef || (existingData && !(existingData as any).id && !docRef)) {
-        throw new Error("Failed to save baseline data")
+      if (!idbResult.success) {
+        setLoading(false)
+        toast({
+          variant: "destructive",
+          title: "Error saving locally",
+          description: idbResult.error || "Failed to save to local storage",
+        })
+        return
+      }
+
+      // Only submit to Firebase if not draft (background sync will handle it)
+      // But for user experience, also save to Firebase directly for faster sync
+      if (!saveAsDraft) {
+        try {
+          if (existingData && (existingData as any).id) {
+            await updateDoc(doc(db, "baselineData", (existingData as any).id), data)
+          } else {
+            const docRef = await addDoc(collection(db, "baselineData"), data)
+            // Store Firebase ID for future updates
+            await saveFormData(
+              formId,
+              'baseline',
+              { ...data, firebaseId: docRef.id },
+              false,
+              validationErrors
+            )
+          }
+        } catch (firebaseError) {
+          // Don't fail - already saved locally, will sync in background
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Firebase save failed, will retry:', firebaseError)
+          }
+        }
       }
 
       toast({
-        title: saveAsDraft ? "Saved as draft" : "Baseline data saved",
+        title: saveAsDraft ? "✓ Saved as draft" : "✓ Baseline data saved",
         description: saveAsDraft ? "You can continue editing later." : "Week 0 assessment has been recorded.",
       })
 
+      setLoading(false)
       onSuccess()
     } catch (error) {
+      setLoading(false)
       logError(error as Error, {
         action: "saveBaselineData",
         severity: "high"

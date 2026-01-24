@@ -14,6 +14,7 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
+import { useIndexedDBSync } from "@/hooks/use-indexed-db-sync"
 import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
 import { useNetworkStatus } from "@/lib/network"
@@ -24,6 +25,7 @@ export default function AddPatientPage() {
   const router = useRouter()
   const { toast } = useToast()
   const isOnline = useNetworkStatus()
+  const { saveFormData } = useIndexedDBSync(user?.uid || "")
   const [loading, setLoading] = useState(false)
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
 
@@ -132,7 +134,7 @@ export default function AddPatientPage() {
     }))
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
     e.preventDefault()
     if (!user || !db) {
       toast({
@@ -143,8 +145,8 @@ export default function AddPatientPage() {
       return
     }
 
-    // Check network connectivity
-    if (!isOnline) {
+    // Check network connectivity (only required for full enrollment, not drafts)
+    if (!isOnline && !saveAsDraft) {
       toast({
         variant: "destructive",
         title: "No Connection",
@@ -153,46 +155,49 @@ export default function AddPatientPage() {
       return
     }
 
-    // Validate required fields
-    const requiredFields = [
-      { field: formData.patientCode, name: "Patient Code" },
-      { field: formData.age, name: "Age" },
-      { field: formData.gender, name: "Gender" },
-      { field: formData.durationOfDiabetes, name: "Duration of Diabetes" },
-      { field: previousTreatmentType, name: "Previous Treatment Type" },
-    ]
+    // SKIP VALIDATION FOR DRAFTS - user can save incomplete patient data
+    if (!saveAsDraft) {
+      // Validate required fields (only for full enrollment)
+      const requiredFields = [
+        { field: formData.patientCode, name: "Patient Code" },
+        { field: formData.age, name: "Age" },
+        { field: formData.gender, name: "Gender" },
+        { field: formData.durationOfDiabetes, name: "Duration of Diabetes" },
+        { field: previousTreatmentType, name: "Previous Treatment Type" },
+      ]
 
-    const missingFields = requiredFields.filter(f => !f.field).map(f => f.name)
-    
-    if (missingFields.length > 0) {
-      toast({
-        variant: "destructive",
-        title: "Missing Required Fields",
-        description: `Please fill in: ${missingFields.join(", ")}`,
-      })
-      return
-    }
+      const missingFields = requiredFields.filter(f => !f.field).map(f => f.name)
+      
+      if (missingFields.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Missing Required Fields",
+          description: `Please fill in: ${missingFields.join(", ")}`,
+        })
+        return
+      }
 
-    // Check if at least one reason for triple FDC is selected
-    if (!Object.values(reasonForTripleFDC).some(v => v)) {
-      toast({
-        variant: "destructive",
-        title: "Missing Selection",
-        description: "Please select at least one reason for KC MeSempa initiation",
-      })
-      return
-    }
+      // Check if at least one reason for triple FDC is selected
+      if (!Object.values(reasonForTripleFDC).some(v => v)) {
+        toast({
+          variant: "destructive",
+          title: "Missing Selection",
+          description: "Please select at least one reason for KC MeSempa initiation",
+        })
+        return
+      }
 
-    // Validate BMI if provided
-    const height = parseFloat(formData.height)
-    const weight = parseFloat(formData.bmi)
-    if (height && weight && bmiMismatchWarning) {
-      toast({
-        variant: "destructive",
-        title: "BMI Validation Error",
-        description: "The entered BMI does not match the calculated value from height/weight. Please correct the values.",
-      })
-      return
+      // Validate BMI if provided
+      const height = parseFloat(formData.height)
+      const weight = parseFloat(formData.bmi)
+      if (height && weight && bmiMismatchWarning) {
+        toast({
+          variant: "destructive",
+          title: "BMI Validation Error",
+          description: "The entered BMI does not match the calculated value from height/weight. Please correct the values.",
+        })
+        return
+      }
     }
 
     setLoading(true)
@@ -220,7 +225,7 @@ export default function AddPatientPage() {
       // Sanitize text inputs
       const sanitizedFormData = sanitizeObject(formData, ['patientCode', 'studySiteCode', 'investigatorName', 'smokingStatus', 'alcoholIntake', 'physicalActivityLevel'])
 
-      const docRef = await addDoc(collection(db, "patients"), {
+      const patientData = {
         doctorId: user.uid,
         patientCode: sanitizedFormData.patientCode,
         studySiteCode: sanitizedFormData.studySiteCode,
@@ -278,18 +283,62 @@ export default function AddPatientPage() {
         previousTherapy: selectedDrugClasses,
         
         createdAt: new Date().toISOString(),
-      })
-
-      if (!docRef.id) {
-        throw new Error("Failed to create patient record")
       }
 
+      // CRITICAL: Save to IndexedDB FIRST (immediate, offline-safe)
+      const patientId = `patient-${user.uid}-${Date.now()}`
+      const idbResult = await saveFormData(
+        patientId,
+        'patient',
+        patientData,
+        saveAsDraft,
+        []
+      )
+
+      if (!idbResult.success) {
+        toast({
+          variant: "destructive",
+          title: "Error saving locally",
+          description: idbResult.error || "Failed to save to local storage",
+        })
+        setLoading(false)
+        return
+      }
+
+      // Only submit to Firebase if not draft
+      if (!saveAsDraft) {
+        try {
+          const docRef = await addDoc(collection(db, "patients"), patientData)
+
+          if (!docRef.id) {
+            throw new Error("Failed to create patient record")
+          }
+
+          // Update IndexedDB with Firebase ID
+          await saveFormData(
+            patientId,
+            'patient',
+            { ...patientData, firebaseId: docRef.id },
+            false,
+            []
+          )
+        } catch (firebaseError) {
+          // Don't fail - already saved locally, will sync in background
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('Firebase save failed, will retry:', firebaseError)
+          }
+        }
+      }
+
+      const actionMsg = saveAsDraft ? "saved as draft" : "enrolled in the trial"
       toast({
         title: "Patient added successfully",
-        description: `Patient ${formData.patientCode} has been enrolled in the trial.`,
+        description: `Patient ${formData.patientCode} has been ${actionMsg}.`,
       })
 
-      await router.push("/dashboard")
+      if (!saveAsDraft) {
+        await router.push("/dashboard")
+      }
     } catch (error) {
       logError(error as Error, {
         action: "addPatient",
@@ -657,6 +706,15 @@ export default function AddPatientPage() {
               <div className="flex gap-3 pt-4">
                 <Button type="submit" className="flex-1" disabled={loading}>
                   {loading ? "Enrolling Patient..." : "Enroll Patient"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="flex-1 bg-transparent"
+                  disabled={loading}
+                  onClick={() => handleSubmit(new Event('click') as any, true)}
+                >
+                  Save as Draft
                 </Button>
                 <Link href="/dashboard" className="flex-1">
                   <Button type="button" variant="outline" className="w-full bg-transparent">

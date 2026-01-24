@@ -72,12 +72,14 @@ export const networkDetector = new NetworkDetector()
  * Usage in React components:
  * const isOnline = useNetworkStatus()
  */
+import { useState, useEffect } from 'react'
+
 export const useNetworkStatus = (): boolean => {
-  const [isOnline, setIsOnline] = (require('react') as typeof import('react')).useState(
+  const [isOnline, setIsOnline] = useState(
     typeof window !== 'undefined' ? navigator.onLine : true
   )
 
-  require('react').useEffect(() => {
+  useEffect(() => {
     const unsubscribe = networkDetector.subscribe(setIsOnline)
     return unsubscribe
   }, [])
