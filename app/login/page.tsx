@@ -17,7 +17,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const { login, loading: authLoading } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
 
@@ -41,6 +41,26 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  // Show loading state while Firebase is initializing
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-3">
+            <div className="flex items-center gap-3 justify-center">
+              <Image src="/favicon-192x192.png" alt="Kollectcare" width={40} height={40} className="h-10 w-10 rounded-lg" />
+              <span className="text-2xl font-bold">Kollectcare</span>
+            </div>
+            <CardTitle className="text-2xl text-center">Doctor Login</CardTitle>
+            <CardDescription className="text-center">
+              Initializing...
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
   }
 
   return (
