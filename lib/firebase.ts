@@ -13,14 +13,15 @@ if (typeof window !== "undefined") {
   // Firebase configuration - loaded from environment variables at build time
   // Variables are set by GitHub Actions workflow into .env.production
   // and compiled into the app by Next.js
+  // Fallback to hardcoded values for Firebase App Hosting (these are NEXT_PUBLIC so safe to expose)
   const firebaseConfig = {
-    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "",
-    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
-    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "",
-    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
-    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
-    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
-    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "",
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyDAn3llTqhmCmysQ0_lcX79RvuJsQMB2ks",
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "kollectcare-rwe-study.firebaseapp.com",
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "kollectcare-rwe-study",
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "kollectcare-rwe-study.firebasestorage.app",
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "716627719667",
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "1:716627719667:web:a828412396c68af35b8e86",
+    measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-QTWVYF3R19",
   }
 
   // Validate Firebase config
