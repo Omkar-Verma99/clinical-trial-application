@@ -13,12 +13,19 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-// Initialize Firebase
-export const firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp()
-export const auth = getAuth(firebaseApp)
-export const db = getFirestore(firebaseApp)
+// Initialize Firebase only in browser environment
+let firebaseApp: any = null
+let auth: any = null
+let db: any = null
 
-// Initialize Analytics only in browser environment
 if (typeof window !== "undefined") {
+  firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp()
+  auth = getAuth(firebaseApp)
+  db = getFirestore(firebaseApp)
+  
+  // Initialize Analytics only in browser environment
   getAnalytics(firebaseApp)
 }
+
+export { firebaseApp, auth, db }
+
