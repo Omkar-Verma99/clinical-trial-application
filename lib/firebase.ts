@@ -13,18 +13,33 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
+// Validate Firebase config in browser environment
+if (typeof window !== "undefined") {
+  const missingKeys = Object.entries(firebaseConfig)
+    .filter(([, value]) => !value)
+    .map(([key]) => key)
+  
+  if (missingKeys.length > 0) {
+    console.error("Missing Firebase configuration keys:", missingKeys)
+  }
+}
+
 // Initialize Firebase only in browser environment
 let firebaseApp: any = null
 let auth: any = null
 let db: any = null
 
 if (typeof window !== "undefined") {
-  firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp()
-  auth = getAuth(firebaseApp)
-  db = getFirestore(firebaseApp)
-  
-  // Initialize Analytics only in browser environment
-  getAnalytics(firebaseApp)
+  try {
+    firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp()
+    auth = getAuth(firebaseApp)
+    db = getFirestore(firebaseApp)
+    
+    // Initialize Analytics only in browser environment
+    getAnalytics(firebaseApp)
+  } catch (error) {
+    console.error("Firebase initialization error:", error)
+  }
 }
 
 export { firebaseApp, auth, db }
