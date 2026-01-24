@@ -1,7 +1,4 @@
 ﻿{
-  "projects": {
-    "default": "kollectcare-rwe-study"
-  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
