@@ -49,7 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Only initialize auth listener on client side
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !auth) {
+      setLoading(false)
       return
     }
 
@@ -86,6 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!networkOnline) {
       throw new Error("No internet connection. Please check your network.")
     }
+    if (!auth) {
+      throw new Error("Firebase authentication is not initialized. Please refresh the page.")
+    }
     await signInWithEmailAndPassword(auth, email, password)
     logInfo("User logged in successfully", { email })
   }, [networkOnline])
@@ -93,6 +97,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signup = useCallback(async (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => {
     if (!networkOnline) {
       throw new Error("No internet connection. Please check your network.")
+    }
+    if (!auth) {
+      throw new Error("Firebase authentication is not initialized. Please refresh the page.")
     }
 
     const userCredential = await createUserWithEmailAndPassword(auth, email, password)
@@ -112,6 +119,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     // Create doctor document
+    if (!db) {
+      throw new Error("Firestore is not initialized. Please refresh the page.")
+    }
     await setDoc(doc(db, "doctors", user.uid), {
       ...doctorData,
       createdAt: new Date().toISOString(),
@@ -121,6 +131,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [networkOnline])
 
   const logout = useCallback(async () => {
+    if (!auth) {
+      throw new Error("Firebase authentication is not initialized. Please refresh the page.")
+    }
     await signOut(auth)
     logInfo("User logged out successfully")
   }, [])

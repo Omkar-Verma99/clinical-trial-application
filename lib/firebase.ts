@@ -59,15 +59,25 @@ let firebaseApp: any = null
 let auth: any = null
 let db: any = null
 
-if (typeof window !== "undefined") {
+if (typeof window !== "undefined" && firebaseConfig && Object.values(firebaseConfig).every(v => v)) {
   try {
+    console.log("Initializing Firebase with config:", { 
+      projectId: firebaseConfig.projectId,
+      authDomain: firebaseConfig.authDomain 
+    })
     firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp()
     auth = getAuth(firebaseApp)
     db = getFirestore(firebaseApp)
     
     // Initialize Analytics only in browser environment
     getAnalytics(firebaseApp)
+    console.log("✓ Firebase initialized successfully")
   } catch (error) {
+    console.error("Firebase initialization error:", error)
+  }
+} else if (typeof window !== "undefined") {
+  console.warn("Firebase config is incomplete or missing, deferring initialization")
+}
     console.error("Firebase initialization error:", error)
   }
 }
