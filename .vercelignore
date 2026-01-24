@@ -1,0 +1,13 @@
+.git
+.gitignore
+README.md
+.env
+.env.*.local
+firebase-debug.log
+.firebaserc
+.venv
+node_modules
+.next
+dist
+build
+*.md

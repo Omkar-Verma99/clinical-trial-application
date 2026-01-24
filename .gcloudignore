@@ -1,0 +1,57 @@
+# This file specifies files that should NOT be uploaded to Google Cloud
+# when deploying to Firebase App Hosting
+
+# node_modules will be installed in the container
+node_modules/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Development and build artifacts
+.next/
+out/
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+
+# Testing
+coverage/
+.nyc_output/
+
+# Other
+.turbo/
+.vercel/
+.firebase/
+
+# Documentation
+*.md
+README.md
+ARCHITECTURE_DIAGRAM.md
+BUG_AUDIT_REPORT.md
+CRF_*.md
+CRF_*.txt
+DEVELOPER_QUICK_REFERENCE.md
+EXPORT_COMPLETION_SUMMARY.md
+FINAL_STATUS_REPORT.md
+IMPLEMENTATION_SUMMARY.md
+PERFORMANCE_OPTIMIZATIONS.md
+PROJECT_ANALYSIS.md
+VALIDATION_CHECKLIST.md

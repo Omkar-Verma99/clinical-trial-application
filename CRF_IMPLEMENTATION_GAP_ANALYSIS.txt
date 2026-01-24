@@ -1,0 +1,243 @@
+# CRF Implementation - Gap Analysis
+
+**Checked Against**: KC MeSempa RWE Study - Case Record Form (Word Document)
+
+---
+
+## ✅ FULLY IMPLEMENTED (All Fields Present)
+
+### SECTION A – PATIENT IDENTIFICATION
+- ✅ Patient Code
+- ✅ Study Site / Clinic Code (studySiteCode)
+- ✅ Investigator Name
+- ✅ Date of Baseline Visit
+
+### SECTION B – DEMOGRAPHICS & LIFESTYLE
+- ✅ Age (years)
+- ✅ Gender (Male/Female/Other)
+- ✅ Height (cm)
+- ✅ Weight (kg)
+- ✅ BMI (kg/m²)
+- ✅ Smoking status (Never/Former/Current)
+- ✅ Alcohol intake (No/Occasional/Regular)
+- ✅ Physical activity level (Sedentary/Moderate/Active)
+
+### SECTION C – DIABETES HISTORY & PHENOTYPE
+- ✅ Duration of Type 2 Diabetes (years)
+- ✅ Baseline Glycemic Severity (HbA1c <7.5% / 7.5–8.5% / 8.6–10% / >10%)
+- ✅ Diabetes-Related Complications (Neuropathy/Retinopathy/Nephropathy/CAD/Stroke/None)
+
+### SECTION D – COMORBIDITIES
+- ✅ Hypertension
+- ✅ Dyslipidemia
+- ✅ Obesity
+- ✅ ASCVD
+- ✅ Heart Failure
+- ✅ Chronic Kidney Disease
+- ✅ Other (free text)
+- ✅ If CKD present – baseline eGFR category (≥90 / 60–89 / 45–59 / 30–44)
+
+### SECTION E – PRIOR ANTI-DIABETIC THERAPY
+- ✅ Previous Treatment Type (Drug-naïve/Oral only/Insulin only/Oral + Insulin)
+- ✅ Previously used drug classes (Metformin/Sulfonylurea/DPP-4/SGLT-2/TZD/Insulin)
+- ✅ Reason for initiating KC MeSempa (all 7 options + Other)
+
+### SECTION F – BASELINE CLINICAL & LAB PARAMETERS (WEEK 0)
+- ✅ HbA1c (%)
+- ✅ Fasting Plasma Glucose (mg/dL)
+- ✅ Post-Prandial Glucose (mg/dL)
+- ✅ Blood Pressure (Systolic/Diastolic in mmHg)
+- ✅ Heart Rate (bpm)
+- ✅ Serum Creatinine (mg/dL)
+- ✅ eGFR (mL/min/1.73 m²)
+- ✅ Urinalysis (Normal/Abnormal with specification)
+
+### SECTION G – TREATMENT & COUNSELLING (BASELINE)
+- ✅ KC MeSempa dose prescribed
+- ✅ Date of initiation
+- ✅ Counselling provided:
+  - ✅ Diet & lifestyle
+  - ✅ Hypoglycemia awareness
+  - ✅ UTI / genital infection awareness
+  - ✅ Hydration advice
+
+### SECTION H – FOLLOW-UP CLINICAL & LAB PARAMETERS (WEEK 12 ± 2 WEEKS)
+- ✅ HbA1c (%)
+- ✅ Fasting Plasma Glucose (mg/dL)
+- ✅ Post-Prandial Glucose (mg/dL)
+- ✅ Weight (kg)
+- ✅ Blood Pressure (Systolic/Diastolic in mmHg)
+- ✅ Serum Creatinine (mg/dL)
+- ✅ eGFR (mL/min/1.73 m²)
+- ✅ Urinalysis (Normal/Abnormal with specification)
+- ✅ Visit Date (Week 12 visit date)
+
+### SECTION I – GLYCEMIC RESPONSE ASSESSMENT
+- ✅ HbA1c Response Category:
+  - ✅ Super-responder (↓ ≥1.5%)
+  - ✅ Responder (↓ 1.0–1.49%)
+  - ✅ Partial responder (↓ 0.5–0.99%)
+  - ✅ Non-responder (<0.5%)
+- ✅ AUTO-CALCULATED in outcomes-calculator.ts
+- ✅ Exported to PDF and CSV
+
+### SECTION J – WEIGHT, BP & RENAL OUTCOMES
+- ✅ Weight change:
+  - ✅ Loss ≥3 kg
+  - ✅ Loss 1–2.9 kg
+  - ✅ Neutral
+  - ✅ Gain
+- ✅ Blood pressure control achieved (Yes/No)
+- ✅ Renal outcome:
+  - ✅ Improved eGFR
+  - ✅ Stable eGFR
+  - ✅ Decline <10%
+  - ✅ Decline ≥10%
+- ✅ AUTO-CALCULATED in outcomes-calculator.ts
+
+### SECTION K – ADHERENCE & TREATMENT DURABILITY
+- ✅ Patient continuing KC MeSempa at Week 12? (Yes/No)
+- ✅ If discontinued, reason:
+  - ✅ Adverse event
+  - ✅ Lack of efficacy
+  - ✅ Cost
+  - ✅ Patient preference
+  - ✅ Other (free text)
+- ✅ Missed doses in last 7 days (0 / 1–2 / 3–5 / >5)
+- ✅ Any add-on / change in anti-diabetic therapy? (No/Yes with details)
+
+### SECTION L – EVENTS OF SPECIAL INTEREST
+- ✅ Hypoglycemia – mild
+- ✅ Hypoglycemia – moderate
+- ✅ Hypoglycemia – severe
+- ✅ UTI
+- ✅ Genital mycotic infection
+- ✅ Dizziness / dehydration symptoms
+- ✅ Hospitalization / ER visit (with reason specification)
+
+### SECTION M – PHYSICIAN GLOBAL ASSESSMENT
+- ✅ Overall efficacy (Excellent/Good/Moderate/Poor)
+- ✅ Overall tolerability (Excellent/Good/Fair/Poor)
+- ✅ Compliance (Excellent/Good/Fair/Poor)
+- ✅ Would you prefer KC MeSempa for long-term therapy? (Yes/No)
+- ✅ Patient profiles where KC MeSempa is preferred:
+  - ✅ Uncontrolled T2DM
+  - ✅ Obese T2DM
+  - ✅ CKD patients
+  - ✅ HTN + T2DM
+  - ✅ Elderly patients
+
+### SECTION N – PATIENT-REPORTED OUTCOMES
+- ✅ Overall satisfaction with therapy (Very satisfied/Satisfied/Neutral/Not satisfied)
+- ✅ GI tolerance vs prior therapy (Improved/Same/Worse)
+- ✅ Patient confidence in managing diabetes (Improved/Same/Worse)
+- ✅ Additional comments (optional)
+
+---
+
+## ⚠️ PARTIAL/INCOMPLETE IMPLEMENTATION
+
+### SECTION L – SAFETY & ADVERSE EVENTS (GENERAL TABLE)
+**Status**: Partial - Events of Special Interest implemented, but missing general adverse event table
+
+**CRF Requirement**:
+```
+Adverse Event Details (MedDRA preferred term)
+┌─────────┬─────────┬────────┬───────┬────────────┬─────────┐
+│ AE Term │ Onset   │ Sever- │Serious│ Action     │ Outcome │
+│         │ Date    │ity    │ Y/N   │ Taken      │         │
+├─────────┼─────────┼────────┼───────┼────────────┼─────────┤
+│         │ (MedDRA)│☐M/M/S │☐Y/N  │☐None/Dose/ │☐Resolved│
+│         │         │        │       │  Stop/Ref  │☐Ongoing │
+└─────────┴─────────┴────────┴───────┴────────────┴─────────┘
+```
+
+**What's Implemented**: 
+- Type definition exists: `adverseEventsStructured` with aeTerm, onsetDate, severity, isSerious, actionTaken, outcome
+- Not fully utilized in forms yet
+
+**Recommendation**: Add general adverse event table entry form to allow physicians to document all adverse events with:
+- AE Term (MedDRA preferred term)
+- Onset Date
+- Severity (Mild/Moderate/Severe)
+- Is Serious (Yes/No)
+- Action Taken (None/Dose adjusted/Drug stopped/Referred)
+- Outcome (Resolved/Ongoing)
+
+---
+
+## ❌ NOT IMPLEMENTED
+
+### SECTION O – DATA PRIVACY & CONFIDENTIALITY
+**Status**: Missing from implementation
+
+**CRF Content**:
+- No personal identifiers recorded in this CRF
+- Data collected as part of routine clinical practice
+- Patient identity mapping retained only at clinic level
+
+**Recommendation**: 
+- Add as informational section in forms
+- Checkbox: "I confirm this CRF contains no personal identifiers"
+- Display privacy statements in patient data entry areas
+
+---
+
+### SECTION P – PHYSICIAN DECLARATION
+**Status**: Missing from implementation
+
+**CRF Content**:
+- "I confirm that the above information is accurate and recorded as part of standard clinical practice."
+- Physician Name
+- Qualification
+- Clinic / Hospital Name
+- Signature & Stamp
+- Date
+
+**Recommendation**:
+- Add physician declaration form section
+- Fields:
+  - Physician Name (auto-filled from logged-in doctor)
+  - Qualification (auto-filled from doctor profile)
+  - Clinic / Hospital Name (auto-filled from doctor.studySiteCode)
+  - Signature (digital signature or checkbox for electronic signature)
+  - Date (auto-filled with current date)
+- Make this a required section before CRF submission
+
+---
+
+## Summary by Completion Level
+
+| Level | Count | Items |
+|-------|-------|-------|
+| ✅ Fully Implemented | 13 | Sections A-N (all data fields) |
+| ⚠️ Partial | 1 | Section L (Events of Special Interest done, general AE table pending) |
+| ❌ Missing | 2 | Sections O & P (informational/signature sections) |
+
+---
+
+## Implementation Priority
+
+### High Priority (Regulatory Requirement)
+1. **SECTION L - Adverse Event Details Table** - Add general AE form with MedDRA terms
+2. **SECTION P - Physician Declaration** - Add digital signature/certification section
+
+### Medium Priority (Documentation)
+1. **SECTION O - Privacy Statement** - Add informational section with checkboxes
+
+---
+
+## Code Locations
+
+**Implemented Sections**:
+- Type definitions: [lib/types.ts](lib/types.ts)
+- Patient forms: [app/patients/add/page.tsx](app/patients/add/page.tsx) (SECTIONS A-E)
+- Baseline form: [components/baseline-form.tsx](components/baseline-form.tsx) (SECTIONS F-G)
+- Follow-up form: [components/followup-form-new.tsx](components/followup-form-new.tsx) (SECTIONS H-N)
+- PDF/CSV export: [lib/pdf-export.ts](lib/pdf-export.ts) (All sections exported)
+
+**Pending Implementation**:
+- General Adverse Event form (SECTION L)
+- Physician Declaration section (SECTION P)
+- Privacy Statement section (SECTION O)
+
