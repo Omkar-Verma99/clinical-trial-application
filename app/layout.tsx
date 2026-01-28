@@ -9,7 +9,7 @@ const geist = Geist({
   subsets: ["latin"],
   display: 'swap',
   preload: true,
-  weight: ['100', '200', '300', '400', '500', '600', '700', '800', '900'],
+  weight: ['400', '500', '600', '700'],
 })
 const geistMono = Geist_Mono({ 
   subsets: ["latin"],

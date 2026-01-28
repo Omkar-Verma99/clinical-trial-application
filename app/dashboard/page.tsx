@@ -107,7 +107,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [patients, setPatients] = useState<PatientWithStatus[]>([])
   const [loadingPatients, setLoadingPatients] = useState(true)
-  const [pagination, setPagination] = useState({ offset: 0, limit: 50, hasMore: false })
+  const [pagination, setPagination] = useState({ offset: 0, limit: 15, hasMore: false })
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [indexedDBReady, setIndexedDBReady] = useState(false)
 
@@ -147,6 +147,8 @@ export default function DashboardPage() {
     if (!user || !db) return
 
     // Set up real-time listener for patient list
+    // Optimized query: Use limit to fetch only necessary patients (pagination-aware)
+    // Fetching limit + 1 to check if hasMore
     const q = query(
       collection(db, "patients"),
       where("doctorId", "==", user.uid),
