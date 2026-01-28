@@ -42,6 +42,7 @@ export default function PatientDetailPage({ params }: Props) {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const [exporting, setExporting] = useState(false)
+  // Note: selectedFollowUp removed - now using dynamic visit tabs from followUps array
 
   useEffect(() => {
     params
@@ -76,10 +77,7 @@ export default function PatientDetailPage({ params }: Props) {
           }
           if (patientData.followups && Array.isArray(patientData.followups)) {
             setFollowUps(patientData.followups)
-            // Auto-select first followup if viewing followup tab
-            if (patientData.followups.length > 0 && !selectedFollowUp) {
-              setSelectedFollowUp(patientData.followups[0])
-            }
+            // Dynamic visit tabs are now created from followUps array
           } else {
             setFollowUps([])
           }
@@ -285,7 +283,7 @@ export default function PatientDetailPage({ params }: Props) {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className={`grid w-full ${followUps.length > 0 ? `grid-cols-${3 + followUps.length + 1}` : 'grid-cols-4'}`}>
+          <TabsList className="grid w-full gap-0" style={{ gridTemplateColumns: `repeat(${3 + followUps.length + 1}, minmax(0, 1fr))` }}>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="baseline">Baseline</TabsTrigger>
             
@@ -522,34 +520,7 @@ export default function PatientDetailPage({ params }: Props) {
             <TabsContent value="comparison">
               {baseline && followUps.length > 0 ? (
                 <div className="space-y-4">
-                  {/* Select which followup to compare */}
-                  {followUps.length > 1 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Select Follow-up Visit for Comparison</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                          {followUps.map((visit, index) => (
-                            <button
-                              key={index}
-                              onClick={() => setSelectedFollowUp(visit)}
-                              className={`p-3 text-center rounded-lg border-2 transition-colors ${
-                                selectedFollowUp === visit
-                                  ? "border-primary bg-primary/5"
-                                  : "border-muted hover:border-primary/50"
-                              }`}
-                            >
-                              <p className="font-semibold">Visit {visit.visitNumber}</p>
-                              <p className="text-xs text-muted-foreground">{visit.visitDate}</p>
-                            </button>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  <ComparisonViewLoader baseline={baseline} followUp={selectedFollowUp || followUps[0]} patient={patient} followUps={followUps} exporting={exporting} onExport={handleExportPDF} />
+                  <ComparisonViewLoader baseline={baseline} followUp={followUps[0]} patient={patient} followUps={followUps} exporting={exporting} onExport={handleExportPDF} />
                 </div>
               ) : (
                 <Card className="p-8 text-center">

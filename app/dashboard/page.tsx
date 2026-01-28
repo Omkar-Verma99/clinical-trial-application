@@ -59,17 +59,17 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
 
   return (
     <div className="bg-white dark:bg-slate-950 rounded-lg border border-border shadow-sm hover:shadow-md transition-shadow overflow-hidden">
-      <div className="flex gap-0 h-full">
+      <div className="flex gap-0 h-full min-h-64">
         {/* LEFT: Patient Card (35%) */}
-        <div className="w-[35%] border-r border-border bg-gradient-to-b from-blue-50 dark:from-slate-900 to-white dark:to-slate-950 p-6 space-y-6">
+        <div className="w-[35%] border-r border-border bg-gradient-to-b from-blue-50 dark:from-slate-900 to-white dark:to-slate-950 p-4 space-y-3">
           {/* Avatar Section */}
-          <div className="space-y-3">
-            <div className="h-20 w-20 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-2xl font-bold text-white shadow-md">
+          <div className="space-y-2">
+            <div className="h-16 w-16 mx-auto rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-xl font-bold text-white shadow-md">
               {initials}
             </div>
             <div className="text-center">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white">{patient.patientCode}</h3>
-              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">{patient.patientCode}</h3>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
                 {patient.age}y • {patient.gender} • {patient.durationOfDiabetes}y DM
               </p>
             </div>
@@ -77,7 +77,7 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
 
           {/* Status Badge */}
           <div className="flex justify-center">
-            <Badge className={`${getStatusColor(statusInfo.status)} px-3 py-1`}>
+            <Badge className={`${getStatusColor(statusInfo.status)} px-2 py-0.5 text-xs`}>
               {statusInfo.label}
             </Badge>
           </div>
@@ -92,13 +92,13 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
           </div>
 
           {/* Medical Summary */}
-          <div className="space-y-3 border-t border-blue-200 dark:border-slate-700 pt-4">
+          <div className="space-y-2 border-t border-blue-200 dark:border-slate-700 pt-2">
             <div>
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">PREVIOUS THERAPY</p>
-              <div className="flex flex-wrap gap-1.5">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">PREVIOUS THERAPY</p>
+              <div className="flex flex-wrap gap-1">
                 {previousTherapies.length > 0 ? (
-                  previousTherapies.map((therapy: string) => (
-                    <span key={therapy} className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-2 py-1 rounded-full">
+                  previousTherapies.slice(0, 2).map((therapy: string) => (
+                    <span key={therapy} className="text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 px-1.5 py-0.5 rounded-full">
                       {therapy}
                     </span>
                   ))
@@ -109,11 +109,11 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
             </div>
 
             <div>
-              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">COMORBIDITIES</p>
-              <div className="flex flex-wrap gap-1.5">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">COMORBIDITIES</p>
+              <div className="flex flex-wrap gap-1">
                 {comorbidities.length > 0 ? (
-                  comorbidities.map((condition) => (
-                    <span key={condition} className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 px-2 py-1 rounded-full">
+                  comorbidities.slice(0, 2).map((condition) => (
+                    <span key={condition} className="text-xs bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 px-1.5 py-0.5 rounded-full">
                       {condition}
                     </span>
                   ))
@@ -125,9 +125,9 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
           </div>
 
           {/* Progress Indicators */}
-          <div className="border-t border-blue-200 dark:border-slate-700 pt-4 space-y-2">
+          <div className="border-t border-blue-200 dark:border-slate-700 pt-2 space-y-1">
             <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">PROGRESS</p>
-            <div className="space-y-2">
+            <div className="space-y-1">
               <div className="flex items-center gap-2">
                 <div className={`h-2 w-2 rounded-full ${patient.hasBaseline ? "bg-green-500" : "bg-gray-300"}`} />
                 <span className="text-xs text-slate-600 dark:text-slate-400">
@@ -152,7 +152,7 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
           {/* Action Button */}
           <button
             onClick={(e) => handleActionClick(e, patient)}
-            className={`w-full px-4 py-2.5 rounded-md font-semibold text-white transition-all text-sm ${
+            className={`w-full px-3 py-2 rounded-md font-semibold text-white transition-all text-xs mt-1 ${
               statusInfo.status === "completed"
                 ? "bg-green-600 hover:bg-green-700 hover:shadow-md"
                 : statusInfo.status === "in-progress"
@@ -165,58 +165,40 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
         </div>
 
         {/* RIGHT: Details Panel (65%) */}
-        <div className="flex-1 p-6 flex flex-col">
+        <div className="flex-1 p-4 flex flex-col">
           {/* Header */}
-          <div className="mb-6 pb-4 border-b border-border">
-            <h4 className="text-sm font-bold text-slate-700 dark:text-slate-300 mb-3">PATIENT DETAILS</h4>
-            <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="mb-4 pb-3 border-b border-border">
+            <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase">PATIENT DETAILS</h4>
+            <div className="grid grid-cols-3 gap-2 text-xs">
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Patient Code</p>
                 <p className="font-semibold text-slate-900 dark:text-white">{patient.patientCode}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Status</p>
-                <p className="font-semibold text-slate-900 dark:text-white">{statusInfo.label}</p>
+                <p className="font-semibold text-slate-900 dark:text-white text-xs">{statusInfo.label}</p>
               </div>
               <div>
                 <p className="text-xs text-slate-500 dark:text-slate-400">Age</p>
-                <p className="font-semibold text-slate-900 dark:text-white">{patient.age} years</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Gender</p>
-                <p className="font-semibold text-slate-900 dark:text-white">{patient.gender}</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">DM Duration</p>
-                <p className="font-semibold text-slate-900 dark:text-white">{patient.durationOfDiabetes} years</p>
-              </div>
-              <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Enrolled</p>
-                <p className="font-semibold text-slate-900 dark:text-white">
-                  {new Date(patient.createdAt).toLocaleDateString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric"
-                  })}
-                </p>
+                <p className="font-semibold text-slate-900 dark:text-white">{patient.age}y</p>
               </div>
             </div>
           </div>
 
           {/* Medical Info */}
-          <div className="space-y-4 flex-1">
+          <div className="space-y-3 flex-1">
             <div>
-              <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">MEDICAL HISTORY</h5>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-md">
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Previous Medications</p>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white line-clamp-2">
+              <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-1 uppercase">MEDICAL HISTORY</h5>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-slate-50 dark:bg-slate-900 p-2 rounded-md">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Previous Meds</p>
+                  <p className="text-xs font-semibold text-slate-900 dark:text-white line-clamp-1">
                     {previousTherapies.length > 0 ? previousTherapies.join(", ") : "None"}
                   </p>
                 </div>
-                <div className="bg-slate-50 dark:bg-slate-900 p-3 rounded-md">
+                <div className="bg-slate-50 dark:bg-slate-900 p-2 rounded-md">
                   <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Comorbidities</p>
-                  <p className="text-sm font-semibold text-slate-900 dark:text-white line-clamp-2">
+                  <p className="text-xs font-semibold text-slate-900 dark:text-white line-clamp-1">
                     {comorbidities.length > 0 ? comorbidities.join(", ") : "None"}
                   </p>
                 </div>
@@ -225,24 +207,20 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
 
             {/* Assessment Timeline */}
             <div>
-              <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-3">ASSESSMENT TIMELINE</h5>
-              <div className="space-y-2">
-                <div className="flex items-start gap-3 p-2 bg-slate-50 dark:bg-slate-900 rounded-md">
-                  <div className="text-lg mt-0.5">
-                    {patient.hasBaseline ? "✅" : "⭕"}
-                  </div>
+              <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase">ASSESSMENT STATUS</h5>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 p-1">
+                  <span className="text-sm">{patient.hasBaseline ? "✅" : "⭕"}</span>
                   <div>
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Baseline Assessment</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{patient.hasBaseline ? "Completed" : "Pending"}</p>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Baseline</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{patient.hasBaseline ? "✓" : "Pending"}</p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-2 bg-slate-50 dark:bg-slate-900 rounded-md">
-                  <div className="text-lg mt-0.5">
-                    {patient.hasFollowUp ? "✅" : "⭕"}
-                  </div>
+                <div className="flex items-center gap-2 p-1">
+                  <span className="text-sm">{patient.hasFollowUp ? "✅" : "⭕"}</span>
                   <div>
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Follow-up Assessment</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">{patient.hasFollowUp ? "Completed" : "Pending"}</p>
+                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Follow-up</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{patient.hasFollowUp ? "✓" : "Pending"}</p>
                   </div>
                 </div>
               </div>
@@ -250,13 +228,14 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
           </div>
 
           {/* Bottom Actions */}
-          <div className="pt-4 border-t border-border mt-4">
+          <div className="pt-2 border-t border-border mt-2">
             <Button 
               variant="outline" 
-              className="w-full bg-transparent text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-950"
+              size="sm"
+              className="w-full bg-transparent text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-950 text-xs h-8"
               onClick={(e) => handleActionClick(e, patient)}
             >
-              View Full Details →
+              View Details →
             </Button>
           </div>
         </div>
