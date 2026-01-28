@@ -39,7 +39,6 @@ export default function PatientDetailPage({ params }: Props) {
   const [patient, setPatient] = useState<Patient | null>(null)
   const [baseline, setBaseline] = useState<BaselineData | null>(null)
   const [followUps, setFollowUps] = useState<FollowUpData[]>([])
-  const [selectedFollowUp, setSelectedFollowUp] = useState<FollowUpData | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const [exporting, setExporting] = useState(false)
@@ -286,10 +285,17 @@ export default function PatientDetailPage({ params }: Props) {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className={`grid w-full ${followUps.length > 0 ? `grid-cols-${3 + followUps.length + 1}` : 'grid-cols-4'}`}>
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="baseline">Baseline</TabsTrigger>
-            <TabsTrigger value="followup">Follow-up</TabsTrigger>
+            
+            {/* Dynamic Visit Tabs */}
+            {followUps.length > 0 && followUps.map((_, index) => (
+              <TabsTrigger key={`visit-${index}`} value={`visit-${index}`}>
+                Visit {index + 1}
+              </TabsTrigger>
+            ))}
+            
             <TabsTrigger value="comparison" disabled={!baseline || followUps.length === 0}>
               Comparison
             </TabsTrigger>
@@ -348,17 +354,61 @@ export default function PatientDetailPage({ params }: Props) {
 
                   <div className="pt-4 border-t">
                     <div className="flex flex-wrap gap-3">
-                      {!baseline && <Button onClick={() => setActiveTab("baseline")}>Add Baseline Assessment</Button>}
-                      {baseline && followUps.length === 0 && (
-                        <Button onClick={() => { setSelectedFollowUp(null); setActiveTab("followup") }}>Add Follow-up Visit</Button>
+                      {!baseline && (
+                        <Button onClick={() => setActiveTab("baseline")}>
+                          Add Baseline Assessment
+                        </Button>
                       )}
+                      
+                      {baseline && followUps.length === 0 && (
+                        <Button 
+                          onClick={() => {
+                            // Create first visit
+                            const firstVisit: FollowUpData = {
+                              visitNumber: 1,
+                              visitDate: "",
+                              hba1c: null as any,
+                              fpg: null as any,
+                              ppg: null as any,
+                              weight: null as any,
+                              bloodPressureSystolic: null as any,
+                              bloodPressureDiastolic: null as any,
+                              serumCreatinine: null as any,
+                              egfr: null as any,
+                              urinalysis: "",
+                              efficacy: "",
+                              tolerability: "",
+                              compliance: "",
+                              satisfaction: "",
+                              comments: "",
+                              actionTaken: [],
+                              outcome: [],
+                              adverseEvents: "",
+                              status: "draft",
+                            } as FollowUpData
+                            setFollowUps([firstVisit])
+                            setActiveTab("visit-0")
+                          }}
+                        >
+                          + Add First Follow-up Visit
+                        </Button>
+                      )}
+                      
                       {baseline && followUps.length > 0 && (
                         <>
-                          <Button onClick={() => { setSelectedFollowUp(null); setActiveTab("followup") }}>Add New Visit</Button>
-                          <Button variant="outline" onClick={() => setActiveTab("followup")}>View/Edit Visits ({followUps.length})</Button>
-                          <Button onClick={() => setActiveTab("comparison")}>View Comparison</Button>
+                          <Button 
+                            onClick={() => setActiveTab("visit-0")}
+                          >
+                            View/Edit Visits ({followUps.length})
+                          </Button>
+                          <Button 
+                            onClick={() => setActiveTab("comparison")}
+                          >
+                            View Comparison
+                          </Button>
                         </>
                       )}
+
                     </div>
                   </div>
                 </CardContent>
@@ -372,60 +422,67 @@ export default function PatientDetailPage({ params }: Props) {
             </TabsContent>
           )}
 
-          {activeTab === "followup" && (
-            <TabsContent value="followup">
+          {/* Dynamic Visit Tabs */}
+          {followUps.map((visit, visitIndex) => (
+            <TabsContent key={`visit-content-${visitIndex}`} value={`visit-${visitIndex}`}>
               {baseline ? (
-                <div className="space-y-4">
-                  {/* List existing followup visits */}
-                  {followUps.length > 0 && (
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Existing Follow-up Visits ({followUps.length})</CardTitle>
-                        <CardDescription>Click on a visit to edit it</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="grid gap-2">
-                          {followUps.map((visit, index) => (
-                            <button
-                              key={index}
-                              onClick={() => setSelectedFollowUp(visit)}
-                              className={`p-4 text-left rounded-lg border-2 transition-colors ${
-                                selectedFollowUp === visit
-                                  ? "border-primary bg-primary/5"
-                                  : "border-muted hover:border-primary/50"
-                              }`}
-                            >
-                              <div className="flex justify-between items-start">
-                                <div>
-                                  <p className="font-semibold">Visit {visit.visitNumber}</p>
-                                  <p className="text-sm text-muted-foreground">Date: {visit.visitDate}</p>
-                                </div>
-                                <span className="text-xs bg-muted px-2 py-1 rounded">
-                                  {visit.status === 'submitted' ? '✓ Submitted' : '✎ Draft'}
-                                </span>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Form for new or existing followup */}
+                <div className="space-y-6">
+                  {/* Form for this visit */}
                   <MemoizedFollowUpForm
                     patientId={patient.id}
-                    existingData={selectedFollowUp || null}
+                    existingData={visit}
                     baselineDate={patient.baselineVisitDate}
                     allFollowUps={followUps}
                     onSuccess={() => {
-                      setSelectedFollowUp(null)
-                      if (followUps.length > 0) {
-                        setActiveTab("followup")
-                      } else {
-                        setActiveTab("comparison")
-                      }
+                      // Refresh and stay on this visit
+                      setActiveTab(`visit-${visitIndex}`)
                     }}
                   />
+
+                  {/* Divider */}
+                  <div className="border-t pt-6" />
+
+                  {/* Add New Visit Button - Only show if this is the last visit */}
+                  {visitIndex === followUps.length - 1 && (
+                    <div className="flex justify-center">
+                      <Button
+                        onClick={() => {
+                          // Create new empty visit entry
+                          const newVisit: FollowUpData = {
+                            visitNumber: followUps.length + 1,
+                            visitDate: "",
+                            hba1c: null as any,
+                            fpg: null as any,
+                            ppg: null as any,
+                            weight: null as any,
+                            bloodPressureSystolic: null as any,
+                            bloodPressureDiastolic: null as any,
+                            serumCreatinine: null as any,
+                            egfr: null as any,
+                            urinalysis: "",
+                            efficacy: "",
+                            tolerability: "",
+                            compliance: "",
+                            satisfaction: "",
+                            comments: "",
+                            actionTaken: [],
+                            outcome: [],
+                            adverseEvents: "",
+                            status: "draft",
+                          } as FollowUpData
+                          
+                          // Add to followUps and switch to new visit
+                          const updatedFollowUps = [...followUps, newVisit]
+                          setFollowUps(updatedFollowUps)
+                          setActiveTab(`visit-${updatedFollowUps.length - 1}`)
+                        }}
+                        size="lg"
+                        className="gap-2"
+                      >
+                        <span>+ ADD NEW VISIT (Visit {followUps.length + 1})</span>
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <Card className="p-8 text-center">
@@ -435,6 +492,29 @@ export default function PatientDetailPage({ params }: Props) {
                   </Button>
                 </Card>
               )}
+            </TabsContent>
+          ))}
+
+          {/* Show form for first visit if no visits exist yet */}
+          {baseline && followUps.length === 0 && activeTab !== "overview" && activeTab !== "baseline" && activeTab !== "comparison" && (
+            <TabsContent value="new-visit">
+              <div className="space-y-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Add First Follow-up Visit</CardTitle>
+                    <CardDescription>Complete the follow-up assessment</CardDescription>
+                  </CardHeader>
+                </Card>
+                <MemoizedFollowUpForm
+                  patientId={patient.id}
+                  existingData={null}
+                  baselineDate={patient.baselineVisitDate}
+                  allFollowUps={[]}
+                  onSuccess={() => {
+                    setActiveTab("overview")
+                  }}
+                />
+              </div>
             </TabsContent>
           )}
 
