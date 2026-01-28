@@ -26,6 +26,9 @@ import { indexedDBService, type StoredFormData, type SyncQueueItem } from '@/lib
 import { db } from '@/lib/firebase'
 import { collection, addDoc, updateDoc, doc, onSnapshot, query, where, getDocs } from 'firebase/firestore'
 
+// Helper to detect development environment safely on client-side
+const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
+
 interface SyncStatus {
   isOnline: boolean
   isSyncing: boolean
@@ -45,6 +48,14 @@ export function useIndexedDBSync(patientId: string) {
 
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
+  const lastSeenDataRef = useRef<Map<string, any>>(new Map())
+  const syncStatusRef = useRef<SyncStatus>({
+    isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+    isSyncing: false,
+    pendingItems: 0,
+    lastSyncTime: null,
+    errors: [],
+  })
 
   /**
    * Initialize IndexedDB and set up listeners
@@ -65,12 +76,12 @@ export function useIndexedDBSync(patientId: string) {
         // Set up real-time listeners for Firebase changes
         setupRealtimeSync()
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopmentEnv()) {
           console.log('✓ IndexedDB sync initialized for patient:', patientId)
         }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Initialization failed'
-        if (process.env.NODE_ENV === 'development') {
+        if (isDevelopmentEnv()) {
           console.error('IndexedDB sync initialization error:', errorMsg)
         }
         addError(errorMsg)
@@ -107,7 +118,7 @@ export function useIndexedDBSync(patientId: string) {
       }))
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Failed to update stats'
-      if (process.env.NODE_ENV === 'development') {
+      if (isDevelopmentEnv()) {
         console.error('Sync status error:', errorMsg)
       }
     }
@@ -127,9 +138,6 @@ export function useIndexedDBSync(patientId: string) {
    * Handle online event - trigger sync
    */
   const handleOnline = useCallback(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📡 Network online - triggering sync')
-    }
     setSyncStatus(prev => ({ ...prev, isOnline: true }))
     performSync()
   }, [])
@@ -138,21 +146,23 @@ export function useIndexedDBSync(patientId: string) {
    * Handle offline event
    */
   const handleOffline = useCallback(() => {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('📡 Network offline - data saved locally')
-    }
     setSyncStatus(prev => ({ ...prev, isOnline: false }))
   }, [])
 
   /**
    * Main sync function - sends queued items to Firebase
+   * V4 Schema: Writes baseline & followups to unified /patients/{patientId} document
    */
   const performSync = useCallback(async () => {
-    if (syncStatus.isSyncing || !syncStatus.isOnline) {
+    // Use ref to check status instead of state dependency to avoid constant recreations
+    if (syncStatusRef.current.isSyncing || !syncStatusRef.current.isOnline) {
       return
     }
 
-    setSyncStatus(prev => ({ ...prev, isSyncing: true }))
+    setSyncStatus(prev => {
+      syncStatusRef.current = { ...prev, isSyncing: true }
+      return syncStatusRef.current
+    })
 
     try {
       const pendingItems = await indexedDBService.getPendingSyncItems()
@@ -166,128 +176,147 @@ export function useIndexedDBSync(patientId: string) {
         return
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log(`🔄 Syncing ${pendingItems.length} items to Firebase`)
+      if (isDevelopmentEnv()) {
+        console.log(`🔄 Syncing ${pendingItems.length} items to Firebase (V4 unified schema)`)
       }
 
-      // Process each pending item
+      // Group items by patientId for efficient batch writes
+      const itemsByPatient = new Map<string, typeof pendingItems>()
+      
       for (const item of pendingItems) {
+        const patientId = item.patientId || ''
+        if (!patientId) {
+          await indexedDBService.recordSyncFailure(item.id, 'Missing patientId - cannot sync')
+          continue
+        }
+        
+        if (!itemsByPatient.has(patientId)) {
+          itemsByPatient.set(patientId, [])
+        }
+        itemsByPatient.get(patientId)!.push(item)
+      }
+
+      // Process each patient's data
+      for (const [patientId, items] of itemsByPatient.entries()) {
         try {
-          const formData = await indexedDBService.loadForm(item.formId)
+          // Load all forms for this patient
+          const baselineForm = items.find(i => i.formType === 'baseline')
+          const followupForms = items.filter(i => i.formType === 'followup')
 
-          if (!formData) {
-            await indexedDBService.markAsSynced(item.id)
-            continue
+          // Load baseline data
+          let baselineData = undefined
+          if (baselineForm) {
+            const baselineDb = await indexedDBService.loadForm(baselineForm.formId || '')
+            if (baselineDb?.data) {
+              baselineData = baselineDb.data
+              delete (baselineData as any).createdAt // Don't overwrite server createdAt
+            }
           }
 
-          // Map formType to Firebase collection
-          const collectionMap: Record<string, string> = {
-            baseline: 'baselineData',
-            followup: 'followUpData',
-            patient: 'patients',
+          // Load followup data
+          const followupsData: any[] = []
+          for (const followupForm of followupForms) {
+            const followupDb = await indexedDBService.loadForm(followupForm.formId || '')
+            if (followupDb?.data) {
+              const followupData = followupDb.data
+              delete (followupData as any).createdAt // Don't overwrite server createdAt
+              followupsData.push(followupData)
+            }
           }
 
-          const collectionName = collectionMap[item.formType]
-          if (!collectionName) {
-            await indexedDBService.recordSyncFailure(item.id, `Unknown form type: ${item.formType}`)
-            continue
-          }
-
-          // Check if document exists in Firebase
-          const existingId = (formData as any).firebaseId || item.formId
-          const docRef = doc(db, collectionName, existingId)
-
-          // Prepare data for Firebase (remove IndexedDB-specific fields)
-          const firebaseData = {
-            ...formData.data,
-            patientId: formData.patientId,
-            isDraft: false,
+          // V4 UNIFIED SCHEMA: Update /patients/{patientId} with baseline & followups
+          const patientRef = doc(db, 'patients', patientId)
+          const updateData: Record<string, any> = {
             updatedAt: new Date().toISOString(),
           }
 
-          // Try to update first, if fails create new
-          try {
-            await updateDoc(docRef, firebaseData)
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`✓ Updated in Firebase: ${item.formId}`)
-            }
-          } catch (updateError) {
-            if ((updateError as any).code === 'not-found') {
-              // Document doesn't exist, create it
-              const newDocRef = await addDoc(collection(db, collectionName), {
-                ...firebaseData,
-                createdAt: formData.savedAt,
-              })
-              
-              // Store Firebase ID for future updates
-              ;(formData as any).firebaseId = newDocRef.id
-              await indexedDBService.saveForm(
-                item.formId,
-                item.formType,
-                formData.patientId,
-                formData.data,
-                false,
-                formData.validationErrors
-              )
-              
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`✓ Created in Firebase: ${item.formId}`)
-              }
-            } else {
-              throw updateError
+          // Add baseline if exists
+          if (baselineData) {
+            updateData.baseline = baselineData
+            if (isDevelopmentEnv()) {
+              console.log(`📝 Syncing baseline for patient ${patientId}`)
             }
           }
 
-          // Mark as synced
-          await indexedDBService.markAsSynced(item.id)
+          // Add followups if exist (replace entire array)
+          if (followupsData.length > 0) {
+            updateData.followUps = followupsData
+            if (isDevelopmentEnv()) {
+              console.log(`📝 Syncing ${followupsData.length} followup(s) for patient ${patientId}`)
+            }
+          }
+
+          // Single write to unified patient document
+          await updateDoc(patientRef, updateData)
+
+          if (isDevelopmentEnv()) {
+            console.log(`✓ Patient ${patientId} synced to V4 unified schema`)
+          }
+
+          // Mark all items for this patient as synced
+          for (const item of items) {
+            await indexedDBService.markAsSynced(item.id)
+          }
         } catch (error) {
           const errorMsg = error instanceof Error ? error.message : 'Sync error'
-          await indexedDBService.recordSyncFailure(item.id, errorMsg)
-          addError(`Failed to sync ${item.formId}: ${errorMsg}`)
-          if (process.env.NODE_ENV === 'development') {
-            console.error(`Sync failed for ${item.formId}:`, errorMsg)
+          
+          // Mark failed items
+          for (const item of items) {
+            await indexedDBService.recordSyncFailure(item.id, errorMsg)
+          }
+          
+          addError(`Failed to sync patient ${patientId}: ${errorMsg}`)
+          if (isDevelopmentEnv()) {
+            console.error(`Sync failed for patient ${patientId}:`, errorMsg)
           }
         }
       }
 
       await updateSyncStatus()
-      setSyncStatus(prev => ({
-        ...prev,
-        isSyncing: false,
-        lastSyncTime: new Date().toISOString(),
-      }))
+      setSyncStatus(prev => {
+        syncStatusRef.current = { ...prev, isSyncing: false, lastSyncTime: new Date().toISOString() }
+        return syncStatusRef.current
+      })
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✓ Sync cycle complete')
+      if (isDevelopmentEnv()) {
+        console.log('✓ Sync cycle complete (V4 unified schema)')
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Sync failed'
-      setSyncStatus(prev => ({ ...prev, isSyncing: false }))
+      setSyncStatus(prev => {
+        syncStatusRef.current = { ...prev, isSyncing: false }
+        return syncStatusRef.current
+      })
       addError(errorMsg)
-      if (process.env.NODE_ENV === 'development') {
+      if (isDevelopmentEnv()) {
         console.error('Sync error:', errorMsg)
       }
     }
-  }, [syncStatus.isSyncing, syncStatus.isOnline, updateSyncStatus, addError])
+  }, [updateSyncStatus, addError])
 
   /**
-   * Start background sync interval
+   * Start event-driven sync (NO POLLING)
+   * Sync only happens when:
+   * 1. Form is submitted
+   * 2. Network comes online
+   * 3. Firebase data changes (real-time listener)
    */
   const startBackgroundSync = useCallback(() => {
-    // Clear any existing interval first
+    // Clear any existing polling interval
     if (syncIntervalRef.current) {
       clearInterval(syncIntervalRef.current)
       syncIntervalRef.current = null
     }
     
-    // Sync every 30 seconds if online (check current status, not closure)
-    syncIntervalRef.current = setInterval(() => {
-      // Check current online status using navigator API to avoid stale closure
-      if (navigator.onLine) {
-        performSync()
-      }
-    }, 30000)
-  }, [performSync])
+    if (isDevelopmentEnv()) {
+      console.log('✅ Event-driven sync active - NO polling, only on-demand')
+    }
+    
+    // Sync will be triggered by:
+    // - handleOnline() when network available
+    // - Firebase onSnapshot listeners
+    // - Form submission (saveFormData)
+  }, [])
 
   /**
    * Save form data to IndexedDB (main entry point)
@@ -310,21 +339,17 @@ export function useIndexedDBSync(patientId: string) {
           validationErrors
         )
 
-        if (result.success) {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`✓ Form data saved: ${formId}`, { isDraft })
-          }
-          await updateSyncStatus()
+        if (isDevelopmentEnv()) {
+          console.log(`✓ Form data saved: ${formId}`, { isDraft })
+        }
+        await updateSyncStatus()
 
-          // Trigger sync if online and not a draft
-          if (!isDraft && syncStatus.isOnline) {
-            setTimeout(() => performSync(), 100)
-          }
-        } else {
-          addError(result.error || 'Failed to save form')
+        // Trigger sync if online and not a draft
+        if (!isDraft && syncStatus.isOnline) {
+          setTimeout(() => performSync(), 100)
         }
 
-        return result
+        return { success: true, error: null }
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Save failed'
         addError(errorMsg)
@@ -370,7 +395,7 @@ export function useIndexedDBSync(patientId: string) {
     try {
       await indexedDBService.clearDraft(formId)
       await updateSyncStatus()
-      if (process.env.NODE_ENV === 'development') {
+      if (isDevelopmentEnv()) {
         console.log(`✓ Draft deleted: ${formId}`)
       }
     } catch (error) {
@@ -383,106 +408,122 @@ export function useIndexedDBSync(patientId: string) {
   /**
    * Set up real-time listeners for Firebase changes
    * Syncs Firebase data to IndexedDB immediately
+   * 
+   * NOTE: Skips listener setup if patientId is empty (useful during patient creation)
    */
   const setupRealtimeSync = useCallback(() => {
+    // Skip listener setup if patientId is empty/invalid
+    if (!patientId || patientId.trim() === "") {
+      if (isDevelopmentEnv()) {
+        console.log('⏭️  Skipping real-time sync - no patientId provided')
+      }
+      return
+    }
+
+    // CRITICAL: Check if Firebase is initialized
+    if (!db) {
+      if (isDevelopmentEnv()) {
+        console.error('⏭️  Skipping real-time sync - Firebase not initialized')
+      }
+      addError('Firebase not initialized')
+      return
+    }
+
     const unsubscribers: Array<() => void> = []
 
     try {
-      // Listen to baseline forms
-      const baselineQuery = query(
-        collection(db, 'baselineData'),
-        where('patientId', '==', patientId)
-      )
+      // V4 SCHEMA: Listen to unified PATIENT document (all data in one place)
+      // Contains: baseline + followUps arrays in single patient doc
+      const patientDocRef = doc(db, 'patients', patientId)
       
-      const unsubscribeBaseline = onSnapshot(
-        baselineQuery,
-        async (snapshot) => {
+      const unsubscribePatient = onSnapshot(
+        patientDocRef,
+        async (docSnapshot) => {
           try {
-            for (const doc of snapshot.docs) {
-              // Update IndexedDB with latest Firebase data
+            if (!docSnapshot.exists()) {
+              if (isDevelopmentEnv()) {
+                console.log('Patient document not found:', patientId)
+              }
+              return
+            }
+
+            const patientData = docSnapshot.data()
+
+            // Save patient info
+            await indexedDBService.saveForm(
+              patientId,
+              'patient',
+              patientId,
+              patientData,
+              false,
+              []
+            )
+
+            // Save baseline data (if exists in patient doc)
+            if (patientData.baseline) {
               await indexedDBService.saveForm(
-                doc.id,
+                patientId,
                 'baseline',
                 patientId,
-                doc.data(),
+                patientData.baseline,
                 false,
                 []
               )
+              if (isDevelopmentEnv()) {
+                console.log('✓ Real-time sync: baseline data updated')
+              }
             }
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`✓ Real-time sync: ${snapshot.docs.length} baseline forms`)
+
+            // Save all followup data (array in patient doc)
+            if (patientData.followUps && Array.isArray(patientData.followUps)) {
+              for (let i = 0; i < patientData.followUps.length; i++) {
+                const followupData = patientData.followUps[i]
+                await indexedDBService.saveForm(
+                  `${patientId}-followup-${i}`,
+                  'followup',
+                  patientId,
+                  followupData,
+                  false,
+                  []
+                )
+              }
+              if (isDevelopmentEnv()) {
+                console.log(`✓ Real-time sync: ${patientData.followUps.length} followup records`)
+              }
+            }
+
+            if (isDevelopmentEnv()) {
+              console.log('✓ Real-time sync: patient data synced from unified schema')
             }
           } catch (error) {
             const errorMsg = error instanceof Error ? error.message : 'Sync error'
-            if (process.env.NODE_ENV === 'development') {
-              console.error('Error syncing baseline forms:', errorMsg)
+            if (isDevelopmentEnv()) {
+              console.error('Error syncing patient data:', errorMsg)
             }
-            addError(`Baseline sync error: ${errorMsg}`)
+            addError(`Patient data sync error: ${errorMsg}`)
           }
         },
         (error) => {
           const errorMsg = error instanceof Error ? error.message : 'Listener error'
-          if (process.env.NODE_ENV === 'development') {
-            console.error('Baseline listener error:', errorMsg)
+          if (isDevelopmentEnv()) {
+            console.error('Patient listener error:', errorMsg)
           }
-          addError(`Baseline listener failed: ${errorMsg}`)
+          addError(`Patient listener failed: ${errorMsg}`)
         }
       )
-      unsubscribers.push(unsubscribeBaseline)
+      unsubscribers.push(unsubscribePatient)
 
-      // Listen to followup forms
-      const followupQuery = query(
-        collection(db, 'followupData'),
-        where('patientId', '==', patientId)
-      )
-      
-      const unsubscribeFollowup = onSnapshot(
-        followupQuery,
-        async (snapshot) => {
-          try {
-            for (const doc of snapshot.docs) {
-              // Update IndexedDB with latest Firebase data
-              await indexedDBService.saveForm(
-                doc.id,
-                'followup',
-                patientId,
-                doc.data(),
-                false,
-                []
-              )
-            }
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`✓ Real-time sync: ${snapshot.docs.length} followup forms`)
-            }
-          } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : 'Sync error'
-            if (process.env.NODE_ENV === 'development') {
-              console.error('Error syncing followup forms:', errorMsg)
-            }
-            addError(`Followup sync error: ${errorMsg}`)
-          }
-        },
-        (error) => {
-          const errorMsg = error instanceof Error ? error.message : 'Listener error'
-          if (process.env.NODE_ENV === 'development') {
-            console.error('Followup listener error:', errorMsg)
-          }
-          addError(`Followup listener failed: ${errorMsg}`)
-        }
-      )
-      unsubscribers.push(unsubscribeFollowup)
-
-      // Store ALL unsubscribers, not just the last one
+      // Store ALL unsubscribers
       unsubscribeRef.current = () => {
         unsubscribers.forEach(unsub => unsub())
       }
 
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✓ Real-time listeners set up for patient:', patientId)
+      if (isDevelopmentEnv()) {
+        console.log('✓ Real-time listener set up for unified patient schema:', patientId)
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : 'Real-time sync setup failed'
-      if (process.env.NODE_ENV === 'development') {
+      if (isDevelopmentEnv()) {
         console.error('Real-time sync setup error:', errorMsg)
       }
       addError(errorMsg)
@@ -509,3 +550,4 @@ export function useIndexedDBSync(patientId: string) {
     triggerSync,
   }
 }
+

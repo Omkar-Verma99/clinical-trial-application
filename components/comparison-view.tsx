@@ -11,6 +11,7 @@ interface ComparisonViewProps {
   baseline: BaselineData
   followUp: FollowUpData
   patient: Patient
+  followUps?: FollowUpData[]
 }
 
 const ComparisonCard = memo(({ label, currentValue, previousValue, change, improved, icon: Icon }: any) => (
@@ -60,7 +61,7 @@ const OutcomeCard = memo(({ label, category, value, improved }: any) => (
 OutcomeCard.displayName = "OutcomeCard"
 
 
-export const ComparisonView = memo(function ComparisonView({ baseline, followUp, patient }: ComparisonViewProps) {
+export const ComparisonView = memo(function ComparisonView({ baseline, followUp, patient, followUps = [] }: ComparisonViewProps) {
   // Memoize calculations
   const changes = useMemo(() => {
     const getChange = (baseValue: number, followValue: number) => ({
@@ -131,14 +132,49 @@ export const ComparisonView = memo(function ComparisonView({ baseline, followUp,
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
+      <Card className="border-2 border-primary/20">
+        <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50">
           <div>
-            <CardTitle className="text-2xl">Clinical Trial Results</CardTitle>
-            <CardDescription>Baseline vs Week 12 Comparison with Auto-Calculated Outcomes</CardDescription>
+            <CardTitle className="text-3xl font-bold">Clinical Trial Results</CardTitle>
+            <CardDescription className="text-base mt-2">
+              Comprehensive Baseline vs Follow-up Analysis with Auto-Calculated Outcomes
+              {followUps && followUps.length > 1 && ` (${followUps.length} follow-up visits tracked)`}
+            </CardDescription>
           </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-8 pt-8">
+          {/* QUICK SUMMARY STATS */}
+          <div className="grid md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-lg border">
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground font-medium">HbA1c Change</p>
+              <p className={`text-2xl font-bold mt-1 ${changes.hba1c.improved ? "text-green-600" : "text-red-600"}`}>
+                {changes.hba1c.value > 0 ? "+" : ""}{changes.hba1c.value.toFixed(2)}%
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{changes.hba1c.improved ? "↓ Improved" : "↑ Worsened"}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground font-medium">FPG Change</p>
+              <p className={`text-2xl font-bold mt-1 ${changes.fpg.improved ? "text-green-600" : "text-red-600"}`}>
+                {changes.fpg.value > 0 ? "+" : ""}{changes.fpg.value.toFixed(0)}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">mg/dL</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground font-medium">Weight Change</p>
+              <p className={`text-2xl font-bold mt-1 ${changes.weight.improved ? "text-green-600" : "text-red-600"}`}>
+                {changes.weight.value > 0 ? "+" : ""}{changes.weight.value.toFixed(1)} kg
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{changes.weight.improved ? "↓ Loss" : "↑ Gain"}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground font-medium">BP Status</p>
+              <p className={`text-2xl font-bold mt-1 ${outcomes.bloodPressureOutcome.overallControlled ? "text-green-600" : "text-orange-600"}`}>
+                {outcomes.bloodPressureOutcome.overallControlled ? "✓ Controlled" : "⚠ Not Controlled"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">{followUp.bloodPressureSystolic}/{followUp.bloodPressureDiastolic}</p>
+            </div>
+          </div>
+
           {/* SECTION I - AUTO-CALCULATED GLYCEMIC RESPONSE */}
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <h3 className="font-semibold text-lg mb-4 text-blue-900">Glycemic Response (Auto-Calculated)</h3>
@@ -303,7 +339,7 @@ export const ComparisonView = memo(function ComparisonView({ baseline, followUp,
               <div className="mt-4 bg-blue-50 p-4 rounded">
                 <p className="text-sm font-semibold text-blue-900 mb-2">Preferred Patient Profiles for KC MeSempa:</p>
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries((physicianAssessment as any).preferredPatientProfiles).map(([key, value]) => 
+                  {Object.entries((physicianAssessment as any).preferredPatientProfiles).map(([key, value]: [string, any]) => 
                     value && (
                       <span key={key} className="bg-blue-200 text-blue-900 text-xs font-semibold px-3 py-1 rounded-full">
                         {key.replace(/([A-Z])/g, " $1").trim()}
@@ -342,6 +378,115 @@ export const ComparisonView = memo(function ComparisonView({ baseline, followUp,
             </div>
           )}
 
+          {/* Multi-Visit Trends (if available) */}
+          {followUps && followUps.length > 1 && (
+            <div className="space-y-4">
+              <div className="bg-gradient-to-r from-purple-50 to-pink-50 border-2 border-purple-200 rounded-lg p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="w-1 h-6 bg-gradient-to-b from-purple-600 to-pink-600 rounded"></div>
+                  <h3 className="font-bold text-lg text-purple-900">Multi-Visit Trend Analysis</h3>
+                </div>
+                <div className="space-y-5">
+                  {/* HbA1c Trend */}
+                  <div className="bg-white p-4 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <p className="text-sm font-bold text-slate-700">HbA1c Progression (%)</p>
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">Primary Endpoint</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-4 py-2 bg-slate-100 border-2 border-slate-300 rounded-lg text-sm font-bold text-slate-800">
+                        📍 Baseline: {baseline.hba1c || "-"}%
+                      </span>
+                      {followUps.map((visit, idx) => {
+                        const isImproved = visit.hba1c && baseline.hba1c && visit.hba1c < baseline.hba1c
+                        return (
+                          <span
+                            key={idx}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                              isImproved
+                                ? "bg-green-100 border-2 border-green-400 text-green-800 shadow-md"
+                                : "bg-orange-100 border-2 border-orange-300 text-orange-800"
+                            }`}
+                          >
+                            {isImproved ? "✓" : "⚠"} Week {visit.visitNumber}: {visit.hba1c || "-"}%
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Weight Trend */}
+                  <div className="bg-white p-4 rounded-lg">
+                    <p className="text-sm font-bold text-slate-700 mb-3">Weight Progression (kg)</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-4 py-2 bg-slate-100 border-2 border-slate-300 rounded-lg text-sm font-bold text-slate-800">
+                        📍 Baseline: {baseline.weight || "-"} kg
+                      </span>
+                      {followUps.map((visit, idx) => {
+                        const isImproved = visit.weight && baseline.weight && visit.weight < baseline.weight
+                        return (
+                          <span
+                            key={idx}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                              isImproved
+                                ? "bg-green-100 border-2 border-green-400 text-green-800 shadow-md"
+                                : "bg-slate-100 border-2 border-slate-300 text-slate-800"
+                            }`}
+                          >
+                            {isImproved ? "✓" : "→"} Week {visit.visitNumber}: {visit.weight || "-"} kg
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* BP Trend */}
+                  <div className="bg-white p-4 rounded-lg">
+                    <p className="text-sm font-bold text-slate-700 mb-3">Blood Pressure Progression (mmHg)</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-4 py-2 bg-slate-100 border-2 border-slate-300 rounded-lg text-sm font-bold text-slate-800">
+                        📍 Baseline: {baseline.bloodPressureSystolic}/{baseline.bloodPressureDiastolic}
+                      </span>
+                      {followUps.map((visit, idx) => (
+                        <span
+                          key={idx}
+                          className="px-4 py-2 bg-cyan-100 border-2 border-cyan-400 rounded-lg text-sm font-bold text-cyan-800"
+                        >
+                          → Week {visit.visitNumber}: {visit.bloodPressureSystolic}/{visit.bloodPressureDiastolic}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* FPG Trend */}
+                  <div className="bg-white p-4 rounded-lg">
+                    <p className="text-sm font-bold text-slate-700 mb-3">Fasting Plasma Glucose Progression (mg/dL)</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-4 py-2 bg-slate-100 border-2 border-slate-300 rounded-lg text-sm font-bold text-slate-800">
+                        📍 Baseline: {baseline.fpg || "-"}
+                      </span>
+                      {followUps.map((visit, idx) => {
+                        const isImproved = visit.fpg && baseline.fpg && visit.fpg < baseline.fpg
+                        return (
+                          <span
+                            key={idx}
+                            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                              isImproved
+                                ? "bg-green-100 border-2 border-green-400 text-green-800 shadow-md"
+                                : "bg-orange-100 border-2 border-orange-300 text-orange-800"
+                            }`}
+                          >
+                            {isImproved ? "✓" : "⚠"} Week {visit.visitNumber}: {visit.fpg || "-"}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Comments */}
           {(followUp.comments || (patientOutcomes as any)?.additionalComments) && (
             <div className="pt-4 border-t">
@@ -354,3 +499,5 @@ export const ComparisonView = memo(function ComparisonView({ baseline, followUp,
     </div>
   )
 })
+
+export default ComparisonView

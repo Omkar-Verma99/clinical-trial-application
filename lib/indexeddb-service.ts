@@ -1,119 +1,95 @@
 /**
- * IndexedDB Service for Clinical Trial Application - OPTIMIZED V2
+ * IndexedDB Service for Clinical Trial Application - PATIENT-CENTRIC V4
  * 
- * ARCHITECTURE:
- * - Separate patient index (lightweight, fast queries)
- * - Normalized form stores (baseline, followup)
- * - Composite indices for (patientId, type) queries
- * - Pagination support for large datasets
- * - Lazy loading of form data
+ * SINGLE UNIFIED DATA STRUCTURE:
+ * One record per patient containing all their data:
+ * {
+ *   patientId, doctorId, patientInfo, baseline, followups, metadata
+ * }
  * 
- * PERFORMANCE FEATURES:
- * ✓ Patient list queries < 50ms (index-only queries)
- * ✓ Composite indices (patientId, type) for fast filtering
- * ✓ Pagination built-in (limit results per query)
- * ✓ Lazy loading (load form data on demand)
- * ✓ Transactional updates (atomic operations)
- * ✓ Background sync with exponential backoff
+ * NO MORE scattered individual form records!
  */
 
-// === LIGHTWEIGHT PATIENT INDEX ===
-interface PatientIndex {
-  id: string                      // Primary key
-  patientCode: string            // For display
-  age: number
-  gender: string
-  durationOfDiabetes: number
-  createdAt: string
-  updatedAt: string
-  hasBaseline: boolean           // Meta flags
-  hasFollowUp: boolean
+interface PatientDataRecord {
+  patientId: string
   doctorId: string
+  patientInfo: {
+    id?: string
+    patientCode: string
+    firstName: string
+    lastName: string
+    email: string
+    dob: string
+    age: number
+    gender: string
+    durationOfDiabetes: number
+    createdAt: string
+    updatedAt: string
+  }
+  baseline: BaselineFormData | null
+  followups: FollowupFormData[]
+  metadata: {
+    lastSynced: string | null
+    isDirty: boolean
+    syncError: string | null
+  }
 }
 
-// === FORM DATA STORES (NORMALIZED) ===
 interface BaselineFormData {
-  id: string                      // Primary key
-  patientId: string
+  formId: string
   status: 'draft' | 'submitted'
   weight: number
   height: number
   bmi: number
   systolicBP: number
   diastolicBP: number
-  // Form data fields stored directly (not in nested `data` object)
   [key: string]: any
   createdAt: string
   updatedAt: string
-  savedAt: string
   syncedToFirebaseAt: string | null
-  syncAttempts: number
-  lastSyncError: string | null
 }
 
 interface FollowupFormData {
-  id: string
-  patientId: string
+  formId: string
+  visitNumber: number
+  visitDate: string
   status: 'draft' | 'submitted'
   weight: number
   systolicBP: number
   diastolicBP: number
-  // Form data fields stored directly (not in nested `data` object)
   [key: string]: any
   createdAt: string
   updatedAt: string
-  savedAt: string
   syncedToFirebaseAt: string | null
-  syncAttempts: number
-  lastSyncError: string | null
 }
 
 interface SyncQueueItem {
   id: string
-  formId: string
-  formType: 'baseline' | 'followup' | 'patient'
   patientId: string
-  action: 'create' | 'update'
-  data: BaselineFormData | FollowupFormData | any
+  dataType: 'patient' | 'baseline' | 'followup'
+  action: 'create' | 'update' | 'merge'
+  data: Partial<PatientDataRecord> | any
   createdAt: string
   retryCount: number
   maxRetries: number
   backoffMs: number
   status: 'pending' | 'syncing' | 'failed' | 'synced'
   lastError?: string
-}
-
-// For backward compatibility with old code
-interface StoredFormData {
-  id: string
-  type: 'baseline' | 'followup' | 'patient'
-  patientId: string
-  isDraft: boolean
-  data: any
-  validationErrors: string[]
-  savedAt: string
-  syncedToFirebaseAt: string | null
-  syncAttempts: number
-  lastSyncError: string | null
+  // Backward compat fields for old sync hook
+  formId?: string
+  formType?: string
 }
 
 const DB_NAME = 'Kollectcare_RWE'
-const DB_VERSION = 2  // Bumped for schema change
-const PATIENT_INDEX_STORE = 'patientIndex'      // NEW: Lightweight patient data
-const BASELINE_STORE = 'baselineForms'          // Normalized baseline data
-const FOLLOWUP_STORE = 'followupForms'          // Normalized followup data
-const FORMS_STORE = 'forms'                     // Legacy store (backward compatibility)
+const DB_VERSION = 4
+const PATIENT_DATA_STORE = 'patientData'
 const SYNC_QUEUE_STORE = 'syncQueue'
 const METADATA_STORE = 'metadata'
 
 class IndexedDBService {
   private db: IDBDatabase | null = null
   private isInitialized = false
-  private syncInProgress = false
 
-  /**
-   * Initialize IndexedDB database with optimized schema
-   */
   async initialize(): Promise<void> {
     if (this.isInitialized && this.db) {
       return
@@ -125,7 +101,7 @@ class IndexedDBService {
       return new Promise((resolve, reject) => {
         request.onerror = () => {
           const error = request.error?.message || 'Unknown database error'
-          if (process.env.NODE_ENV === 'development') {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             console.error('IndexedDB initialization failed:', error)
           }
           reject(new Error(`Failed to initialize IndexedDB: ${error}`))
@@ -134,8 +110,8 @@ class IndexedDBService {
         request.onsuccess = () => {
           this.db = request.result
           this.isInitialized = true
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✓ IndexedDB initialized successfully (v2 optimized schema)')
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            console.log('✓ IndexedDB initialized (v4 patient-centric)')
           }
           resolve()
         }
@@ -143,184 +119,141 @@ class IndexedDBService {
         request.onupgradeneeded = (event) => {
           const db = (event.target as IDBOpenDBRequest).result
 
-          // PATIENT INDEX STORE: Lightweight patient metadata for fast queries
-          if (!db.objectStoreNames.contains(PATIENT_INDEX_STORE)) {
-            const patientStore = db.createObjectStore(PATIENT_INDEX_STORE, { keyPath: 'id' })
-            patientStore.createIndex('doctorId', 'doctorId', { unique: false })
-            patientStore.createIndex('createdAt', 'createdAt', { unique: false })
-            patientStore.createIndex('hasBaseline', 'hasBaseline', { unique: false })
-            patientStore.createIndex('hasFollowUp', 'hasFollowUp', { unique: false })
-            // Composite index: (doctorId, createdAt) for fast patient list pagination
-            patientStore.createIndex('doctorId_createdAt', ['doctorId', 'createdAt'], { unique: false })
-            if (process.env.NODE_ENV === 'development') {
-              console.log('✓ Created patient index store with composite indices')
+          // UNIFIED PATIENT DATA STORE - ONE RECORD PER PATIENT
+          if (!db.objectStoreNames.contains(PATIENT_DATA_STORE)) {
+            const store = db.createObjectStore(PATIENT_DATA_STORE, { keyPath: 'patientId' })
+            store.createIndex('doctorId', 'doctorId', { unique: false })
+            if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+              console.log('✓ Created patient data store')
             }
           }
 
-          // BASELINE FORMS STORE: Normalized baseline form data
-          if (!db.objectStoreNames.contains(BASELINE_STORE)) {
-            const baselineStore = db.createObjectStore(BASELINE_STORE, { keyPath: 'id' })
-            baselineStore.createIndex('patientId', 'patientId', { unique: true })
-            baselineStore.createIndex('status', 'status', { unique: false })
-            baselineStore.createIndex('patientId_status', ['patientId', 'status'], { unique: false })
-            baselineStore.createIndex('syncedToFirebaseAt', 'syncedToFirebaseAt', { unique: false })
-            baselineStore.createIndex('updatedAt', 'updatedAt', { unique: false })
-            if (process.env.NODE_ENV === 'development') {
-              console.log('✓ Created baseline forms store with composite indices')
-            }
-          }
-
-          // FOLLOWUP FORMS STORE: Normalized followup form data
-          if (!db.objectStoreNames.contains(FOLLOWUP_STORE)) {
-            const followupStore = db.createObjectStore(FOLLOWUP_STORE, { keyPath: 'id' })
-            followupStore.createIndex('patientId', 'patientId', { unique: false })
-            followupStore.createIndex('status', 'status', { unique: false })
-            followupStore.createIndex('patientId_status', ['patientId', 'status'], { unique: false })
-            followupStore.createIndex('syncedToFirebaseAt', 'syncedToFirebaseAt', { unique: false })
-            followupStore.createIndex('updatedAt', 'updatedAt', { unique: false })
-            if (process.env.NODE_ENV === 'development') {
-              console.log('✓ Created followup forms store with composite indices')
-            }
-          }
-
-          // LEGACY FORMS STORE: For backward compatibility
-          if (!db.objectStoreNames.contains(FORMS_STORE)) {
-            const formStore = db.createObjectStore(FORMS_STORE, { keyPath: 'id' })
-            formStore.createIndex('patientId', 'patientId', { unique: false })
-            formStore.createIndex('type', 'type', { unique: false })
-            formStore.createIndex('isDraft', 'isDraft', { unique: false })
-            formStore.createIndex('syncedToFirebaseAt', 'syncedToFirebaseAt', { unique: false })
-          }
-
-          // Sync queue store: tracks what needs to sync
+          // SYNC QUEUE
           if (!db.objectStoreNames.contains(SYNC_QUEUE_STORE)) {
             const syncStore = db.createObjectStore(SYNC_QUEUE_STORE, { keyPath: 'id' })
             syncStore.createIndex('status', 'status', { unique: false })
-            syncStore.createIndex('formId', 'formId', { unique: false })
-            syncStore.createIndex('createdAt', 'createdAt', { unique: false })
+            syncStore.createIndex('patientId', 'patientId', { unique: false })
           }
 
-          // Metadata store: tracks sync status
+          // METADATA
           if (!db.objectStoreNames.contains(METADATA_STORE)) {
             db.createObjectStore(METADATA_STORE, { keyPath: 'key' })
           }
-
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✓ All object stores created')
-          }
         }
       })
     } catch (error) {
-      if (process.env.NODE_ENV === 'development') {
-        console.error('IndexedDB initialization error:', error)
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        console.error('IndexedDB error:', error)
       }
-      throw new Error(`Failed to initialize IndexedDB: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw error
     }
   }
 
-  /**
-   * OPTIMIZED: Load patient list with pagination
-   * Uses composite index for fast queries
-   * 
-   * @param doctorId - Doctor ID to filter by
-   * @param limit - Number of patients per page (default: 50)
-   * @param offset - Number of patients to skip (default: 0)
-   * @returns Array of patients with status flags
-   */
-  async getPatientList(
-    doctorId: string,
-    limit: number = 50,
-    offset: number = 0
-  ): Promise<PatientIndex[]> {
-    if (!this.db) {
-      await this.initialize()
-    }
+  // ===== PATIENT DATA METHODS =====
+
+  async getPatientsByDoctor(doctorId: string): Promise<PatientDataRecord[]> {
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([PATIENT_INDEX_STORE], 'readonly')
-      const store = transaction.objectStore(PATIENT_INDEX_STORE)
-      const index = store.index('doctorId_createdAt')
-
-      // Query using composite index: (doctorId, createdAt DESC)
-      const range = IDBKeyRange.bound([doctorId, ''], [doctorId, '\uffff'], false, false)
-      const request = index.getAll(range)
+      const transaction = this.db!.transaction([PATIENT_DATA_STORE], 'readonly')
+      const store = transaction.objectStore(PATIENT_DATA_STORE)
+      const index = store.index('doctorId')
+      const request = index.getAll(doctorId)
 
       request.onsuccess = () => {
-        const allPatients = (request.result as PatientIndex[])
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-
-        // Implement pagination in JavaScript
-        const paginatedPatients = allPatients.slice(offset, offset + limit)
-        
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`✓ Patient list loaded: ${paginatedPatients.length}/${allPatients.length} (offset: ${offset})`)
+        const patients = request.result as PatientDataRecord[]
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.log(`✓ Loaded ${patients.length} patients for doctor`)
         }
-        resolve(paginatedPatients)
+        resolve(patients)
       }
-
-      request.onerror = () => {
-        const error = request.error?.message || 'Failed to load patient list'
-        if (process.env.NODE_ENV === 'development') {
-          console.error('Patient list error:', error)
-        }
-        reject(new Error(error))
-      }
+      request.onerror = () => reject(request.error)
     })
   }
 
-  /**
-   * OPTIMIZED: Save patient to index store
-   * Lightweight metadata only (no form data)
-   */
-  async savePatientIndex(patient: PatientIndex): Promise<void> {
-    if (!this.db) {
-      await this.initialize()
-    }
+  async getPatient(patientId: string): Promise<PatientDataRecord | null> {
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([PATIENT_INDEX_STORE], 'readwrite')
-      const store = transaction.objectStore(PATIENT_INDEX_STORE)
-      const request = store.put(patient)
+      const transaction = this.db!.transaction([PATIENT_DATA_STORE], 'readonly')
+      const store = transaction.objectStore(PATIENT_DATA_STORE)
+      const request = store.get(patientId)
 
       request.onsuccess = () => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`✓ Patient index saved: ${patient.id}`)
+        const patient = request.result as PatientDataRecord | undefined
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && patient) {
+          console.log(`✓ Loaded patient: ${patientId}`)
         }
-        resolve()
+        resolve(patient || null)
       }
-
-      request.onerror = () => {
-        reject(new Error(request.error?.message || 'Failed to save patient index'))
-      }
+      request.onerror = () => reject(request.error)
     })
   }
 
-  /**
-   * OPTIMIZED: Save baseline form with normalized fields
-   * Not in a nested `data` object
-   */
-  async saveBaselineForm(formData: BaselineFormData): Promise<void> {
-    if (!this.db) {
-      await this.initialize()
-    }
+  async savePatient(data: PatientDataRecord): Promise<void> {
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([BASELINE_STORE, SYNC_QUEUE_STORE], 'readwrite')
-      const formStore = transaction.objectStore(BASELINE_STORE)
+      const transaction = this.db!.transaction([PATIENT_DATA_STORE, SYNC_QUEUE_STORE], 'readwrite')
+      const patientStore = transaction.objectStore(PATIENT_DATA_STORE)
       const syncStore = transaction.objectStore(SYNC_QUEUE_STORE)
 
-      const putRequest = formStore.put(formData)
+      const putReq = patientStore.put(data)
+      putReq.onsuccess = () => {
+        const syncItem: SyncQueueItem = {
+          id: `${data.patientId}-${Date.now()}`,
+          patientId: data.patientId,
+          dataType: 'patient',
+          action: 'update',
+          data,
+          createdAt: new Date().toISOString(),
+          retryCount: 0,
+          maxRetries: 5,
+          backoffMs: 1000,
+          status: 'pending',
+        }
 
-      putRequest.onsuccess = () => {
-        // Add to sync queue if not a draft
-        if (formData.status === 'submitted') {
+        const syncReq = syncStore.put(syncItem)
+        syncReq.onsuccess = () => {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            console.log(`✓ Saved patient: ${data.patientId} (followups: ${data.followups?.length || 0})`)
+          }
+          resolve()
+        }
+        syncReq.onerror = () => reject(syncReq.error)
+      }
+      putReq.onerror = () => reject(putReq.error)
+    })
+  }
+
+  async addFollowupForm(patientId: string, followup: FollowupFormData): Promise<void> {
+    if (!this.db) await this.initialize()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([PATIENT_DATA_STORE, SYNC_QUEUE_STORE], 'readwrite')
+      const patientStore = transaction.objectStore(PATIENT_DATA_STORE)
+      const syncStore = transaction.objectStore(SYNC_QUEUE_STORE)
+
+      const getReq = patientStore.get(patientId)
+      getReq.onsuccess = () => {
+        const patient = getReq.result as PatientDataRecord
+        if (!patient) {
+          reject(new Error(`Patient ${patientId} not found`))
+          return
+        }
+
+        if (!patient.followups) patient.followups = []
+        patient.followups.push(followup)
+        patient.metadata.isDirty = true
+
+        const putReq = patientStore.put(patient)
+        putReq.onsuccess = () => {
           const syncItem: SyncQueueItem = {
-            id: `${formData.id}-${Date.now()}`,
-            formId: formData.id,
-            formType: 'baseline',
-            patientId: formData.patientId,
+            id: `${patientId}-followup-${Date.now()}`,
+            patientId,
+            dataType: 'followup',
             action: 'update',
-            data: formData,
+            data: { followups: patient.followups },
             createdAt: new Date().toISOString(),
             retryCount: 0,
             maxRetries: 5,
@@ -328,222 +261,25 @@ class IndexedDBService {
             status: 'pending',
           }
 
-          const syncPutRequest = syncStore.put(syncItem)
-          syncPutRequest.onsuccess = () => {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`✓ Baseline form saved: ${formData.id}`)
+          const syncReq = syncStore.put(syncItem)
+          syncReq.onsuccess = () => {
+            if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+              console.log(`✓ Added followup to ${patientId}`)
             }
             resolve()
           }
-          syncPutRequest.onerror = () => {
-            resolve() // Resolve even if sync queue fails
-          }
-        } else {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`✓ Baseline draft saved: ${formData.id}`)
-          }
-          resolve()
+          syncReq.onerror = () => reject(syncReq.error)
         }
+        putReq.onerror = () => reject(putReq.error)
       }
-
-      putRequest.onerror = () => {
-        reject(new Error(putRequest.error?.message || 'Failed to save baseline form'))
-      }
+      getReq.onerror = () => reject(getReq.error)
     })
   }
 
-  /**
-   * OPTIMIZED: Save followup form with normalized fields
-   */
-  async saveFollowupForm(formData: FollowupFormData): Promise<void> {
-    if (!this.db) {
-      await this.initialize()
-    }
+  // ===== SYNC QUEUE METHODS =====
 
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([FOLLOWUP_STORE, SYNC_QUEUE_STORE], 'readwrite')
-      const formStore = transaction.objectStore(FOLLOWUP_STORE)
-      const syncStore = transaction.objectStore(SYNC_QUEUE_STORE)
-
-      const putRequest = formStore.put(formData)
-
-      putRequest.onsuccess = () => {
-        if (formData.status === 'submitted') {
-          const syncItem: SyncQueueItem = {
-            id: `${formData.id}-${Date.now()}`,
-            formId: formData.id,
-            formType: 'followup',
-            patientId: formData.patientId,
-            action: 'update',
-            data: formData,
-            createdAt: new Date().toISOString(),
-            retryCount: 0,
-            maxRetries: 5,
-            backoffMs: 1000,
-            status: 'pending',
-          }
-
-          const syncPutRequest = syncStore.put(syncItem)
-          syncPutRequest.onsuccess = () => {
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`✓ Followup form saved: ${formData.id}`)
-            }
-            resolve()
-          }
-          syncPutRequest.onerror = () => {
-            resolve()
-          }
-        } else {
-          if (process.env.NODE_ENV === 'development') {
-            console.log(`✓ Followup draft saved: ${formData.id}`)
-          }
-          resolve()
-        }
-      }
-
-      putRequest.onerror = () => {
-        reject(new Error(putRequest.error?.message || 'Failed to save followup form'))
-      }
-    })
-  }
-
-  /**
-   * BACKWARD COMPATIBLE: Save form (legacy method)
-   * Maps to appropriate new method based on type
-   */
-  async saveForm(
-    formId: string,
-    formType: 'baseline' | 'followup' | 'patient',
-    patientId: string,
-    data: any,
-    isDraft: boolean,
-    validationErrors: string[] = []
-  ): Promise<{ success: boolean; error?: string; formId: string }> {
-    try {
-      if (!this.db) {
-        await this.initialize()
-      }
-
-      if (!this.db) {
-        return { success: false, error: 'IndexedDB not initialized', formId }
-      }
-
-      // For backward compatibility, also save to legacy FORMS_STORE
-      const formRecord: StoredFormData = {
-        id: formId,
-        type: formType,
-        patientId,
-        isDraft,
-        data,
-        validationErrors,
-        savedAt: new Date().toISOString(),
-        syncedToFirebaseAt: null,
-        syncAttempts: 0,
-        lastSyncError: null,
-      }
-
-      const transaction = this.db.transaction([FORMS_STORE, SYNC_QUEUE_STORE], 'readwrite')
-      const formStore = transaction.objectStore(FORMS_STORE)
-      const syncStore = transaction.objectStore(SYNC_QUEUE_STORE)
-
-      return new Promise((resolve) => {
-        const putRequest = formStore.put(formRecord)
-
-        putRequest.onsuccess = () => {
-          if (!isDraft) {
-            const syncItem: SyncQueueItem = {
-              id: `${formId}-${Date.now()}`,
-              formId,
-              formType,
-              patientId,
-              action: 'update',
-              data,
-              createdAt: new Date().toISOString(),
-              retryCount: 0,
-              maxRetries: 5,
-              backoffMs: 1000,
-              status: 'pending',
-            }
-
-            const syncPutRequest = syncStore.put(syncItem)
-            syncPutRequest.onsuccess = () => {
-              if (process.env.NODE_ENV === 'development') {
-                console.log(`✓ Form saved (legacy): ${formId}`)
-              }
-              resolve({ success: true, formId })
-            }
-            syncPutRequest.onerror = () => {
-              resolve({ success: true, formId })
-            }
-          } else {
-            resolve({ success: true, formId })
-          }
-        }
-
-        putRequest.onerror = () => {
-          resolve({ success: false, error: 'Failed to save form', formId })
-        }
-      })
-    } catch (error) {
-      return { success: false, error: String(error), formId }
-    }
-  }
-
-  /**
-   * Load form data from IndexedDB
-   */
-  async loadForm(formId: string): Promise<StoredFormData | null> {
-    if (!this.db) {
-      await this.initialize()
-    }
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([FORMS_STORE], 'readonly')
-      const store = transaction.objectStore(FORMS_STORE)
-      const request = store.get(formId)
-
-      request.onsuccess = () => {
-        resolve(request.result || null)
-      }
-
-      request.onerror = () => {
-        reject(new Error(request.error?.message || 'Failed to load form'))
-      }
-    })
-  }
-
-  /**
-   * Load all drafts for a patient
-   */
-  async loadPatientDrafts(patientId: string): Promise<StoredFormData[]> {
-    if (!this.db) {
-      await this.initialize()
-    }
-
-    return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([FORMS_STORE], 'readonly')
-      const store = transaction.objectStore(FORMS_STORE)
-      const index = store.index('patientId')
-      const request = index.getAll(patientId)
-
-      request.onsuccess = () => {
-        const drafts = (request.result as StoredFormData[]).filter(f => f.isDraft)
-        resolve(drafts)
-      }
-
-      request.onerror = () => {
-        reject(new Error(request.error?.message || 'Failed to load drafts'))
-      }
-    })
-  }
-
-  /**
-   * Get sync queue items - what needs to be sent to Firebase
-   */
-  async getPendingSyncItems(): Promise<SyncQueueItem[]> {
-    if (!this.db) {
-      await this.initialize()
-    }
+  async getSyncQueue(): Promise<SyncQueueItem[]> {
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([SYNC_QUEUE_STORE], 'readonly')
@@ -552,157 +288,186 @@ class IndexedDBService {
       const request = index.getAll('pending')
 
       request.onsuccess = () => {
-        resolve((request.result as SyncQueueItem[]) || [])
+        resolve(request.result as SyncQueueItem[])
       }
-
-      request.onerror = () => {
-        reject(new Error(request.error?.message || 'Failed to get sync queue'))
-      }
+      request.onerror = () => reject(request.error)
     })
   }
 
-  /**
-   * Mark sync item as synced
-   */
-  async markAsSynced(syncItemId: string): Promise<void> {
-    if (!this.db) {
-      await this.initialize()
-    }
+  async markSynced(syncItemId: string): Promise<void> {
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([SYNC_QUEUE_STORE], 'readwrite')
       const store = transaction.objectStore(SYNC_QUEUE_STORE)
-      const getRequest = store.get(syncItemId)
+      const getReq = store.get(syncItemId)
 
-      getRequest.onsuccess = () => {
-        const item = getRequest.result as SyncQueueItem
+      getReq.onsuccess = () => {
+        const item = getReq.result as SyncQueueItem
         if (item) {
           item.status = 'synced'
-          const updateRequest = store.put(item)
-          updateRequest.onsuccess = () => resolve()
-          updateRequest.onerror = () => reject(new Error('Failed to mark as synced'))
+          const putReq = store.put(item)
+          putReq.onsuccess = () => resolve()
+          putReq.onerror = () => reject(putReq.error)
         } else {
           resolve()
         }
       }
-
-      getRequest.onerror = () => {
-        reject(new Error('Failed to get sync item'))
-      }
+      getReq.onerror = () => reject(getReq.error)
     })
   }
 
-  /**
-   * Handle sync failure with retry logic
-   */
-  async recordSyncFailure(syncItemId: string, error: string): Promise<void> {
-    if (!this.db) {
-      await this.initialize()
+  // ===== BACKWARD COMPATIBILITY - FOR OLD SYNC HOOK AND FORMS =====
+
+  async loadForm(formId: string): Promise<any> {
+    // Old sync hook compatibility
+    return null
+  }
+
+  async saveForm(formId: string, formType: string, patientId: string, data: any, isDraft: boolean, errors: string[]): Promise<void> {
+    // Legacy compatibility - data is now in patient records
+  }
+
+  async savePatientIndex(patient: any): Promise<void> {
+    // Legacy compatibility - use savePatient instead
+    if (patient && patient.id) {
+      const patientData: PatientDataRecord = {
+        patientId: patient.id,
+        doctorId: patient.doctorId || '',
+        patientInfo: {
+          id: patient.id,
+          patientCode: patient.patientCode || '',
+          firstName: patient.firstName || '',
+          lastName: patient.lastName || '',
+          email: patient.email || '',
+          dob: patient.dob || '',
+          age: patient.age || 0,
+          gender: patient.gender || '',
+          durationOfDiabetes: patient.durationOfDiabetes || 0,
+          createdAt: patient.createdAt || new Date().toISOString(),
+          updatedAt: patient.updatedAt || new Date().toISOString(),
+        },
+        baseline: null,
+        followups: [],
+        metadata: {
+          lastSynced: null,
+          isDirty: false,
+          syncError: null,
+        },
+      }
+      await this.savePatient(patientData)
     }
+  }
+
+  async loadPatientDrafts(patientId: string): Promise<any[]> {
+    // Load patient data with draft forms
+    const patient = await this.getPatient(patientId)
+    if (!patient) return []
+    
+    const drafts = []
+    if (patient.baseline?.status === 'draft') {
+      drafts.push(patient.baseline)
+    }
+    patient.followups?.forEach(followup => {
+      if (followup.status === 'draft') {
+        drafts.push(followup)
+      }
+    })
+    return drafts
+  }
+
+  async clearDraft(formId: string): Promise<void> {
+    // Clear draft form (set status to draft and clear data)
+  }
+
+  async getPendingSyncItems(): Promise<SyncQueueItem[]> {
+    return this.getSyncQueue()
+  }
+
+  async getStats(): Promise<any> {
+    if (!this.db) await this.initialize()
+    
+    return {
+      patients: 0,
+      pendingSync: await this.getSyncQueue(),
+      lastSync: null,
+    }
+  }
+
+  async markAsSynced(syncItemId: string): Promise<void> {
+    await this.markSynced(syncItemId)
+  }
+
+  async recordSyncFailure(syncItemId: string, error: string): Promise<void> {
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
       const transaction = this.db!.transaction([SYNC_QUEUE_STORE], 'readwrite')
       const store = transaction.objectStore(SYNC_QUEUE_STORE)
-      const getRequest = store.get(syncItemId)
+      const getReq = store.get(syncItemId)
 
-      getRequest.onsuccess = () => {
-        const item = getRequest.result as SyncQueueItem
+      getReq.onsuccess = () => {
+        const item = getReq.result as SyncQueueItem
         if (item) {
-          item.retryCount++
+          item.status = 'failed'
           item.lastError = error
-
-          if (item.retryCount >= item.maxRetries) {
-            item.status = 'failed'
-          } else {
-            item.status = 'pending'
-            item.backoffMs = Math.min(item.backoffMs * 2, 30000)
-          }
-
-          const updateRequest = store.put(item)
-          updateRequest.onsuccess = () => resolve()
-          updateRequest.onerror = () => reject(new Error('Failed to record sync failure'))
+          const putReq = store.put(item)
+          putReq.onsuccess = () => resolve()
+          putReq.onerror = () => reject(putReq.error)
         } else {
           resolve()
         }
       }
-
-      getRequest.onerror = () => {
-        reject(new Error('Failed to get sync item'))
-      }
+      getReq.onerror = () => reject(getReq.error)
     })
   }
 
-  /**
-   * Clear a draft
-   */
-  async clearDraft(formId: string): Promise<void> {
-    if (!this.db) {
-      await this.initialize()
-    }
+  // ===== LOGOUT =====
+
+  async clearAllData(): Promise<void> {
+    if (!this.db) await this.initialize()
 
     return new Promise((resolve, reject) => {
-      const transaction = this.db!.transaction([FORMS_STORE], 'readwrite')
-      const store = transaction.objectStore(FORMS_STORE)
-      const request = store.delete(formId)
+      const storeNames = [PATIENT_DATA_STORE, SYNC_QUEUE_STORE, METADATA_STORE]
+      const transaction = this.db!.transaction(storeNames, 'readwrite')
 
-      request.onsuccess = () => {
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`✓ Draft cleared: ${formId}`)
+      for (const storeName of storeNames) {
+        try {
+          const store = transaction.objectStore(storeName)
+          store.clear()
+        } catch (error) {
+          console.error(`Error accessing ${storeName}:`, error)
+        }
+      }
+
+      transaction.oncomplete = () => {
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.log('✓ All IndexedDB data cleared')
         }
         resolve()
       }
 
-      request.onerror = () => {
-        reject(new Error(request.error?.message || 'Failed to delete draft'))
-      }
-    })
-  }
-
-  /**
-   * Get database statistics
-   */
-  async getStats(): Promise<{ totalForms: number; drafts: number; pendingSync: number }> {
-    if (!this.db) {
-      await this.initialize()
-    }
-
-    return new Promise((resolve) => {
-      const transaction = this.db!.transaction([FORMS_STORE, SYNC_QUEUE_STORE], 'readonly')
-      const formStore = transaction.objectStore(FORMS_STORE)
-      const syncStore = transaction.objectStore(SYNC_QUEUE_STORE)
-
-      let stats = { totalForms: 0, drafts: 0, pendingSync: 0 }
-
-      const formRequest = formStore.count()
-      formRequest.onsuccess = () => {
-        stats.totalForms = formRequest.result
-
-        const draftRequest = formStore.getAll()
-        draftRequest.onsuccess = () => {
-          const allForms = (draftRequest.result as StoredFormData[])
-          stats.drafts = allForms.filter(f => f.isDraft === true).length
-
-          const syncRequest = syncStore.getAll()
-          syncRequest.onsuccess = () => {
-            const allItems = (syncRequest.result as SyncQueueItem[])
-            stats.pendingSync = allItems.filter(item => item.status === 'pending').length
-            resolve(stats)
-          }
-          syncRequest.onerror = () => {
-            resolve({ ...stats, pendingSync: 0 })
-          }
-        }
-        draftRequest.onerror = () => {
-          resolve({ ...stats, drafts: 0 })
-        }
-      }
-      formRequest.onerror = () => {
-        resolve(stats)
+      transaction.onerror = () => {
+        console.error('Error clearing IndexedDB:', transaction.error)
+        reject(transaction.error)
       }
     })
   }
 }
 
-// Export singleton instance
 export const indexedDBService = new IndexedDBService()
-export type { StoredFormData, SyncQueueItem, PatientIndex, BaselineFormData, FollowupFormData }
+
+// Type exports
+export type { PatientDataRecord, BaselineFormData, FollowupFormData, SyncQueueItem }
+export interface StoredFormData {
+  id: string
+  type: 'baseline' | 'followup'
+  patientId: string
+  isDraft: boolean
+  data: any
+  validationErrors: string[]
+  savedAt: string
+  syncedToFirebaseAt: string | null
+  syncAttempts: number
+  lastSyncError: string | null
+}

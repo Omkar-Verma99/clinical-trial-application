@@ -35,7 +35,7 @@ export const logError = (
   }
   
   // Console logging in development
-  if (process.env.NODE_ENV === 'development') {
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
     console.error('[Error]', errorLog)
   }
   
@@ -61,10 +61,8 @@ export const logWarning = (message: string, context?: ErrorContext): void => {
     context
   }
   
-  if (process.env.NODE_ENV === 'development') {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('[Warning]', warningLog)
-    }
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    console.warn('[Warning]', warningLog)
   }
 }
 
@@ -82,10 +80,8 @@ export const logInfo = (message: string, context?: ErrorContext): void => {
     context
   }
   
-  if (process.env.NODE_ENV === 'development') {
-    if (process.env.NODE_ENV === 'development') {
-      console.log('[Info]', infoLog)
-    }
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    console.log('[Info]', infoLog)
   }
 }
 

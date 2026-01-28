@@ -25,7 +25,10 @@ export default function AddPatientPage() {
   const router = useRouter()
   const { toast } = useToast()
   const isOnline = useNetworkStatus()
-  const { saveFormData } = useIndexedDBSync(user?.uid || "")
+  // NOTE: Pass empty string as patientId since we're creating a new patient
+  // The real patientId will be generated after patient creation
+  // This prevents real-time listeners from trying to sync non-existent data
+  const { saveFormData } = useIndexedDBSync("")
   const [loading, setLoading] = useState(false)
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
 
@@ -136,11 +139,11 @@ export default function AddPatientPage() {
 
   const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
     e.preventDefault()
-    if (!user || !db) {
+    if (!user || !user.uid || !db) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Firebase is not initialized. Please refresh the page.",
+        description: "Firebase is not initialized or user not authenticated. Please refresh the page.",
       })
       return
     }
@@ -324,7 +327,7 @@ export default function AddPatientPage() {
           )
         } catch (firebaseError) {
           // Don't fail - already saved locally, will sync in background
-          if (process.env.NODE_ENV === 'development') {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             console.warn('Firebase save failed, will retry:', firebaseError)
           }
         }

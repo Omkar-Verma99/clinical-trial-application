@@ -123,7 +123,9 @@ export interface BaselineData {
 // FOLLOW-UP ASSESSMENT - Week 12 ± 2 weeks
 export interface FollowUpData {
   patientId: string
+  visitNumber?: number                // Visit week number (1, 2, 3, etc., calculated from date)
   visitDate?: string                  // Week 12 visit date (NEW)
+  status?: "draft" | "submitted"      // Form submission status
   
   // SECTION H - Follow-up Clinical & Lab Parameters
   hba1c: number

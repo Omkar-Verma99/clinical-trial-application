@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "dev": "next dev",
+    "dev": "node suppress-sourcemap-warnings.js && next dev",
     "lint": "eslint .",
     "start": "next start"
   },

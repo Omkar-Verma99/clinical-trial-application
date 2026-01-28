@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, useMemo, useCallback, type ReactNode } from "react"
+import { useRouter } from "next/navigation"
 import {
   type User,
   onAuthStateChanged,
@@ -37,6 +38,7 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const router = useRouter()
   const [user, setUser] = useState<User | null>(null)
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [loading, setLoading] = useState(true)
@@ -69,9 +71,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
           // Initialize IndexedDB for this user
           await indexedDBService.initialize()
-          if (process.env.NODE_ENV === 'development') {
-            console.log('✓ IndexedDB initialized on login for user:', user.uid)
-          }
 
           // Fetch doctor data
           const doctorDoc = await getDoc(doc(db, "doctors", user.uid))
@@ -110,9 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               })
             }
             
-            if (process.env.NODE_ENV === 'development') {
-              console.log(`✓ Cached ${initialDocs.size} patients to optimized IndexedDB (lazy loading)`)
-            }
+            // Cached patients to IndexedDB
 
             // Set up real-time listener for patient changes (additions, updates, deletions)
             // CRITICAL: Store the unsubscribe function for cleanup
@@ -136,9 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                       doctorId: user.uid
                     })
                   }
-                  if (process.env.NODE_ENV === 'development') {
-                    console.log(`✓ Real-time sync: ${snapshot.docs.length} patients`)
-                  }
+                  // Real-time sync completed
                 } catch (syncError) {
                   logError(syncError as Error, {
                     action: "realtimeSyncPatients",
@@ -148,7 +143,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
               },
               (error) => {
-                if (process.env.NODE_ENV === 'development') {
+                if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
                   console.error('Patient real-time sync error:', error)
                 }
                 logError(error as Error, {
@@ -241,9 +236,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth) {
       throw new Error("Firebase authentication is not initialized. Please refresh the page.")
     }
+    
+    // CRITICAL: Clean up all listeners BEFORE signing out
+    if (unsubscribePatientsRef.current) {
+      unsubscribePatientsRef.current()
+      unsubscribePatientsRef.current = null
+    }
+    
+    // SECURITY CRITICAL: Clear all IndexedDB data on logout
+    // Prevents unauthorized access to cached patient data if device is compromised
+    try {
+      await indexedDBService.clearAllData()
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        console.log('✓ IndexedDB cleared on logout')
+      }
+    } catch (error) {
+      console.error('Error clearing IndexedDB on logout:', error)
+      logError(error as Error, {
+        action: "clearIndexedDBOnLogout",
+        severity: "high"
+      })
+      // Don't block logout if IndexedDB clear fails, but log the error
+    }
+    
     await signOut(auth)
     logInfo("User logged out successfully")
-  }, [])
+    router.push("/login")
+  }, [router])
 
   // Memoize context value to prevent unnecessary re-renders
   const value = useMemo(

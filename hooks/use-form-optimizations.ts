@@ -43,7 +43,7 @@ export function useFormOptimizations(options: UseFormOptimizationsOptions = {}) 
         const duration = performance.now() - startTime
 
         // Log performance in development
-        if (process.env.NODE_ENV === 'development') {
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.log(`Form submission took ${duration.toFixed(2)}ms`)
         }
 

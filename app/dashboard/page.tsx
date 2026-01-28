@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { collection, query, where, orderBy, onSnapshot, getDocs } from "firebase/firestore"
+import { collection, query, where, orderBy, onSnapshot, getDocs, doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { Patient, BaselineData, FollowUpData } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -146,113 +146,69 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user || !db) return
 
-    // OPTIMIZED: First load from IndexedDB for instant UI
-    const loadPatientListFromIndexedDB = async () => {
-      try {
-        const { indexedDBService } = require('@/lib/indexeddb-service')
-        const cachedPatients = await indexedDBService.getPatientList(user.uid, pagination.limit, pagination.offset)
-        
-        // Get form status for cached patients
-        if (cachedPatients.length > 0) {
-          const patientIds = cachedPatients.map((p: any) => p.id)
-          const baselineQuery = query(
-            collection(db, "baselineData"),
-            where("patientId", "in", patientIds)
-          )
-          const followUpQuery = query(
-            collection(db, "followUpData"),
-            where("patientId", "in", patientIds)
-          )
-
-          const [baselineSnaps, followUpSnaps] = await Promise.all([
-            getDocs(baselineQuery).catch(() => ({ docs: [] })),
-            getDocs(followUpQuery).catch(() => ({ docs: [] }))
-          ])
-
-          const baselineMap = new Map(baselineSnaps.docs.map(doc => [doc.data().patientId, true]))
-          const followUpMap = new Map(followUpSnaps.docs.map(doc => [doc.data().patientId, true]))
-
-          const patientsWithStatus = cachedPatients.map((p: any) => ({
-            ...p,
-            hasBaseline: baselineMap.has(p.id),
-            hasFollowUp: followUpMap.has(p.id),
-          } as PatientWithStatus))
-
-          setPatients(patientsWithStatus)
-          setIndexedDBReady(true)
-        }
-
-        if (process.env.NODE_ENV === 'development') {
-          console.log(`✓ Loaded ${cachedPatients.length} patients from IndexedDB (pagination: offset=${pagination.offset}, limit=${pagination.limit})`)
-        }
-      } catch (error) {
-        console.error('IndexedDB patient list error:', error)
-      } finally {
-        setLoadingPatients(false)
-      }
-    }
-
-    loadPatientListFromIndexedDB()
-
-    // Set up real-time listener for real-time updates (continues running)
+    // Set up real-time listener for patient list
     const q = query(
       collection(db, "patients"),
       where("doctorId", "==", user.uid),
       orderBy("createdAt", "desc")
     )
 
+    // Set a timeout to ensure loading state is cleared even if listener fails
+    const timeoutId = setTimeout(() => {
+      if (loadingPatients) {
+        setLoadingPatients(false)
+      }
+    }, 5000)
+
     const unsubscribe = onSnapshot(
       q,
       async (querySnapshot) => {
         try {
           const patientsData: PatientWithStatus[] = []
-          const baselineMap = new Map()
-          const followUpMap = new Map()
 
-          // Batch fetch form data
-          const patientIds = querySnapshot.docs.map(d => d.id)
-          if (patientIds.length > 0) {
-            const baselineQuery = query(collection(db, "baselineData"), where("patientId", "in", patientIds))
-            const followUpQuery = query(collection(db, "followUpData"), where("patientId", "in", patientIds))
-
-            const [baselineSnaps, followUpSnaps] = await Promise.all([
-              getDocs(baselineQuery).catch(() => ({ docs: [] })),
-              getDocs(followUpQuery).catch(() => ({ docs: [] }))
-            ])
-
-            baselineSnaps.docs.forEach(doc => baselineMap.set(doc.data().patientId, true))
-            followUpSnaps.docs.forEach(doc => followUpMap.set(doc.data().patientId, true))
-          }
-
-          // Build patient list with pagination
-          for (const doc of querySnapshot.docs.slice(pagination.offset, pagination.offset + pagination.limit)) {
-            const patientData = doc.data() as Omit<Patient, 'id'>
+          // V4 Schema: Build list from unified /patients documents
+          for (const patientDoc of querySnapshot.docs) {
+            const patientData = patientDoc.data() as Omit<Patient, 'id'>
+            
             patientsData.push({
               ...patientData,
-              id: doc.id,
-              hasBaseline: baselineMap.has(doc.id),
-              hasFollowUp: followUpMap.has(doc.id),
+              id: patientDoc.id,
+              hasBaseline: !!patientData.baseline,
+              hasFollowUp: !!(patientData.followups && patientData.followups.length > 0),
             } as PatientWithStatus)
           }
 
-          setPatients(patientsData)
+          // Apply pagination
+          const paginatedPatients = patientsData.slice(pagination.offset, pagination.offset + pagination.limit)
+
+          setPatients(paginatedPatients)
+          setLoadingPatients(false)
+          setIndexedDBReady(true)
           setPagination(prev => ({
             ...prev,
             hasMore: querySnapshot.docs.length > pagination.offset + pagination.limit
           }))
           setPaginationLoading(false)
+          clearTimeout(timeoutId)
         } catch (error) {
           console.error("Error fetching patient details:", error)
+          setLoadingPatients(false)
           setPaginationLoading(false)
+          clearTimeout(timeoutId)
         }
       },
       (error) => {
         console.error("Error setting up real-time listener:", error)
+        setLoadingPatients(false)
         setPaginationLoading(false)
+        clearTimeout(timeoutId)
       }
     )
 
-    return unsubscribe
+    return () => {
+      unsubscribe()
+      clearTimeout(timeoutId)
+    }
   }, [user, pagination.offset])
 
   const getNextStatus = useCallback((patient: PatientWithStatus) => {

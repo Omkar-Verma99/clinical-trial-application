@@ -23,9 +23,9 @@ const MemoizedFollowUpForm = memo(FollowUpForm)
 const ComparisonView = lazy(() => import("@/components/comparison-view").then(mod => ({ default: mod.ComparisonView })))
 
 // Lazy load wrapper component
-const ComparisonViewLoader = ({ baseline, followUp, patient, exporting, onExport }: any) => (
+const ComparisonViewLoader = ({ baseline, followUp, patient, followUps = [], exporting, onExport }: any) => (
   <Suspense fallback={<div className="h-96 flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" /></div>}>
-    <ComparisonView baseline={baseline} followUp={followUp} patient={patient} />
+    <ComparisonView baseline={baseline} followUp={followUp} patient={patient} followUps={followUps} />
   </Suspense>
 )
 
@@ -38,7 +38,8 @@ export default function PatientDetailPage({ params }: Props) {
   const [patientId, setPatientId] = useState<string>("")
   const [patient, setPatient] = useState<Patient | null>(null)
   const [baseline, setBaseline] = useState<BaselineData | null>(null)
-  const [followUp, setFollowUp] = useState<FollowUpData | null>(null)
+  const [followUps, setFollowUps] = useState<FollowUpData[]>([])
+  const [selectedFollowUp, setSelectedFollowUp] = useState<FollowUpData | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const [exporting, setExporting] = useState(false)
@@ -52,73 +53,58 @@ export default function PatientDetailPage({ params }: Props) {
   }, [params])
 
   useEffect(() => {
-    if (!patientId || !user?.uid || !db) return
+    // CRITICAL: Check authentication BEFORE setting up any listeners
+    if (!patientId || !user?.uid || !db) {
+      return () => {} // No cleanup needed
+    }
 
     setLoading(true)
     const unsubscribers: (() => void)[] = []
 
-    // OPTIMIZED: Single query for patient (data is in top-level collection)
+    // OPTIMIZED: Get patient document (now includes baseline and followups array)
     const patientRef = doc(db, `patients/${patientId}`)
 
     const unsubPatient = onSnapshot(
       patientRef,
       (snap) => {
         if (snap.exists()) {
-          setPatient({ id: snap.id, ...snap.data() } as Patient)
+          const patientData = snap.data() as Patient & { baseline?: BaselineData; followups?: FollowUpData[] }
+          setPatient({ ...patientData, id: snap.id } as Patient)
+          
+          // Extract baseline and followups from unified patient document
+          if (patientData.baseline) {
+            setBaseline(patientData.baseline)
+          }
+          if (patientData.followups && Array.isArray(patientData.followups)) {
+            setFollowUps(patientData.followups)
+            // Auto-select first followup if viewing followup tab
+            if (patientData.followups.length > 0 && !selectedFollowUp) {
+              setSelectedFollowUp(patientData.followups[0])
+            }
+          } else {
+            setFollowUps([])
+          }
         } else {
           setPatient(null)
+          setBaseline(null)
+          setFollowUps([])
         }
         setLoading(false)
       },
       (error) => {
+        // CRITICAL: Ignore permission errors if user is logged out
+        if (error.code === 'permission-denied' && !user?.uid) {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            console.debug("Ignoring permission error after logout")
+          }
+          return
+        }
         console.error("Error fetching patient:", error)
         setPatient(null)
         setLoading(false)
       }
     )
     unsubscribers.push(unsubPatient)
-
-    // OPTIMIZED: Single query for baseline data (use getDocs for speed, then listen for updates)
-    const baselineQuery = query(
-      collection(db, "baselineData"),
-      where("patientId", "==", patientId)
-    )
-    const unsubBaseline = onSnapshot(
-      baselineQuery,
-      (snap) => {
-        if (snap.docs.length > 0) {
-          setBaseline({ id: snap.docs[0].id, ...snap.docs[0].data() } as BaselineData)
-        } else {
-          setBaseline(null)
-        }
-      },
-      (error) => {
-        console.error("Error fetching baseline:", error)
-        setBaseline(null)
-      }
-    )
-    unsubscribers.push(unsubBaseline)
-
-    // OPTIMIZED: Single query for follow-up data
-    const followUpQuery = query(
-      collection(db, "followUpData"),
-      where("patientId", "==", patientId)
-    )
-    const unsubFollowUp = onSnapshot(
-      followUpQuery,
-      (snap) => {
-        if (snap.docs.length > 0) {
-          setFollowUp({ id: snap.docs[0].id, ...snap.docs[0].data() } as FollowUpData)
-        } else {
-          setFollowUp(null)
-        }
-      },
-      (error) => {
-        console.error("Error fetching followup:", error)
-        setFollowUp(null)
-      }
-    )
-    unsubscribers.push(unsubFollowUp)
 
     return () => {
       unsubscribers.forEach(unsub => unsub())
@@ -130,7 +116,8 @@ export default function PatientDetailPage({ params }: Props) {
 
     setExporting(true)
     try {
-      await downloadPatientPDF(patient, baseline, followUp, doctor)
+      // Pass all followups for trend analysis
+      await downloadPatientPDF(patient, baseline, followUps.length > 0 ? followUps[0] : null, followUps, doctor || undefined)
       toast({
         title: "Success",
         description: "Patient data exported to PDF successfully",
@@ -145,12 +132,12 @@ export default function PatientDetailPage({ params }: Props) {
     } finally {
       setExporting(false)
     }
-  }, [patient, baseline, followUp, doctor])
+  }, [patient, baseline, followUps, doctor])
 
   const handleExportCSV = useCallback(() => {
     if (!patient) return
     try {
-      downloadCSV(patient, baseline, followUp, doctor)
+      downloadCSV(patient, baseline, followUps.length > 0 ? followUps[0] : null, doctor)
       toast({
         title: "Success",
         description: "Patient data exported to CSV successfully",
@@ -163,12 +150,12 @@ export default function PatientDetailPage({ params }: Props) {
         variant: "destructive",
       })
     }
-  }, [patient, baseline, followUp, doctor])
+  }, [patient, baseline, followUps, doctor])
 
   const handleExportExcel = useCallback(() => {
     if (!patient) return
     try {
-      downloadExcel(patient, baseline, followUp, doctor)
+      downloadExcel(patient, baseline, followUps.length > 0 ? followUps[0] : null, doctor)
       toast({
         title: "Success",
         description: "Patient data exported to Excel successfully",
@@ -181,7 +168,7 @@ export default function PatientDetailPage({ params }: Props) {
         variant: "destructive",
       })
     }
-  }, [patient, baseline, followUp, doctor])
+  }, [patient, baseline, followUps, doctor])
 
   if (loading) {
     return (
@@ -303,7 +290,7 @@ export default function PatientDetailPage({ params }: Props) {
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="baseline">Baseline</TabsTrigger>
             <TabsTrigger value="followup">Follow-up</TabsTrigger>
-            <TabsTrigger value="comparison" disabled={!baseline || !followUp}>
+            <TabsTrigger value="comparison" disabled={!baseline || followUps.length === 0}>
               Comparison
             </TabsTrigger>
           </TabsList>
@@ -362,11 +349,15 @@ export default function PatientDetailPage({ params }: Props) {
                   <div className="pt-4 border-t">
                     <div className="flex flex-wrap gap-3">
                       {!baseline && <Button onClick={() => setActiveTab("baseline")}>Add Baseline Assessment</Button>}
-                      {baseline && !followUp && (
-                        <Button onClick={() => setActiveTab("followup")}>Add Follow-up Assessment</Button>
+                      {baseline && followUps.length === 0 && (
+                        <Button onClick={() => { setSelectedFollowUp(null); setActiveTab("followup") }}>Add Follow-up Visit</Button>
                       )}
-                      {baseline && followUp && (
-                        <Button onClick={() => setActiveTab("comparison")}>View Comparison</Button>
+                      {baseline && followUps.length > 0 && (
+                        <>
+                          <Button onClick={() => { setSelectedFollowUp(null); setActiveTab("followup") }}>Add New Visit</Button>
+                          <Button variant="outline" onClick={() => setActiveTab("followup")}>View/Edit Visits ({followUps.length})</Button>
+                          <Button onClick={() => setActiveTab("comparison")}>View Comparison</Button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -384,11 +375,58 @@ export default function PatientDetailPage({ params }: Props) {
           {activeTab === "followup" && (
             <TabsContent value="followup">
               {baseline ? (
-                <MemoizedFollowUpForm
-                  patientId={patient.id}
-                  existingData={followUp}
-                  onSuccess={() => setActiveTab("comparison")}
-                />
+                <div className="space-y-4">
+                  {/* List existing followup visits */}
+                  {followUps.length > 0 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Existing Follow-up Visits ({followUps.length})</CardTitle>
+                        <CardDescription>Click on a visit to edit it</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid gap-2">
+                          {followUps.map((visit, index) => (
+                            <button
+                              key={index}
+                              onClick={() => setSelectedFollowUp(visit)}
+                              className={`p-4 text-left rounded-lg border-2 transition-colors ${
+                                selectedFollowUp === visit
+                                  ? "border-primary bg-primary/5"
+                                  : "border-muted hover:border-primary/50"
+                              }`}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="font-semibold">Visit {visit.visitNumber}</p>
+                                  <p className="text-sm text-muted-foreground">Date: {visit.visitDate}</p>
+                                </div>
+                                <span className="text-xs bg-muted px-2 py-1 rounded">
+                                  {visit.status === 'submitted' ? '✓ Submitted' : '✎ Draft'}
+                                </span>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Form for new or existing followup */}
+                  <MemoizedFollowUpForm
+                    patientId={patient.id}
+                    existingData={selectedFollowUp || null}
+                    baselineDate={patient.baselineVisitDate}
+                    allFollowUps={followUps}
+                    onSuccess={() => {
+                      setSelectedFollowUp(null)
+                      if (followUps.length > 0) {
+                        setActiveTab("followup")
+                      } else {
+                        setActiveTab("comparison")
+                      }
+                    }}
+                  />
+                </div>
               ) : (
                 <Card className="p-8 text-center">
                   <p className="text-muted-foreground">Please complete baseline assessment first</p>
@@ -402,47 +440,36 @@ export default function PatientDetailPage({ params }: Props) {
 
           {activeTab === "comparison" && (
             <TabsContent value="comparison">
-              {baseline && followUp ? (
+              {baseline && followUps.length > 0 ? (
                 <div className="space-y-4">
-                  <Card className="bg-muted/30 p-4">
-                    <div className="space-y-3">
-                      <h3 className="font-semibold">Export Data</h3>
-                      <p className="text-sm text-muted-foreground">Download complete trial data in various formats</p>
-                      <div className="flex flex-wrap gap-3">
-                        <Button
-                          onClick={handleExportPDF}
-                          disabled={exporting}
-                          className="gap-2 bg-purple-600 hover:bg-purple-700"
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                          </svg>
-                          {exporting ? "Exporting PDF..." : "Export PDF"}
-                        </Button>
-                        <Button
-                          onClick={handleExportCSV}
-                          variant="outline"
-                          className="gap-2"
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          Export CSV
-                        </Button>
-                        <Button
-                          onClick={handleExportExcel}
-                          variant="outline"
-                          className="gap-2"
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          Export Excel
-                        </Button>
-                      </div>
-                    </div>
-                  </Card>
-                  <ComparisonViewLoader baseline={baseline} followUp={followUp} patient={patient} exporting={exporting} onExport={handleExportPDF} />
+                  {/* Select which followup to compare */}
+                  {followUps.length > 1 && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Select Follow-up Visit for Comparison</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {followUps.map((visit, index) => (
+                            <button
+                              key={index}
+                              onClick={() => setSelectedFollowUp(visit)}
+                              className={`p-3 text-center rounded-lg border-2 transition-colors ${
+                                selectedFollowUp === visit
+                                  ? "border-primary bg-primary/5"
+                                  : "border-muted hover:border-primary/50"
+                              }`}
+                            >
+                              <p className="font-semibold">Visit {visit.visitNumber}</p>
+                              <p className="text-xs text-muted-foreground">{visit.visitDate}</p>
+                            </button>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  <ComparisonViewLoader baseline={baseline} followUp={selectedFollowUp || followUps[0]} patient={patient} followUps={followUps} exporting={exporting} onExport={handleExportPDF} />
                 </div>
               ) : (
                 <Card className="p-8 text-center">

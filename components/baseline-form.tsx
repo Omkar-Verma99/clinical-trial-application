@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, memo } from "react"
 import { collection, addDoc, updateDoc, doc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/auth-context"
 import type { BaselineData } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -24,6 +25,7 @@ interface BaselineFormProps {
 
 export const BaselineForm = memo(function BaselineForm({ patientId, existingData, onSuccess }: BaselineFormProps) {
   const { toast } = useToast()
+  const { user } = useAuth()
   const { saveFormData } = useIndexedDBSync(patientId)
   const [loading, setLoading] = useState(false)
 
@@ -55,6 +57,16 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
 
   const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
     e.preventDefault()
+
+    // CRITICAL: Verify user is loaded and has uid before saving
+    if (!user?.uid) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "User not authenticated. Please refresh the page.",
+      })
+      return
+    }
 
     // Show loading immediately
     setLoading(true)
@@ -127,6 +139,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
 
       const data = {
         patientId,
+        doctorId: user?.uid || "",
         
         // Clinical Parameters
         hba1c: hba1cValue,
@@ -180,25 +193,34 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
       }
 
       // Only submit to Firebase if not draft (background sync will handle it)
-      // But for user experience, also save to Firebase directly for faster sync
+      // UNIFIED STRUCTURE: Always update patients/{patientId}/baseline
       if (!saveAsDraft) {
         try {
-          if (existingData && (existingData as any).id) {
-            await updateDoc(doc(db, "baselineData", (existingData as any).id), data)
-          } else {
-            const docRef = await addDoc(collection(db, "baselineData"), data)
-            // Store Firebase ID for future updates
-            await saveFormData(
-              formId,
-              'baseline',
-              { ...data, firebaseId: docRef.id },
-              false,
-              validationErrors
-            )
-          }
+          // Update or create patient document with baseline data
+          await updateDoc(doc(db, "patients", patientId), {
+            baseline: {
+              ...data,
+              formId: formId,
+              syncedToFirebaseAt: new Date().toISOString()
+            },
+            metadata: {
+              lastSynced: new Date().toISOString(),
+              isDirty: false,
+              syncError: null
+            }
+          })
+          
+          // Store Firebase ID for future updates
+          await saveFormData(
+            formId,
+            'baseline',
+            { ...data, firebaseId: patientId, formId: formId },
+            false,
+            validationErrors
+          )
         } catch (firebaseError) {
           // Don't fail - already saved locally, will sync in background
-          if (process.env.NODE_ENV === 'development') {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             console.warn('Firebase save failed, will retry:', firebaseError)
           }
         }

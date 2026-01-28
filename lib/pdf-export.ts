@@ -79,6 +79,7 @@ export async function generatePatientPDF(
   patient: Patient,
   baseline: BaselineData | null,
   followUp: FollowUpData | null,
+  followUps?: FollowUpData[],
   doctor?: Doctor
 ) {
   const doc = new jsPDF({
@@ -488,6 +489,125 @@ export async function generatePatientPDF(
     yPosition += 3
   }
 
+  // ===== SECTION: MULTI-VISIT TREND ANALYSIS (If Multiple Followups) =====
+  if (followUps && followUps.length > 1) {
+    if (yPosition > pageHeight - 100) { doc.addPage(); yPosition = margin }
+    
+    yPosition = addSectionHeading(doc, "MULTI-VISIT TREND ANALYSIS", yPosition, margin, pageWidth)
+    
+    // Create a comparison table
+    doc.setFontSize(9)
+    doc.setFont("helvetica", "bold")
+    
+    const tableData: (string | number)[][] = []
+    const headers = ["Metric", "Baseline", ...followUps.map(v => `Visit ${v.visitNumber}`)]
+    tableData.push(headers as string[])
+    
+    // Add key metrics rows
+    const metrics = [
+      { label: "HbA1c (%)", key: "hba1c" },
+      { label: "FPG (mg/dL)", key: "fpg" },
+      { label: "Weight (kg)", key: "weight" },
+      { label: "BP (mmHg)", key: "bp" },
+      { label: "Serum Creatinine", key: "serumCreatinine" },
+      { label: "eGFR (mL/min)", key: "egfr" }
+    ]
+    
+    for (const metric of metrics) {
+      const row: (string | number)[] = [metric.label]
+      
+      // Baseline value
+      if (metric.key === "bp" && baseline) {
+        row.push(`${baseline.bloodPressureSystolic || ""}/${baseline.bloodPressureDiastolic || ""}`)
+      } else if (baseline && metric.key in baseline) {
+        row.push((baseline as any)[metric.key] || "")
+      } else {
+        row.push("")
+      }
+      
+      // Followup values
+      for (const followup of followUps) {
+        if (metric.key === "bp") {
+          row.push(`${followup.bloodPressureSystolic || ""}/${followup.bloodPressureDiastolic || ""}`)
+        } else if (metric.key in followup) {
+          row.push((followup as any)[metric.key] || "")
+        } else {
+          row.push("")
+        }
+      }
+      
+      tableData.push(row)
+    }
+    
+    // Draw simple table
+    let tableYPos = yPosition + 5
+    const colWidth = (pageWidth - 2 * margin) / tableData[0].length
+    
+    // Header row
+    doc.setFillColor(41, 128, 185)
+    doc.setTextColor(255, 255, 255)
+    for (let i = 0; i < tableData[0].length; i++) {
+      doc.rect(margin + i * colWidth, tableYPos - 3, colWidth, 5, "F")
+      doc.setFontSize(8)
+      doc.text(tableData[0][i].toString(), margin + i * colWidth + 1, tableYPos, { maxWidth: colWidth - 1 })
+    }
+    tableYPos += 5
+    
+    // Data rows
+    doc.setTextColor(0, 0, 0)
+    doc.setFont("helvetica", "normal")
+    for (let rowIdx = 1; rowIdx < tableData.length; rowIdx++) {
+      const isAlt = rowIdx % 2 === 0
+      if (isAlt) {
+        doc.setFillColor(245, 245, 245)
+        doc.rect(margin, tableYPos - 3, pageWidth - 2 * margin, 5, "F")
+      }
+      
+      for (let i = 0; i < tableData[rowIdx].length; i++) {
+        doc.setFontSize(7)
+        doc.text(tableData[rowIdx][i].toString(), margin + i * colWidth + 1, tableYPos, { maxWidth: colWidth - 1 })
+      }
+      tableYPos += 5
+    }
+    
+    yPosition = tableYPos + 5
+    
+    // Summary trends
+    if (baseline && followUps.length > 0) {
+      doc.setFont("helvetica", "bold")
+      doc.setFontSize(9)
+      doc.text("Key Observations:", margin, yPosition)
+      yPosition += 5
+      
+      doc.setFont("helvetica", "normal")
+      doc.setFontSize(8)
+      
+      const observations: string[] = []
+      
+      if (baseline.hba1c && followUps[0].hba1c) {
+        const change = (followUps[followUps.length - 1].hba1c || 0) - baseline.hba1c
+        const direction = change < 0 ? "decreased" : "increased"
+        const trend = followUps.map(f => f.hba1c).join(" → ")
+        observations.push(`HbA1c ${direction}: ${baseline.hba1c}% → ${trend}%`)
+      }
+      
+      if (baseline.weight && followUps[0].weight) {
+        const change = (followUps[followUps.length - 1].weight || 0) - baseline.weight
+        const direction = change < 0 ? "decreased" : "increased"
+        const trend = followUps.map(f => f.weight).join(" → ")
+        observations.push(`Weight ${direction}: ${baseline.weight} kg → ${trend} kg`)
+      }
+      
+      for (const obs of observations) {
+        const wrapped = doc.splitTextToSize(obs, pageWidth - 2 * margin - 5)
+        doc.text(wrapped, margin + 5, yPosition)
+        yPosition += wrapped.length * 3
+      }
+    }
+    
+    yPosition += 5
+  }
+
   // ===== SECTION P: PHYSICIAN DECLARATION =====
   if (yPosition > pageHeight - 60) { doc.addPage(); yPosition = margin }
   yPosition = addSectionHeading(doc, "PHYSICIAN DECLARATION", yPosition, margin, pageWidth)
@@ -536,10 +656,11 @@ export async function downloadPatientPDF(
   patient: Patient,
   baseline: BaselineData | null,
   followUp: FollowUpData | null,
+  followUps?: FollowUpData[],
   doctor?: Doctor
 ) {
   try {
-    const doc = await generatePatientPDF(patient, baseline, followUp, doctor)
+    const doc = await generatePatientPDF(patient, baseline, followUp, followUps, doctor)
     doc.save(`CRF_${patient.patientCode}_${new Date().toISOString().split("T")[0]}.pdf`)
   } catch (error) {
     console.error("Error generating PDF:", error)

@@ -3,8 +3,9 @@
 import type React from "react"
 
 import { useState, memo } from "react"
-import { collection, addDoc, updateDoc, doc } from "firebase/firestore"
+import { collection, addDoc, updateDoc, doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/auth-context"
 import DOMPurify from "dompurify"
 import type { FollowUpData } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -20,14 +21,33 @@ interface FollowUpFormProps {
   patientId: string
   existingData: FollowUpData | null
   onSuccess: () => void
+  baselineDate?: string // Baseline visit date to calculate weeks
+  allFollowUps?: FollowUpData[] // Track all existing visits
 }
 
-export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess }: FollowUpFormProps) {
+export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess, baselineDate, allFollowUps = [] }: FollowUpFormProps) {
   const { toast } = useToast()
+  const { user } = useAuth()
   const { saveFormData } = useIndexedDBSync(patientId)
   const [loading, setLoading] = useState(false)
+  
+  // Calculate visitNumber based on date difference from baseline (in weeks)
+  // For editing, use existing; for new, calculate from dates
+  const calculateVisitNumber = (visitDate: string): number => {
+    if (!visitDate || !baselineDate) return existingData?.visitNumber || 1
+    
+    const baseline = new Date(baselineDate)
+    const visit = new Date(visitDate)
+    const diffDays = Math.floor((visit.getTime() - baseline.getTime()) / (1000 * 60 * 60 * 24))
+    const weeks = Math.max(1, Math.round(diffDays / 7))
+    return weeks
+  }
+  
+  const [visitDate, setVisitDate] = useState(existingData?.visitDate || "")
+  const visitNumber = existingData?.visitNumber || calculateVisitNumber(visitDate)
 
   const [formData, setFormData] = useState({
+    visitNumber: visitNumber,
     visitDate: existingData?.visitDate || "",
     hba1c: existingData?.hba1c?.toString() || "",
     fpg: existingData?.fpg?.toString() || "",
@@ -96,6 +116,17 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
   const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
     e.preventDefault()
+
+    // CRITICAL: Verify user is loaded and has uid before saving
+    if (!user?.uid) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "User not authenticated. Please refresh the page.",
+      })
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -165,6 +196,8 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
       const data = {
         patientId,
+        doctorId: user?.uid || "",
+        visitNumber: formData.visitNumber,
         visitDate: formData.visitDate,
         hba1c: formData.hba1c ? Number.parseFloat(formData.hba1c) : null,
         fpg: formData.fpg ? Number.parseFloat(formData.fpg) : null,
@@ -263,24 +296,60 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       }
 
       // Only submit to Firebase if not draft (background sync will handle it)
+      // UNIFIED STRUCTURE: Update or append to patients/{patientId}/followups array
       if (!saveAsDraft) {
         try {
-          if (existingData && (existingData as any).id) {
-            await updateDoc(doc(db, "followUpData", (existingData as any).id), data)
-          } else {
-            const docRef = await addDoc(collection(db, "followUpData"), data)
+          // Get current patient data to check existing followups
+          const patientDocRef = doc(db, "patients", patientId)
+          const patientDoc = await getDoc(patientDocRef)
+          
+          if (patientDoc.exists()) {
+            const patientData = patientDoc.data()
+            const existingFollowups = patientData.followups || []
+            
+            // Check if followup with same visitNumber exists
+            const visitIndex = existingFollowups.findIndex(
+              (f: any) => f.visitNumber === data.visitNumber
+            )
+            
+            if (visitIndex >= 0) {
+              // UPDATE existing followup at that index
+              existingFollowups[visitIndex] = {
+                ...data,
+                formId: formId,
+                syncedToFirebaseAt: new Date().toISOString()
+              }
+            } else {
+              // ADD new followup to array
+              existingFollowups.push({
+                ...data,
+                formId: formId,
+                syncedToFirebaseAt: new Date().toISOString()
+              })
+            }
+            
+            // Update patient document with updated followups array
+            await updateDoc(patientDocRef, {
+              followups: existingFollowups,
+              metadata: {
+                lastSynced: new Date().toISOString(),
+                isDirty: false,
+                syncError: null
+              }
+            })
+            
             // Store Firebase ID for future updates
             await saveFormData(
               formId,
               'followup',
-              { ...data, firebaseId: docRef.id },
+              { ...data, firebaseId: patientId, formId: formId },
               false,
               validationErrors
             )
           }
         } catch (firebaseError) {
           // Don't fail - already saved locally, will sync in background
-          if (process.env.NODE_ENV === 'development') {
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
             console.warn('Firebase save failed, will retry:', firebaseError)
           }
         }
@@ -295,7 +364,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       onSuccess()
     } catch (error) {
       setLoading(false)
-      if (process.env.NODE_ENV === 'development') {
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
         console.error("Error saving follow-up data:", error)
       }
       toast({
@@ -318,16 +387,26 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* SECTION H - Follow-up Visit Date */}
           <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <h3 className="font-semibold text-lg">Follow-up Visit (Week 12 ± 2 weeks)</h3>
+            <h3 className="font-semibold text-lg">Follow-up Visit</h3>
             <div className="space-y-2">
               <Label htmlFor="visitDate">Date of Visit *</Label>
               <Input
                 id="visitDate"
                 type="date"
                 value={formData.visitDate}
-                onChange={(e) => setFormData({ ...formData, visitDate: e.target.value })}
+                onChange={(e) => {
+                  const newDate = e.target.value
+                  const newVisitNumber = calculateVisitNumber(newDate)
+                  setFormData({ ...formData, visitDate: newDate, visitNumber: newVisitNumber })
+                  setVisitDate(newDate)
+                }}
                 required
               />
+              {formData.visitDate && (
+                <p className="text-sm text-muted-foreground">
+                  Calculated Visit: Week {formData.visitNumber}
+                </p>
+              )}
             </div>
           </div>
 

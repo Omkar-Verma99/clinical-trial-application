@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { Patient } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -33,23 +33,24 @@ export default function ReportsPage() {
         const patientsSnapshot = await getDocs(patientsQuery)
         const patients = patientsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Patient[]
 
-        // Fetch baseline and follow-up data for each patient
+        // Fetch baseline and follow-up data for each patient from V4 unified schema
         const reports = await Promise.all(
           patients.map(async (patient) => {
             try {
-              const baselineQuery = query(collection(db, "baselineData"), where("patientId", "==", patient.id))
-              const baselineSnapshot = await getDocs(baselineQuery)
-              const baseline = baselineSnapshot.empty
-                ? null
-                : ({ ...baselineSnapshot.docs[0].data(), id: baselineSnapshot.docs[0].id } as any)
-
-              const followUpQuery = query(collection(db, "followUpData"), where("patientId", "==", patient.id))
-              const followUpSnapshot = await getDocs(followUpQuery)
-              const followUp = followUpSnapshot.empty
-                ? null
-                : ({ ...followUpSnapshot.docs[0].data(), id: followUpSnapshot.docs[0].id } as any)
-
-              return { patient, baseline, followUp }
+              // V4 Schema: Get baseline & followups from unified /patients/{id} document
+              const patientDocRef = doc(db, "patients", patient.id)
+              const patientSnapshot = await getDoc(patientDocRef)
+              
+              if (patientSnapshot.exists()) {
+                const patientData = patientSnapshot.data()
+                return {
+                  patient,
+                  baseline: patientData.baseline || null,
+                  followUp: patientData.followups && patientData.followups.length > 0 ? patientData.followups[0] : null
+                }
+              }
+              
+              return { patient, baseline: null, followUp: null }
             } catch (patientError) {
               console.error(`Error fetching data for patient ${patient.id}:`, patientError)
               return { patient, baseline: null, followUp: null }

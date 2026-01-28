@@ -8,10 +8,12 @@ import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { PasswordInput } from "@/components/ui/password-input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
+import { getAuthErrorMessage } from "@/lib/auth-errors"
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -38,11 +40,66 @@ export default function SignupPage() {
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Validation
+    if (!formData.name.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please enter your full name.",
+      })
+      return
+    }
+
+    if (!formData.email.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please enter a valid email address.",
+      })
+      return
+    }
+
+    if (formData.password.length < 6) {
+      toast({
+        variant: "destructive",
+        title: "Weak Password",
+        description: "Password must be at least 6 characters long.",
+      })
+      return
+    }
+
     if (formData.password !== formData.confirmPassword) {
       toast({
         variant: "destructive",
-        title: "Passwords do not match",
-        description: "Please ensure both passwords are identical.",
+        title: "Passwords Don't Match",
+        description: "Please ensure both password fields are identical.",
+      })
+      return
+    }
+
+    if (!formData.registrationNumber.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please enter your registration number.",
+      })
+      return
+    }
+
+    if (!formData.qualification.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please enter your qualification.",
+      })
+      return
+    }
+
+    if (!formData.studySiteCode.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Missing Information",
+        description: "Please enter your study site code.",
       })
       return
     }
@@ -61,16 +118,22 @@ export default function SignupPage() {
         studySiteCode: formData.studySiteCode,
       })
       toast({
-        title: "Registration successful!",
-        description: "Your account has been created.",
+        title: "Registration Successful! 🎉",
+        description: "Your account has been created. Welcome to Kollectcare!",
       })
       router.push("/dashboard")
     } catch (error: any) {
+      const errorInfo = getAuthErrorMessage(error)
       toast({
         variant: "destructive",
-        title: "Registration failed",
-        description: error.message || "Unable to create account.",
+        title: errorInfo.title,
+        description: errorInfo.description,
       })
+
+      // Log error for debugging
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        console.error('Signup error:', error)
+      }
     } finally {
       setLoading(false)
     }
@@ -215,28 +278,29 @@ export default function SignupPage() {
             <div className="grid md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password *</Label>
-                <Input
+                <PasswordInput
                   id="password"
                   name="password"
-                  type="password"
                   placeholder="Create a password"
                   value={formData.password}
                   onChange={handleChange}
                   autoComplete="new-password"
                   required
+                  showToggle={true}
                 />
+                <p className="text-xs text-muted-foreground">Minimum 6 characters</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password *</Label>
-                <Input
+                <PasswordInput
                   id="confirmPassword"
                   name="confirmPassword"
-                  type="password"
                   placeholder="Confirm password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   autoComplete="new-password"
                   required
+                  showToggle={true}
                 />
               </div>
             </div>

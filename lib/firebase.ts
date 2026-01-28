@@ -30,6 +30,11 @@ if (typeof window !== "undefined") {
       auth = getAuth(firebaseApp)
       db = getFirestore(firebaseApp)
 
+      // Disable analytics SDK warnings
+      if (typeof window !== 'undefined') {
+        (window as any)['FIREBASE_ANALYTICS_ENABLED'] = false
+      }
+
       // Initialize Analytics only in browser environment
       try {
         getAnalytics(firebaseApp)
@@ -37,7 +42,10 @@ if (typeof window !== "undefined") {
         // Analytics init failures are non-critical
       }
     } catch (error) {
-      console.error("❌ Firebase initialization failed:", error)
+      // Suppress Firebase initialization errors in console (they're handled by error logging)
+      if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        console.error("Firebase initialization error (non-critical):", error)
+      }
     }
   } else {
     console.warn("⚠️  Firebase config is incomplete, cannot initialize")
