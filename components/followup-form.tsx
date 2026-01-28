@@ -271,6 +271,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         },
         comments: formData.additionalComments,
         isDraft: saveAsDraft,
+        status: saveAsDraft ? "draft" : "submitted",
         createdAt: existingData?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }

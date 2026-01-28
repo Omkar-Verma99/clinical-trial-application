@@ -21,7 +21,13 @@ function drawKeyValue(doc: jsPDF, key: string, value: any, yPos: number, margin:
   
   doc.setFont("helvetica", "normal")
   doc.setTextColor(0, 0, 0)
-  const displayValue = value === true ? "☑ Yes" : value === false ? "☐ No" : (value?.toString() || "—")
+  let displayValue = "—"
+  
+  if (value === true) displayValue = "☑ Yes"
+  else if (value === false) displayValue = "☐ No"
+  else if (value !== null && value !== undefined && typeof value === 'number') displayValue = value.toFixed(2)
+  else if (value) displayValue = value.toString()
+  
   doc.text(displayValue, col2Start, yPos)
   return yPos + 4
 }
@@ -220,7 +226,9 @@ export async function generatePatientPDF(
       yPos += 3
       doc.setFont("helvetica", "normal")
       yPos = drawKeyValue(doc, "Category:", visit.glycemicResponse.category, yPos, margin, col1Width, col2Start)
-      if (visit.glycemicResponse.hba1cChange !== null) yPos = drawKeyValue(doc, "HbA1c Change (%):", visit.glycemicResponse.hba1cChange.toFixed(2), yPos, margin, col1Width, col2Start)
+      if (visit.glycemicResponse.hba1cChange !== null && visit.glycemicResponse.hba1cChange !== undefined) {
+        yPos = drawKeyValue(doc, "HbA1c Change (%):", Number(visit.glycemicResponse.hba1cChange).toFixed(2), yPos, margin, col1Width, col2Start)
+      }
     }
 
     // Outcomes
@@ -411,34 +419,46 @@ export function downloadCSV(patient: Patient, baseline: BaselineData | null, fol
 }
 
 export function downloadExcel(patient: Patient, baseline: BaselineData | null, followUp: FollowUpData | null, doctor?: any): void {
-  let tsv = "Kollectcare CRF Data Export\n"
-  tsv += `Generated\t${new Date().toLocaleDateString()}\n\n`
+  // Create CSV content (Excel can open CSV files directly)
+  let csv = "Kollectcare CRF Data Export\n"
+  csv += `Generated,${new Date().toLocaleDateString()}\n\n`
   
-  tsv += "PATIENT INFORMATION\n"
-  tsv += `Patient Code\t${patient.patientCode}\n`
-  tsv += `Age\t${patient.age}\n`
-  tsv += `Gender\t${patient.gender}\n`
-  tsv += `Duration of Diabetes\t${patient.durationOfDiabetes} years\n\n`
+  if (doctor) {
+    csv += `Investigator,${doctor.name}\n`
+    csv += `Registration,${doctor.registrationNumber || "N/A"}\n\n`
+  }
+  
+  csv += "PATIENT INFORMATION\n"
+  csv += `Patient Code,${patient.patientCode}\n`
+  csv += `Age,${patient.age}\n`
+  csv += `Gender,${patient.gender}\n`
+  csv += `Duration of Diabetes,${patient.durationOfDiabetes} years\n\n`
   
   if (baseline) {
-    tsv += "BASELINE DATA\n"
-    tsv += `HbA1c\t${baseline.hba1c}%\n`
-    tsv += `FPG\t${baseline.fpg} mg/dL\n`
-    tsv += `Weight\t${baseline.weight} kg\n`
+    csv += "BASELINE DATA\n"
+    csv += `HbA1c (%),${baseline.hba1c}\n`
+    csv += `FPG (mg/dL),${baseline.fpg}\n`
+    csv += `Weight (kg),${baseline.weight}\n`
+    csv += `Blood Pressure (mmHg),${baseline.bloodPressureSystolic}/${baseline.bloodPressureDiastolic}\n`
+    csv += `Serum Creatinine,${baseline.serumCreatinine}\n`
+    csv += `eGFR,${baseline.egfr}\n\n`
   }
   
   if (followUp) {
-    tsv += "\nFOLLOW-UP DATA\n"
-    tsv += `HbA1c\t${followUp.hba1c}%\n`
-    tsv += `FPG\t${followUp.fpg} mg/dL\n`
-    tsv += `Weight\t${followUp.weight} kg\n`
+    csv += "FOLLOW-UP DATA\n"
+    csv += `HbA1c (%),${followUp.hba1c}\n`
+    csv += `FPG (mg/dL),${followUp.fpg}\n`
+    csv += `Weight (kg),${followUp.weight}\n`
+    csv += `Blood Pressure (mmHg),${followUp.bloodPressureSystolic}/${followUp.bloodPressureDiastolic}\n`
+    csv += `Serum Creatinine,${followUp.serumCreatinine}\n`
+    csv += `eGFR,${followUp.egfr}\n`
   }
-  
-  const blob = new Blob([tsv], { type: "application/vnd.ms-excel" })
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
   const url = window.URL.createObjectURL(blob)
   const a = document.createElement("a")
   a.href = url
-  a.download = `CRF_${patient.patientCode}_${new Date().toISOString().split("T")[0]}.xlsx`
+  a.download = `CRF_${patient.patientCode}_${new Date().toISOString().split("T")[0]}.csv`
   a.click()
   window.URL.revokeObjectURL(url)
 }

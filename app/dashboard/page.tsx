@@ -230,9 +230,8 @@ const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick
           {/* Bottom Actions */}
           <div className="pt-2 border-t border-border mt-2">
             <Button 
-              variant="outline" 
               size="sm"
-              className="w-full bg-transparent text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900 hover:bg-blue-50 dark:hover:bg-blue-950 text-xs h-8"
+              className="w-full bg-black text-white hover:bg-black/90 dark:bg-white dark:text-black dark:hover:bg-white/90 text-xs h-8"
               onClick={(e) => handleActionClick(e, patient)}
             >
               View Details →
@@ -281,7 +280,7 @@ export default function DashboardPage() {
   // Initialize patient list with pagination from optimized IndexedDB
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login")
+      router.push("/login?from=/dashboard")
     }
   }, [user, loading, router])
 
@@ -406,7 +405,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
-      <header className="border-b border-border/40 bg-card/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Image src="/favicon-192x192.png" alt="Kollectcare" width={32} height={32} className="h-8 w-8 rounded" />

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState, useCallback, useMemo, Suspense, lazy, memo } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import Image from "next/image"
 import { doc, onSnapshot, query, collection, where } from "firebase/firestore"
@@ -35,6 +36,7 @@ interface Props {
 
 export default function PatientDetailPage({ params }: Props) {
   const { user, doctor, logout } = useAuth()
+  const router = useRouter()
   const [patientId, setPatientId] = useState<string>("")
   const [patient, setPatient] = useState<Patient | null>(null)
   const [baseline, setBaseline] = useState<BaselineData | null>(null)
@@ -43,6 +45,14 @@ export default function PatientDetailPage({ params }: Props) {
   const [activeTab, setActiveTab] = useState("overview")
   const [exporting, setExporting] = useState(false)
   // Note: selectedFollowUp removed - now using dynamic visit tabs from followUps array
+
+  // Auth guard: redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !user) {
+      const currentPath = `/patients/${patientId || '[id]'}`
+      router.push(`/login?from=${encodeURIComponent(currentPath)}`)
+    }
+  }, [user, loading, patientId, router])
 
   useEffect(() => {
     params
@@ -170,7 +180,7 @@ export default function PatientDetailPage({ params }: Props) {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
-        <header className="border-b border-border/40 bg-card/80 backdrop-blur-sm">
+        <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
           <div className="container mx-auto px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="sm" disabled>← Back</Button>
@@ -236,7 +246,7 @@ export default function PatientDetailPage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
-      <header className="border-b border-border/40 bg-card/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link href="/dashboard">
@@ -283,85 +293,69 @@ export default function PatientDetailPage({ params }: Props) {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full gap-0" style={{ gridTemplateColumns: `repeat(${3 + followUps.length + 1}, minmax(0, 1fr))` }}>
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="baseline">Baseline</TabsTrigger>
+          <TabsList className="grid w-full gap-0 bg-muted p-0" style={{ gridTemplateColumns: `repeat(${3 + followUps.length + 1}, minmax(0, 1fr))` }}>
+            <TabsTrigger value="overview" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Overview</TabsTrigger>
+            <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Baseline</TabsTrigger>
             
-            {/* Dynamic Visit Tabs */}
+            {/* Dynamic FollowUp Tabs */}
             {followUps.length > 0 && followUps.map((_, index) => (
-              <TabsTrigger key={`visit-${index}`} value={`visit-${index}`}>
-                Visit {index + 1}
+              <TabsTrigger key={`visit-${index}`} value={`visit-${index}`} className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
+                Follow Up {index + 1}
               </TabsTrigger>
             ))}
             
-            <TabsTrigger value="comparison" disabled={!baseline || followUps.length === 0}>
+            <TabsTrigger value="comparison" disabled={!baseline || followUps.length === 0} className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
               Comparison
             </TabsTrigger>
           </TabsList>
 
           {activeTab === "overview" && (
             <TabsContent value="overview">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Patient Profile</CardTitle>
-                  <CardDescription>Anonymized patient information</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Patient Code</p>
-                      <p className="font-medium">{patient.patientCode}</p>
+              <div className="grid md:grid-cols-3 gap-4">
+                {/* Left Column - Patient Card */}
+                <Card className="md:col-span-1 border-2 border-primary/20">
+                  <CardContent className="pt-4">
+                    {/* Avatar */}
+                    <div className="mb-3 flex justify-center">
+                      <div className="h-20 w-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                        <span className="text-white text-lg font-bold">{patient.patientCode.slice(0, 2)}</span>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Age / Gender</p>
-                      <p className="font-medium">
-                        {patient.age} years / {patient.gender}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Duration of Diabetes</p>
-                      <p className="font-medium">{patient.durationOfDiabetes} years</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Previous Therapy</p>
-                      <p className="font-medium">{Array.isArray(patient.previousTherapy) ? patient.previousTherapy.join(", ") : "None"}</p>
-                    </div>
-                    <div className="md:col-span-2">
-                      <p className="text-sm text-muted-foreground">Comorbidities</p>
-                      <p className="font-medium">
-                        {patient.comorbidities && typeof patient.comorbidities === 'object'
-                          ? Object.entries(patient.comorbidities)
-                              .filter(([key, value]) => key !== 'other' && key !== 'ckdEgfrCategory' && value === true)
-                              .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1))
-                              .join(", ") || "None"
-                          : "None"}
-                      </p>
-                    </div>
-                    <div className="md:col-span-2">
-                      <p className="text-sm text-muted-foreground">Reason for Triple FDC</p>
-                      <p className="font-medium">
-                        {patient.reasonForTripleFDC && typeof patient.reasonForTripleFDC === 'object'
-                          ? Object.entries(patient.reasonForTripleFDC)
-                              .filter(([key, value]) => key !== 'other' && value === true)
-                              .map(([key]) => key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1'))
-                              .join(", ") || "None"
-                          : "None"}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="pt-4 border-t">
-                    <div className="flex flex-wrap gap-3">
+                    {/* Patient Code */}
+                    <h3 className="text-lg font-bold text-center">{patient.patientCode}</h3>
+                    <p className="text-xs text-muted-foreground text-center mt-1">{patient.age}y • {patient.gender} • {patient.durationOfDiabetes}y DM</p>
+
+                    {/* Status Badges */}
+                    <div className="mt-3 space-y-1.5">
+                      <div className="flex items-center justify-between text-xs p-2 bg-blue-50 dark:bg-blue-950 rounded">
+                        <span className="text-muted-foreground">Baseline</span>
+                        <span className="text-lg">{baseline ? "✅" : "⭕"}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs p-2 bg-blue-50 dark:bg-blue-950 rounded">
+                        <span className="text-muted-foreground">Follow-ups</span>
+                        <span className="text-lg">{followUps.length > 0 ? "✅" : "⭕"}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-xs p-2 bg-blue-50 dark:bg-blue-950 rounded">
+                        <span className="text-muted-foreground">Comparison</span>
+                        <span className="text-lg">{baseline && followUps.length > 0 ? "✅" : "⭕"}</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="mt-4 space-y-1.5">
                       {!baseline && (
-                        <Button onClick={() => setActiveTab("baseline")}>
-                          Add Baseline Assessment
+                        <Button 
+                          onClick={() => setActiveTab("baseline")}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-xs h-8"
+                        >
+                          + Add Baseline
                         </Button>
                       )}
                       
                       {baseline && followUps.length === 0 && (
                         <Button 
                           onClick={() => {
-                            // Create first visit
                             const firstVisit: FollowUpData = {
                               visitNumber: 1,
                               visitDate: "",
@@ -382,13 +376,15 @@ export default function PatientDetailPage({ params }: Props) {
                               actionTaken: [],
                               outcome: [],
                               adverseEvents: "",
+                              isDraft: true,
                               status: "draft",
                             } as FollowUpData
                             setFollowUps([firstVisit])
                             setActiveTab("visit-0")
                           }}
+                          className="w-full bg-green-600 hover:bg-green-700 text-xs h-8"
                         >
-                          + Add First Follow-up Visit
+                          + Add Follow-up
                         </Button>
                       )}
                       
@@ -396,21 +392,105 @@ export default function PatientDetailPage({ params }: Props) {
                         <>
                           <Button 
                             onClick={() => setActiveTab("visit-0")}
+                            className="w-full text-xs h-8"
+                            variant="outline"
                           >
-                            View/Edit Visits ({followUps.length})
+                            Edit Visits ({followUps.length})
                           </Button>
                           <Button 
                             onClick={() => setActiveTab("comparison")}
+                            className="w-full bg-purple-600 hover:bg-purple-700 text-xs h-8"
                           >
                             View Comparison
                           </Button>
                         </>
                       )}
-
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                {/* Right Column - Medical Details */}
+                <Card className="md:col-span-2">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-lg">Clinical Information</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Previous Therapy */}
+                    {Array.isArray(patient.previousTherapy) && patient.previousTherapy.length > 0 && (
+                      <div>
+                        <p className="text-xs text-muted-foreground font-semibold mb-2 uppercase">Previous Therapy</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {patient.previousTherapy.map((therapy, idx) => (
+                            <span key={idx} className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-100 text-xs rounded">
+                              {therapy}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Comorbidities */}
+                    {patient.comorbidities && typeof patient.comorbidities === 'object' && (
+                      <div>
+                        <p className="text-xs text-muted-foreground font-semibold mb-2 uppercase">Comorbidities</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(patient.comorbidities)
+                            .filter(([key, value]) => key !== 'other' && key !== 'ckdEgfrCategory' && value === true)
+                            .map(([key]) => (
+                              <span key={key} className="px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-100 text-xs rounded">
+                                {key.charAt(0).toUpperCase() + key.slice(1)}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Reason for Triple FDC */}
+                    {patient.reasonForTripleFDC && Object.values(patient.reasonForTripleFDC).some(v => v === true) && (
+                      <div>
+                        <p className="text-xs text-muted-foreground font-semibold mb-2 uppercase">Reason for Triple FDC</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Object.entries(patient.reasonForTripleFDC)
+                            .filter(([key, value]) => key !== 'other' && value === true)
+                            .map(([key]) => (
+                              <span key={key} className="px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 text-xs rounded">
+                                {key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')}
+                              </span>
+                            ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Lifestyle */}
+                    <div className="grid grid-cols-2 gap-3 text-xs">
+                      {patient.smokingStatus && (
+                        <div className="p-2 bg-muted rounded">
+                          <p className="text-muted-foreground">Smoking</p>
+                          <p className="font-medium">{patient.smokingStatus}</p>
+                        </div>
+                      )}
+                      {patient.alcoholIntake && (
+                        <div className="p-2 bg-muted rounded">
+                          <p className="text-muted-foreground">Alcohol</p>
+                          <p className="font-medium">{patient.alcoholIntake}</p>
+                        </div>
+                      )}
+                      {patient.physicalActivityLevel && (
+                        <div className="p-2 bg-muted rounded">
+                          <p className="text-muted-foreground">Activity</p>
+                          <p className="font-medium">{patient.physicalActivityLevel}</p>
+                        </div>
+                      )}
+                      {patient.bmi && (
+                        <div className="p-2 bg-muted rounded">
+                          <p className="text-muted-foreground">BMI</p>
+                          <p className="font-medium">{patient.bmi}</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </TabsContent>
           )}
 
@@ -440,13 +520,13 @@ export default function PatientDetailPage({ params }: Props) {
                   {/* Divider */}
                   <div className="border-t pt-6" />
 
-                  {/* Add New Visit Button - Only show if this is the last visit */}
-                  {visitIndex === followUps.length - 1 && (
+                  {/* Add New FollowUp Button - Only if current one is saved (not draft) */}
+                  {visitIndex === followUps.length - 1 && visit.isDraft !== true && (
                     <div className="flex justify-center">
                       <Button
                         onClick={() => {
-                          // Create new empty visit entry
-                          const newVisit: FollowUpData = {
+                          // Create new empty followup entry
+                          const newFollowUp: FollowUpData = {
                             visitNumber: followUps.length + 1,
                             visitDate: "",
                             hba1c: null as any,
@@ -466,19 +546,31 @@ export default function PatientDetailPage({ params }: Props) {
                             actionTaken: [],
                             outcome: [],
                             adverseEvents: "",
+                            isDraft: true,
                             status: "draft",
                           } as FollowUpData
                           
-                          // Add to followUps and switch to new visit
-                          const updatedFollowUps = [...followUps, newVisit]
+                          // Add to followUps and switch to new followup
+                          const updatedFollowUps = [...followUps, newFollowUp]
                           setFollowUps(updatedFollowUps)
                           setActiveTab(`visit-${updatedFollowUps.length - 1}`)
                         }}
                         size="lg"
                         className="gap-2"
                       >
-                        <span>+ ADD NEW VISIT (Visit {followUps.length + 1})</span>
+                        <span>+ ADD NEW FOLLOW UP (Follow Up {followUps.length + 1})</span>
                       </Button>
+                    </div>
+                  )}
+                  
+                  {/* Show message if user tries to add without saving current */}
+                  {visitIndex === followUps.length - 1 && visit.isDraft === true && (
+                    <div className="flex justify-center">
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center max-w-md">
+                        <p className="text-sm text-amber-800">
+                          <strong>Save Follow Up {visitIndex + 1} first</strong> before adding the next follow-up visit.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -519,7 +611,47 @@ export default function PatientDetailPage({ params }: Props) {
           {activeTab === "comparison" && (
             <TabsContent value="comparison">
               {baseline && followUps.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-6">
+                  {/* Export Buttons */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Export Patient Data</CardTitle>
+                      <CardDescription>Download complete patient records in your preferred format</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-3">
+                        <Button onClick={handleExportPDF} disabled={exporting} className="gap-2">
+                          {exporting ? (
+                            <>
+                              <div className="animate-spin h-4 w-4 border-2 border-background border-t-foreground rounded-full" />
+                              Exporting...
+                            </>
+                          ) : (
+                            <>
+                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                              </svg>
+                              Export PDF
+                            </>
+                          )}
+                        </Button>
+                        <Button onClick={handleExportCSV} variant="outline" className="gap-2">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Export CSV
+                        </Button>
+                        <Button onClick={handleExportExcel} variant="outline" className="gap-2">
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Export Excel
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  {/* Comparison View */}
                   <ComparisonViewLoader baseline={baseline} followUp={followUps[0]} patient={patient} followUps={followUps} exporting={exporting} onExport={handleExportPDF} />
                 </div>
               ) : (

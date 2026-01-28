@@ -143,14 +143,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 }
               },
               (error) => {
-                if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+                // Suppress permission errors after logout (user is null)
+                if (!user) {
+                  return
+                }
+                
+                if (error.code === 'permission-denied') {
+                  logError(error as Error, {
+                    action: "patientsListener",
+                    userId: user.uid,
+                    severity: "medium",
+                    message: "Permission denied accessing patients"
+                  })
+                } else if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
                   console.error('Patient real-time sync error:', error)
                 }
-                logError(error as Error, {
-                  action: "patientsListener",
-                  userId: user.uid,
-                  severity: "medium"
-                })
               }
             )
           } catch (cacheError) {
@@ -242,6 +249,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribePatientsRef.current()
       unsubscribePatientsRef.current = null
     }
+    
+    // Clear user and doctor state immediately to prevent further Firestore calls
+    setUser(null)
+    setDoctor(null)
     
     // SECURITY CRITICAL: Clear all IndexedDB data on logout
     // Prevents unauthorized access to cached patient data if device is compromised

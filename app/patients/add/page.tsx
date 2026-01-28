@@ -359,7 +359,7 @@ export default function AddPatientPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
-      <header className="border-b border-border/40 bg-card/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
           <Link href="/dashboard">
             <Button variant="ghost" size="sm">

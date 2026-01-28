@@ -126,6 +126,7 @@ export interface FollowUpData {
   visitNumber?: number                // Visit week number (1, 2, 3, etc., calculated from date)
   visitDate?: string                  // Week 12 visit date (NEW)
   status?: "draft" | "submitted"      // Form submission status
+  isDraft?: boolean                   // Explicitly track if form is saved (not draft)
   
   // SECTION H - Follow-up Clinical & Lab Parameters
   hba1c: number

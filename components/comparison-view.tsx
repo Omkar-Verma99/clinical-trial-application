@@ -21,8 +21,8 @@ const ComparisonCard = memo(({ label, currentValue, previousValue, change, impro
         <div>
           <p className="text-sm text-muted-foreground">{label}</p>
           <div className="flex items-baseline gap-3 mt-1">
-            <span className="text-2xl font-bold">{currentValue}</span>
-            <span className="text-sm text-muted-foreground">from {previousValue}</span>
+            <span className="text-2xl font-bold">{typeof currentValue === 'number' ? currentValue.toFixed(2) : currentValue}</span>
+            <span className="text-sm text-muted-foreground">from {typeof previousValue === 'number' ? previousValue.toFixed(2) : previousValue}</span>
           </div>
         </div>
         {improved ? <ArrowDown className="h-4 w-4 text-green-600" /> : <ArrowUp className="h-4 w-4 text-red-600" />}
@@ -30,7 +30,7 @@ const ComparisonCard = memo(({ label, currentValue, previousValue, change, impro
       <div className="flex items-center gap-2 mt-2">
         <span className={`text-sm font-medium ${improved ? "text-green-600" : "text-red-600"}`}>
           {change > 0 ? "+" : ""}
-          {change} ({Math.abs(Number((change / previousValue) * 100)).toFixed(1)}%)
+          {Number(change).toFixed(2)} ({Math.abs(Number((change / previousValue) * 100)).toFixed(1)}%)
         </span>
       </div>
     </CardContent>
