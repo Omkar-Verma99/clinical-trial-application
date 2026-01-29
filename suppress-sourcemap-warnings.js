@@ -1,13 +1,17 @@
 /**
- * Suppress Next.js Turbopack source map warnings on Windows
- * This is a workaround for a known issue where Turbopack generates
- * source map URLs that Node.js can't parse on Windows systems
+ * Suppress non-critical warnings
+ * - Turbopack source map warnings on Windows
  */
 
 const originalError = console.error;
 
 console.error = function (...args) {
   const message = args[0]?.toString?.() || '';
+  
+  // Suppress source map path warnings on Windows
+  if (message.includes('source map') || message.includes('SourceMap')) {
+    return;
+  }
   
   // Suppress source map warnings from Next.js Turbopack
   if (

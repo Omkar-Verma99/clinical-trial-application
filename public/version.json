@@ -1,0 +1,7 @@
+{
+  "version": "3.0.0",
+  "features": ["offline-first", "auto-sync", "patient-creation", "form-queuing"],
+  "lastUpdated": "2026-01-29T14:00:00Z",
+  "minAppVersion": "1.0.0",
+  "offlineSyncEnabled": true
+}
