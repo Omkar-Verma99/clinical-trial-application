@@ -1,1316 +1,675 @@
-# Clinical Trial Application - Complete User Guide
+# Clinical Trial Application - User Guide
 
-**Version:** 1.0.0  
-**Last Updated:** January 27, 2026  
-**Document Type:** Comprehensive User Guide  
+**Version:** 2.0  
+**Last Updated:** January 29, 2026  
 **Status:** Production Ready
 
 ---
 
-## Welcome to Clinical Trial Application
+## 📱 What is This App?
 
-This comprehensive guide covers everything you need to know to use the Clinical Trial Application effectively, including **complete offline support** for areas with unreliable internet connectivity.
+This is a **Clinical Trial Management System** for doctors to manage patient assessments during a diabetes treatment study.
 
----
-
-## Table of Contents
-
-1. [System Requirements](#system-requirements)
-2. [Getting Started (First Time)](#getting-started-first-time)
-3. [Login & Authentication](#login--authentication)
-4. [Offline Mode Explained](#offline-mode-explained)
-5. [Managing Patients](#managing-patients)
-6. [Recording Data](#recording-data)
-7. [Viewing Results & Comparisons](#viewing-results--comparisons)
-8. [Syncing & Data Management](#syncing--data-management)
-9. [Mobile Features](#mobile-features)
-10. [Troubleshooting](#troubleshooting)
-11. [FAQ](#faq)
-12. [Best Practices](#best-practices)
+**Key Points:**
+- ✅ Works **offline** (no internet needed after first login)
+- ✅ **Secure** - HIPAA compliant, patient data anonymized
+- ✅ **Simple** - Clean, straightforward interface
+- ✅ **Automatic** - Data syncs when you're online
 
 ---
 
-## System Requirements
+## 🚀 Getting Started (First Time)
 
-### Browser Requirements
-- **Chrome, Firefox, Safari, or Edge** (latest 2 versions)
-- **JavaScript enabled**
-- **IndexedDB enabled** (for offline functionality)
-- **localStorage enabled**
+### 1. Create Your Account (Requires Internet)
 
-### Device Support
+1. Open the app in your web browser
+2. Click **"Sign Up"**
+3. Enter:
+   - Your email address
+   - A strong password (8+ characters)
+   - Your full name
+   - Your medical license/registration number
+4. Click **"Sign Up"**
+5. Verify your email if prompted
 
-| Device | Status | Notes |
-|--------|--------|-------|
-| Desktop/Laptop | ✅ Full Support | Optimal experience, all features |
-| Tablet | ✅ Full Support | Touch-optimized interface |
-| Mobile | ✅ Full Support | Responsive design, mobile-optimized forms |
+### 2. First Login (Requires Internet)
 
-### Network Requirements
-- **First Login:** Internet connection required (one-time verification)
-- **Offline Usage:** Works for 30 days without internet
-- **Re-verification:** ~30 seconds online every 30 days
-- **Auto-Sync:** Happens automatically when internet is available
+1. Go back to login page
+2. Enter your email and password
+3. Click **"Login"**
+4. You'll see: **"Welcome! Ready for offline access"**
 
----
+**What Happens Behind the Scenes:**
+- Server verifies you're an authorized doctor
+- Your patient data is downloaded and cached
+- Your credentials are securely stored (encrypted)
+- You're now ready to work offline
 
-## Getting Started (First Time)
+### 3. You're Ready!
 
-### Step 1: Open the Application
-
-Navigate to the application URL in your web browser:
-- **Development:** http://localhost:3000
-- **Production:** https://your-app-domain.com
-
-### Step 2: Sign Up for an Account
-
-1. Click **"Sign Up"** button on the landing page
-2. Fill in your information:
-   - **Email Address** - Your work email
-   - **Password** - Create a strong password (8+ characters)
-   - **Full Name** - Your complete name
-   - **Registration/License Number** - Your medical credentials
-3. Click **"Sign Up"** to create your account
-4. Verify your email (if verification is enabled)
-
-### Step 3: First Login (Must Be Online)
-
-1. Click **"Login"** on the landing page
-2. Enter your email address
-3. Enter your password
-4. Click **"Login"**
-5. System verifies your credentials with the server
-6. Once verified:
-   - Your credentials are encrypted and stored locally (AES-256)
-   - Your patient list is pre-cached
-   - Offline access is enabled for 30 days
-
-**Important:** Your first login MUST be online. The server needs to verify you're an authorized doctor before offline access is enabled.
-
-### Step 4: Set Up Your Profile (Optional)
-
-1. Go to **Settings** (if available)
-2. Update your:
-   - Full name
-   - Contact information
-   - Study site designation
-   - Preferences
+After first login, you can:
+- ✅ Work offline for 30 days
+- ✅ Login anytime (online or offline)
+- ✅ Create and edit patient forms
+- ✅ View all your patient data
 
 ---
 
-## Login & Authentication
+## 💻 Main Screens
 
-### Logging In (Online)
+### Dashboard (Home)
+- **Patient List** - All your patients at a glance
+- **Recent Activity** - Latest changes and updates
+- **Quick Actions** - Add patient, view reports
+- **Status** - Online/Offline indicator (green = online, red = offline)
 
-**When you have internet:**
+### Patient Details Page
+- **Patient Info** - Demographics, medical history
+- **Baseline Form** - Initial assessment (Week 0)
+- **Follow-up Forms** - All follow-up visits
+- **Comparison View** - Baseline vs follow-up side-by-side
+- **Export** - Download as PDF/CSV/Excel
 
-1. Go to the login page
-2. Enter your email address
-3. Enter your password
-4. Click **"Login"**
-5. You're logged in and can access all features
-
-**What Happens Automatically:**
-- ✅ Your credentials are securely encrypted (AES-256)
-- ✅ Your patient list is updated
-- ✅ Any pending data is synced to the server
-- ✅ Your offline access counter is reset
-
-### Logging In (Offline)
-
-**When you DON'T have internet:**
-
-1. Go to the login page
-2. Enter your email address (must match what you registered)
-3. Enter your password (must be correct)
-4. Click **"Login"**
-5. System checks your locally stored encrypted credentials
-6. If credentials match, you're logged in offline ✓
-
-**What You Can Do Offline:**
-- ✅ View your patient list
-- ✅ View patient details
-- ✅ View baseline forms
-- ✅ View follow-up forms
-- ✅ Add new patients
-- ✅ Add new forms
-- ✅ Edit existing forms
-- ✅ View reports and comparisons
-
-**What You Can't Do Offline:**
-- ❌ Change your password
-- ❌ Change account settings
-- ❌ Add new doctor accounts
-
-### Monthly Re-Verification
-
-**How It Works:**
-
-After 30 days of your last online login, you'll see a message:
-> "Monthly re-verification required. Please login online to verify your account."
-
-**What to Do:**
-
-1. Connect to the internet
-2. Go back to the login page
-3. Enter your email and password (same as before)
-4. Click **"Login"**
-5. You'll see: "Verification successful! Good for another 30 days"
-6. You're set for another 30 days of offline access
-
-**Takes:** ~30 seconds  
-**How Often:** Once per month (approximately)  
-**Why?** Security best practice (same as banking apps)
-
-### Password Management
-
-**Changing Your Password:**
-
-1. Go to **Settings**
-2. Click **"Change Password"**
-3. Enter your current password
-4. Enter your new password
-5. Confirm your new password
-6. Click **"Save"**
-
-**Requires:** Internet connection
-
-**Forgot Your Password:**
-
-1. On the login page, click **"Forgot Password?"**
-2. Enter your email address
-3. Check your email for a reset link
-4. Click the link and create a new password
-5. Go back to login with your new password
-
-**Requires:** Internet connection
-
-**Important:** Your new password will NOT work offline until you login online once. The new password will be encrypted and stored locally.
+### Patient List
+- **Search** - Find by patient code (PT0001, etc.)
+- **Filter** - View by status (completed, pending)
+- **Add New** - Click to add new patient
+- **Sort** - Click column headers to sort
 
 ---
 
-## Offline Mode Explained
+## 👤 Adding Patients
 
-### What is Offline Mode?
+### Step 1: Click "Add Patient"
 
-**Simple Answer:**  
-Work without internet and your data stays safe and is saved.
+1. From dashboard, click **"Add Patient"** button
+2. You'll see the patient form
 
-**Technical Answer:**  
-Your device stores encrypted local copies of your data and automatically syncs with the server when you reconnect to the internet.
+### Step 2: Fill Patient Information
 
-### How It Works (3 Steps)
+**Required Fields:**
+- **Patient Code** - PT0001, PT0002, etc. (system auto-generates)
+- **First Name** - Patient's first name
+- **Last Name** - Patient's last name
+- **Email** - Patient's email (optional)
+- **Date of Birth** - Their birthday
+- **Gender** - Male/Female
+- **Duration of Diabetes** - How many years with diabetes
 
-#### Step 1: First Login (Online Required)
+### Step 3: Save as Draft or Submit
+
+- **Save as Draft** - Incomplete data, can finish later
+- **Submit** - Ready to proceed to baseline form
+
+**Notes:**
+- Drafts save automatically
+- Can edit anytime
+- Works offline too
+
+---
+
+## 📋 Recording Patient Data
+
+### Baseline Form (Week 0 Assessment)
+
+**When:** First visit with patient  
+**What:** Initial measurements and health status
+
+**Fields to Fill:**
+1. **Vital Signs**
+   - Weight (kg)
+   - Height (cm)
+   - Blood Pressure (Systolic/Diastolic)
+
+2. **Clinical Parameters**
+   - HbA1c (%)
+   - FPG - Fasting Plasma Glucose (mg/dL)
+   - BMI (auto-calculated from weight/height)
+
+3. **Medical History**
+   - Current medications
+   - Medication dosages
+   - Other medical conditions
+
+4. **Assessment Notes**
+   - Any additional notes
+
+**Tips:**
+- All numeric fields are validated (reasonable ranges)
+- BMI calculates automatically
+- Save as draft if unsure
+- Can edit anytime before final submission
+
+### Follow-Up Form (Week 12 Assessment)
+
+**When:** End-of-study visit (Week 12 ± 2 weeks)  
+**What:** Outcome measurements and treatment evaluation
+
+**Fields to Fill:**
+1. **Visit Information**
+   - Visit date
+   - Visit number (auto-assigned)
+
+2. **Outcome Measurements**
+   - Weight (kg)
+   - Blood Pressure
+   - HbA1c (%)
+   - FPG (mg/dL)
+
+3. **Treatment Response**
+   - **HbA1c Response:**
+     - Response (≥1% reduction)
+     - Partial Response (0.5-<1% reduction)
+     - No Response (<0.5% reduction)
+   - **Efficacy:** Excellent / Good / Fair / Poor
+   - **Tolerability:** Excellent / Good / Fair / Poor
+
+4. **Treatment Status**
+   - Still taking medication? (Yes/No)
+   - If No: Reason for discontinuation
+   - Missed doses: None / Some / Many
+
+5. **Safety & Adverse Events**
+   - Any adverse events?
+   - Type and severity
+   - Action taken
+
+**Tips:**
+- System auto-categorizes HbA1c response
+- Compare with baseline automatically
+- Works offline - data saved locally
+- Multiple follow-ups per patient allowed
+
+---
+
+## 🔄 Offline Mode
+
+### How It Works
+
+**First Login (Online):**
 ```
-You → Open App → Enter Email & Password → 
-Server Verifies Your Identity → 
-Credentials Encrypted & Stored → Access Granted
+You Login → System Caches Your Data → Credentials Saved
 ```
 
-**What Happens:**
-- Server confirms you're an authorized doctor
-- Your credentials are securely encrypted (AES-256)
-- Your patient list is cached locally
-- Sync database is initialized
-- You're now ready for offline use
-
-#### Step 2: Work Offline
+**Working Offline:**
 ```
-You → Open App → Login with Stored Credentials → 
-Credentials Decrypted → Access Granted → Work Freely
+You Open App (No Internet) → Login with Saved Credentials → 
+Work Normally → Everything Saved Locally
 ```
 
-**What Happens:**
-- App checks if internet is available (shows offline indicator)
-- Uses locally stored encrypted credentials
-- All forms and data saved to local device
-- No internet needed
-- Everything saved safely locally
-
-#### Step 3: Sync When Online
+**Reconnecting (Online):**
 ```
-You → Connect to Internet → App Detects Connection → 
-Auto-Sync Pending Data → Server Validation → 
-All Data Backed Up
+Internet Returns → App Detects Connection → 
+Auto-Sync All Pending Changes → Success ✓
 ```
 
-**What Happens:**
-- App automatically detects internet connection
-- Sends all pending changes to server
-- Server validates the data
-- Updates are confirmed
-- Green "Synced" indicator appears
+### What Works Offline ✅
 
-### The 30-Day Window
+| Feature | Offline | Online |
+|---------|---------|--------|
+| View patient list | ✅ | ✅ |
+| View patient details | ✅ | ✅ |
+| View forms | ✅ | ✅ |
+| Create baseline form | ✅ | ✅ |
+| Create follow-up form | ✅ | ✅ |
+| Edit existing forms | ✅ | ✅ |
+| Save drafts | ✅ | ✅ |
+| Compare baseline vs follow-up | ✅ | ✅ |
+| View reports | ✅ | ✅ |
+| Export PDF/CSV | ✅* | ✅ |
+| Sync data to server | ❌ | ✅ |
 
-#### How It Works
+*Offline: Uses cached data
 
-You can work offline for **30 days** after your last online login.
+### 30-Day Verification Window
+
+**What is it?**
+
+You can work offline for up to **30 days** after your last online login. After that, you need to login online once to verify your credentials (takes ~30 seconds).
 
 **Example Timeline:**
-- Monday, Jan 1: Login online
-- Jan 1-30: Can login offline anytime
-- Feb 1: Need to verify online once (~30 seconds)
-- Feb 1-Mar 2: Can login offline again
-- Mar 3: Need to verify online once
-- And so on...
+```
+Mon, Jan 1: Login online ✓
+Jan 1-30: Can login offline anytime ✓
+Jan 31-Feb 1: Still works offline ✓
+Feb 1: After 30 days, need to verify
+Connect to internet → Login online → Good for another 30 days ✓
+```
 
-#### Why 30 Days?
+**Why 30 Days?**
+- Security (credentials expire)
+- Healthcare compliance requirements
+- Standard industry practice
+- Automatic encryption reset
 
-✅ **Security:** Credentials expire for safety  
-✅ **Compliance:** Healthcare regulations require periodic verification  
-✅ **Industry Standard:** Same as major banking apps  
-✅ **Technology:** Resets encryption keys automatically  
-
-#### What Happens After 30 Days?
-
+**When 30 Days Expires:**
 1. Try to login offline
-2. See message: **"Please verify online"**
+2. See message: "Please verify online"
 3. Connect to internet
-4. Login once with email & password
-5. See: **"Verification successful! Good for another 30 days"**
-6. Done! Good for another 30 days
-
-#### No Worries!
-
-This is **normal and expected**:
-- ❌ NOT an error
-- ❌ NOT permanent
-- ✅ Happens once per month
-- ✅ Takes ~30 seconds
-- ✅ All data remains safe
-
-### What Works Offline
-
-#### ✅ Full Offline Support
-
-- **Patient Management**
-  - ✓ View your patient list (pre-cached)
-  - ✓ View patient details and history
-  - ✓ Add new patients (queued for sync)
-  - ✓ Search and filter patients
-
-- **Forms & Data Entry**
-  - ✓ Add baseline forms (Week 0)
-  - ✓ Add follow-up forms (Week 12)
-  - ✓ Edit existing forms
-  - ✓ Save drafts
-  - ✓ Continue editing anytime
-
-- **Viewing & Analysis**
-  - ✓ View all baseline data
-  - ✓ View all follow-up data
-  - ✓ View comparison reports
-  - ✓ View aggregate trial reports
-  - ✓ See calculated outcomes
-
-- **Mobile Features**
-  - ✓ Mobile-responsive design
-  - ✓ Touch-optimized forms
-  - ✓ Mobile-friendly buttons
-  - ✓ Mobile navigation
-
-#### ⚠️ Limited Offline Support
-
-- Viewing patient list limited to ~50 per page
-- Based on your last online session
-- More patients load once online
-
-#### ❌ Requires Internet
-
-- **First login** (one-time verification)
-- **Monthly re-verification** (once per month, ~30 seconds)
-- **Password changes** (security requirement)
-- **Account settings** changes
-- **Adding new doctors** (admin feature)
-
-### Automatic Sync Process
-
-#### When Sync Happens
-
-Syncing automatically occurs when:
-- ✅ You connect to the internet (app detects automatically)
-- ✅ You login online
-- ✅ Periodically during your session (every few minutes)
-
-#### What Gets Synced
-
-All your pending changes:
-- ✅ New patients created offline
-- ✅ New forms filled offline
-- ✅ Existing forms edited offline
-- ✅ Any data entered offline
-
-#### How Sync Works
-
-1. **App detects internet** → Starts sync automatically
-2. **Sends pending data** → To the server securely
-3. **Server validates** → Checks all data is correct
-4. **Conflicts resolved** → If same data edited both places
-5. **Updates confirmed** → Green checkmark appears
-6. **Error handling** → Failed items retry automatically
-
-#### Sync Status Indicators
-
-| Icon | Status | Meaning |
-|------|--------|---------|
-| ✓ | Synced | All data synced, fully backed up |
-| ⏳ | Syncing | Currently syncing data in progress |
-| ⚠️ | Pending | Data waiting to sync (will sync when online) |
-| ❌ | Error | Sync failed (will retry automatically) |
+4. Login with your email & password
+5. See: "Verification successful! Good for another 30 days"
+6. Done! Can go offline again
 
 ---
 
-## Managing Patients
+## 📊 Viewing Results
 
-### Viewing Your Patient List
+### Patient Dashboard
 
-1. Click **"Patients"** in the navigation menu
-2. See all your patients listed
-3. Patients are shown with:
-   - Patient ID
-   - Age
-   - Gender
-   - Status (Has baseline, Follow-up completed, etc.)
-   - Last updated date
+Shows all information about one patient:
+- **Patient Info** - Demographics
+- **Baseline** - Week 0 measurements
+- **Follow-ups** - All follow-up visits
+- **Comparison** - Baseline vs Latest Follow-up
 
-### Offline Patient List
+### Comparison View
 
-- **Pre-cached:** Up to 50 patients per page
-- **Updated:** From your last online session
-- **Browsing:** Search and filter works offline
-- **Adding More:** Loading more patients requires internet
+**What It Shows:**
+- Baseline measurements (left side)
+- Follow-up measurements (right side)
+- Changes (⬆️ improved, ⬇️ declined, → no change)
+- Outcome category (Response, Partial Response, No Response)
+- Safety status (Green = safe, Yellow = caution)
 
-### Adding a New Patient
+**Color Coding:**
+- 🟢 **Green** - Good response / safe
+- 🟡 **Yellow** - Moderate / caution
+- 🔴 **Red** - Poor response / concern
 
-**Works Offline!** You can add patients without internet.
+**Interpretation:**
+- Look at the arrows to see if parameters improved
+- Check the outcome badge for overall assessment
+- Review notes section for clinical context
 
-1. Click **"Add Patient"** button
-2. Fill in patient information:
-   - **Name** (required) - Patient's full name
-   - **Date of Birth** (required) - Patient's DOB
-   - **Patient ID** (required) - Unique identifier (must be unique)
-   - **Gender** - Select from dropdown
-   - **Contact Information** - Phone/email if available
-   - **Medical History** - Previous conditions
-   - **Current Medications** - What they're taking
-   - **Comorbidities** - Other health conditions
+### Reports & Analytics (Dashboard)
 
-3. Click **"Save"**
-   - Data is saved **locally on your device** ✓
-   - Data is queued for sync when online
-   - You can continue working offline
+**Report Page Features:**
+- Patient count (total enrolled)
+- Response rate (% showing improvement)
+- Average parameter changes
+- Export trial data
 
-4. When you go **online:**
-   - Data automatically syncs to server
-   - Server validates the patient ID is unique
-   - Green checkmark appears when done
-
-### Duplicate Patient Check
-
-**The system prevents duplicate patient IDs:**
-
-- ✅ Checks offline database
-- ✅ Checks server database (when online)
-- ✅ Won't let you create duplicate
-- ✅ Shows error if ID already exists
-
-**If Duplicate Error Appears:**
-1. Check if patient already exists
-2. Use a different patient ID
-3. Click "Save" again
-
-### Viewing Patient Details
-
-1. Click any patient from the list
-2. You'll see:
-   - **Patient Profile** - Name, DOB, contact info
-   - **Baseline Form** - Week 0 data (if filled)
-   - **Follow-up Form** - Week 12 data (if filled)
-   - **Comparison** - Baseline vs Follow-up results
-   - **Forms** - History of all forms
-   - **Actions** - Edit, delete, export options
-
-3. Click any section to view details
+**Export Options:**
+- **CSV** - Spreadsheet format (Excel)
+- **PDF** - Printable format
+- **JSON** - Raw data format
 
 ---
 
-## Recording Data
+## 💾 Data Management
 
-### Baseline Assessment (Week 0)
+### Auto-Save
 
-**When to Complete:** At patient's first visit  
-**Time to Complete:** 10-15 minutes  
-**Can Save as Draft:** Yes, complete later  
-**Works Offline:** Yes ✓
+- Forms save automatically every few seconds
+- You'll see: "⏳ Saving..." → "✓ Saved"
+- Works online AND offline
+- No manual save needed
 
-#### How to Record Baseline
+### Drafts
 
-1. Go to **Patients**
-2. Click on the patient you want to assess
-3. Click **"Baseline"** tab
-4. Fill in the form with patient's current measurements:
+**Creating a Draft:**
+1. Start filling a form
+2. Click "Save as Draft"
+3. Form saves with incomplete data
 
-**Clinical Measurements:**
-- Weight (kg)
-- Blood Pressure (Systolic/Diastolic)
-- Heart Rate (bpm)
-- Temperature (°C)
-- Other vitals as needed
+**Continuing a Draft:**
+1. Go back to patient
+2. Click "Edit Baseline" or "Edit Follow-up"
+3. Your draft data appears
+4. Continue filling and save again
 
-**Lab Parameters:**
-- HbA1c (%)
-- Fasting Plasma Glucose (mg/dL)
-- Post-Prandial Glucose (mg/dL)
-- Serum Creatinine (mg/dL)
-- eGFR (mL/min/1.73m²)
-- Urinalysis findings
+**Deleting a Draft:**
+1. Click "Delete Draft"
+2. Confirm deletion
+3. Draft is removed (can't undo)
 
-**Medical Observations:**
-- Previous diabetes therapies
-- Current symptoms
-- Comorbidities
-- Counseling provided
+### Syncing
 
-**Treatment Plan:**
-- Medication dosage
-- Treatment initiation date
-- Patient education completed
+**Manual Sync:**
+- Click "Sync Now" button (if available)
+- App syncs all pending changes
 
-5. Click **"Save"** (works offline)
-   - Form saved locally
-   - Shows "Saved" indicator
-   - Ready to sync when online
+**Automatic Sync:**
+- Happens automatically when you:
+  - Save a form (if online)
+  - Go online after being offline
+  - Open the app (if pending items)
 
-6. Click **"Finalize"** (optional)
-   - Marks form as complete
-   - Can still edit if needed
+**What Gets Synced:**
+- New patients
+- New/updated forms
+- Deleted forms
+- All metadata
 
-### Follow-up Assessment (Week 12)
-
-**When to Complete:** After 12 weeks (±2 weeks)  
-**Time to Complete:** 10-15 minutes  
-**Can Save as Draft:** Yes  
-**Works Offline:** Yes ✓
-
-#### How to Record Follow-up
-
-1. Go to **Patients**
-2. Click on the patient
-3. Click **"Follow-up"** tab
-4. Fill in follow-up measurements (same as baseline)
-
-**Repeat Measurements:**
-- All vital signs again
-- All lab parameters again
-- Current status
-
-**Adverse Events:**
-- Any side effects experienced
-- Severity (Mild/Moderate/Severe)
-- Action taken (Stopped medication, Reduced dose, etc.)
-- Whether resolved
-
-**Physician Assessment:**
-- Efficacy rating (Excellent/Good/Fair/Poor)
-- Tolerability assessment
-- Patient compliance status
-- Overall impression
-
-**Patient-Reported Outcomes:**
-- Energy levels (How patient feels)
-- Overall satisfaction with treatment
-- Any comments or observations
-
-5. Click **"Save"** (works offline)
-6. Click **"Finalize"** to mark complete
-
-### Editing Forms
-
-**Before Syncing:**
-1. Click on the patient
-2. Click on the form you want to edit
-3. Click **"Edit"** button
-4. Make changes
-5. Click **"Save"**
-
-**After Syncing:**
-1. Form is now on server
-2. You can still edit online or offline
-3. Changes sync automatically
-
-### Saving vs Finalizing
-
-| Action | Meaning | Can Edit? | Sync Status |
-|--------|---------|-----------|-------------|
-| **Save** | Save work in progress | ✓ Yes | Will sync |
-| **Finalize** | Mark form complete | ✓ Yes (can still edit) | Will sync |
-
-Both actions save to local device. Both will sync when online.
+**Sync Status:**
+- ✓ All synced - Everything up to date
+- ⏳ Syncing - In progress
+- ⚠️ Pending - Waiting for sync
+- ❌ Failed - Has errors (try again)
 
 ---
 
-## Viewing Results & Comparisons
+## 📤 Exporting Data
 
-### View Patient's Baseline Data
+### Export Patient Record
 
-1. Click on patient
-2. Click **"Baseline"** tab
-3. See all Week 0 measurements
-4. View recorded date and time
-5. See status (Saved/Finalized)
+**From Patient Detail Page:**
 
-### View Patient's Follow-up Data
+1. Click **"Export"** button
+2. Choose format:
+   - **PDF** - Formatted document
+   - **CSV** - Spreadsheet
+   - **Excel** - Excel workbook
+3. Click **"Download"**
+4. File downloads to your computer
 
-1. Click on patient
-2. Click **"Follow-up"** tab
-3. See all Week 12 measurements
-4. View recorded date and time
-5. See status (Saved/Finalized)
+**What's Included:**
+- Patient demographics
+- Baseline form data
+- All follow-up forms
+- Comparison summary
+- Anonymized (only patient code, no name)
 
-### View Baseline vs Follow-up Comparison
+### Export Trial Data
 
-**The system automatically calculates changes!**
+**From Reports Page:**
 
-1. Click on patient
-2. Click **"Comparison"** tab
-3. System shows:
-   - Side-by-side comparison (Week 0 vs Week 12)
-   - **Color coding:**
-     - 🟢 **Green** = Improvement
-     - 🔴 **Red** = Decline
-     - ⚪ **Gray** = No change
+1. Click **"Export Trial Data"**
+2. Choose format
+3. Click **"Download"**
 
-### Automatic Calculations
+**What's Included:**
+- All patients
+- All baseline forms
+- All follow-up forms
+- Summary statistics
+- Completely anonymized
 
-The system automatically calculates:
-
-**Glycemic Response:**
-- Excellent: ≥1.5% reduction in HbA1c
-- Good: 1-1.5% reduction
-- Fair: <1% reduction
-- No response: No reduction or increase
-
-**Weight Change:**
-- Calculated in kg and %
-- Green if decreased (improvement)
-- Red if increased (decline)
-
-**Blood Pressure Change:**
-- Systolic change
-- Diastolic change
-- Status: Improved/Maintained/Worsened
-
-**Renal Function:**
-- eGFR change assessment
-- Status: Stable/Improved/Declined
-
-**Safety Profile:**
-- Number of adverse events
-- Severity breakdown
-- Resolution status
+**Uses:**
+- Analysis in Excel/spreadsheet
+- Reporting to investigators
+- Regulatory submissions
+- Statistical analysis
 
 ---
 
-## Syncing & Data Management
+## 🔐 Security & Privacy
 
-### Understanding Sync Queue
+### Your Password
 
-**Sync Queue** = Pending data waiting to sync to server
+- **Keep Secret** - Never share with anyone
+- **Strong** - Use mix of letters, numbers, symbols
+- **Change Regularly** - Every 90 days recommended
+- **Forgotten** - Can reset via email
 
-**What Goes in Sync Queue:**
-- ✓ New patients created offline
-- ✓ New forms filled offline
-- ✓ Existing forms edited offline
-- ✓ Any changes made offline
+### Patient Data Privacy
 
-**Where Does Data Go:**
-- Offline: Stored in IndexedDB on your device
-- When Online: Automatically sent to Firebase server
-- Always Encrypted: AES-256 encryption throughout
+- **Anonymized** - Only patient code visible (PT0001, etc.)
+- **No Real Names** - In exports and reports
+- **Encrypted** - In transit and at rest
+- **Secure** - HIPAA compliant
+- **Your Patients** - Only you can see your patients
 
-### Automatic Sync (Recommended)
+### Device Security
 
-**Let the app sync automatically:**
+- **Lock Your Device** - Password/biometric
+- **Don't Share Device** - App has access to patient data
+- **Logout When Done** - If sharing device
+- **Update OS** - Keep device updated
 
-The app will automatically sync when:
-- ✓ You go online
-- ✓ You login online
-- ✓ Periodically during your session
+### Password Reset
 
-**You Don't Need to Do Anything!**
-- Data syncs in the background
-- You can keep working
-- Green checkmark shows when done
-
-### Manual Sync (If Needed)
-
-If you want to force sync immediately:
-
-1. Look for **"Sync"** button (usually top or bottom of screen)
-2. Click **"Sync"** button
-3. Shows current status:
-   - "Synced ✓" - Everything is up to date
-   - "Syncing..." - Currently syncing
-   - "Pending ⏳" - Waiting to sync
-4. Once finished, shows "Synced ✓"
-
-### Checking Sync Status
-
-**Connection Indicator** (usually top of screen):
-- 🟢 **Green** = Online, can sync
-- 🔴 **Red** = Offline, will sync later
-- ⚪ **Gray** = Unknown
-
-**Data Status Icons:**
-- ✓ **Checkmark** = Synced
-- ⏳ **Hourglass** = Syncing
-- ⚠️ **Warning** = Pending
-- ❌ **X** = Error (will retry)
-
-### What to Do If Sync Fails
-
-**If You See an Error:**
-
-1. **Check internet connection**
-   - Make sure you're actually online
-   - Try loading another website
-   - Restart your router if needed
-
-2. **Refresh the page**
-   - Press Ctrl+R (Windows) or Cmd+R (Mac)
-   - Wait for page to reload
-   - Try syncing again
-
-3. **Clear browser cache** (if problem persists)
-   - Go to Settings → Clear browsing data
-   - Select "All time"
-   - Click "Clear data"
-   - Reload the application
-
-4. **Try again**
-   - Sync should work now
-   - Data will catch up automatically
-
-5. **Contact support** (if still failing)
-   - Note the error message
-   - Include patient ID
-   - Include timestamp
-
-### Data Export
-
-**Export Patient Data:**
-
-1. Click on patient
-2. Look for **"Export"** button
-3. Choose format:
-   - **PDF** - For printing/reports
-   - **JSON** - For data analysis
-   - **CSV** - For Excel
-4. File downloads automatically
-
-**Export Trial Reports:**
-
-1. Go to **"Reports"** section
-2. View trial statistics
-3. Click **"Export"** button
-4. Choose format (CSV, JSON, PDF)
-5. Customize filter (by site, date range, etc.)
-6. File downloads automatically
+**If You Forget:**
+1. Click "Forgot Password"
+2. Enter your email
+3. Check email for reset link
+4. Click link and create new password
+5. Login with new password
+6. Next online login caches new password
 
 ---
 
-## Mobile Features
+## ⚠️ Troubleshooting
 
-### Using on Mobile Devices
+### Problem: Can't Login Offline
 
-**Fully Responsive Design:**
-
-The application is optimized for mobile devices with:
-- ✓ Mobile-responsive layout
-- ✓ Touch-optimized forms
-- ✓ Mobile-friendly buttons (larger for touch)
-- ✓ Vertical scrolling (not horizontal)
-- ✓ Mobile-optimized keyboards
-
-### Mobile Tips
-
-1. **Use Portrait Orientation**
-   - Hold phone vertically
-   - Forms are optimized for portrait
-   - Easier to read and fill
-
-2. **Larger Touch Targets**
-   - Buttons are bigger for touch
-   - Easy to tap accurately
-   - ~44x44 pixels minimum
-
-3. **Mobile Keyboard**
-   - Correct keyboard appears automatically
-   - Email field shows email keyboard
-   - Number field shows number pad
-   - Date field shows date picker
-
-4. **Form Fill-in**
-   - One question per screen
-   - Scroll down to see next question
-   - "Next" button to move forward
-   - "Previous" button to go back
-   - "Save" button when done
-
-5. **Mobile Navigation**
-   - Menu button (hamburger icon) at top
-   - Main options: Patients, Forms, Reports
-   - Back button to return
-   - Touch to select
-
-### Mobile Offline
-
-Mobile devices work **fully offline** just like desktops:
-- ✓ Login offline
-- ✓ Add patients offline
-- ✓ Fill forms offline
-- ✓ View data offline
-- ✓ Auto-sync when online
-
----
-
-## Troubleshooting
-
-### Problem: "Login Failed"
-
-**Error:** Cannot login (online or offline)
+**Possible Causes:**
+- Haven't logged in online first (system needs to cache data)
+- More than 30 days since last online login
+- Incorrect email or password
 
 **Solutions:**
+1. Connect to internet
+2. Login with correct email & password
+3. Wait for successful online login
+4. Try offline login again
+5. Contact support if still failing
 
-1. **Check email spelling**
-   - Emails are case-insensitive
-   - Make sure there are no spaces
-   - Double-check the spelling
+### Problem: Data Not Syncing
 
-2. **Check password**
-   - Passwords are case-sensitive
-   - Caps Lock should be OFF
-   - Make sure you have the right password
-
-3. **Forgot password?**
-   - Click "Forgot Password?" on login page
-   - Enter your email
-   - Check your email for reset link
-   - Create new password
-   - Try login again
-
-4. **Try a different browser**
-   - Sometimes browser cache causes issues
-   - Try Chrome, Firefox, or Safari
-   - If login works in different browser, clear cache in original browser
-
-### Problem: "Offline Access Not Available"
-
-**Error:** Cannot login offline even though app should support it
-
-**Reasons & Solutions:**
-
-1. **Must have logged in online at least once**
-   - First login MUST be online
-   - Do you remember logging in online?
-   - Try: Go online and login once
-
-2. **Check if it's been 30+ days**
-   - Offline access expires after 30 days
-   - When did you last login online?
-   - If 30+ days ago: Go online and login once more
-
-3. **Email doesn't match**
-   - The email must match what you registered
-   - Check for typos
-   - Try exact spelling of registration email
-
-4. **Password changed recently?**
-   - If you recently changed password
-   - Old credentials still cached
-   - Go online and login with NEW password
-   - Then try offline with new password
-
-5. **Try clearing browser storage**
-   - Go to DevTools (F12)
-   - Applications → Storage → Clear All
-   - Refresh page
-   - Try again
-
-### Problem: "Data Not Syncing"
-
-**Error:** Added forms offline, but they're not appearing online
+**Possible Causes:**
+- No internet connection
+- Temporary server issue
+- Too much data to sync
 
 **Solutions:**
+1. Check internet connection
+2. Try clicking "Sync Now"
+3. Wait a few minutes
+4. Restart the app
+5. Contact support if persists
 
-1. **Check internet connection**
-   - Look for connection indicator (should be green)
-   - Try loading another website
-   - If other sites don't load, restart your router
+### Problem: Form Validation Error
 
-2. **Refresh the page**
-   - Press Ctrl+R (Windows) or Cmd+R (Mac)
-   - Wait for page to fully reload
-   - Check if data appears now
-
-3. **Try manual sync**
-   - Look for "Sync" button
-   - Click it
-   - Wait for it to complete
-   - Check status indicator
-
-4. **Check browser storage isn't full**
-   - IndexedDB has size limits (usually several MB)
-   - If device is very full, storage might be full
-   - Try clearing cache
-   - Or try different browser
-
-5. **Restart the app**
-   - Close the browser tab completely
-   - Wait 10 seconds
-   - Open application again
-   - Login and try syncing
-
-6. **Still not working?**
-   - Contact support
-   - Include: Patient ID, last activity time, device type
-   - We can manually sync from server side
-
-### Problem: "Can't Add New Patient"
-
-**Error:** "Add Patient" button doesn't work or shows error
-
-**Reasons & Solutions:**
-
-1. **Check if you're online**
-   - Some features need internet for validation
-   - Look at connection indicator
-   - If offline, that's OK - patient queues for sync
-
-2. **Try with internet first**
-   - Connect to internet
-   - Try adding patient again
-   - If it works, system will cache the capability
-
-3. **Check duplicate patient ID**
-   - Is patient ID unique?
-   - Check your existing patient list
-   - Try different patient ID
-
-4. **Field validation**
-   - Make sure all required fields are filled
-   - Required fields: Name, DOB, Patient ID
-   - Try filling more carefully
-
-5. **Try different browser**
-   - Sometimes browser cache causes issues
-   - Try Chrome, Firefox, or Safari
-   - See if add patient works in different browser
-
-### Problem: "My Data Disappeared!"
-
-**Error:** Entered data offline, now it's gone
-
-**Where Did It Go? Check These:**
-
-1. **Did you logout?**
-   - Logging out clears local data (by design, for security)
-   - Always save before logging out
-   - Data on server is still safe
-   - Go online and login to sync data back
-
-2. **Did you clear browser data?**
-   - If you cleared browsing data:
-     - Go to Settings
-     - "Clear browsing data"
-     - Check if IndexedDB was selected
-     - This deletes local data
-   - Check browser history - might be in "recently closed" tabs
-
-3. **Did you switch browser?**
-   - Each browser has its own IndexedDB
-   - Data in Chrome is NOT in Firefox
-   - Switch back to original browser
-   - Or go online to sync data
-
-4. **Did you restart your computer?**
-   - Local data persists even after restart
-   - But clear cache can remove it
-   - Data is always safe on server if you synced
-
-5. **Still missing?**
-   - Contact support
-   - Include patient ID and approximate time you entered data
-   - We can check server backups
-   - We can recover your data
-
-### Problem: "Form Won't Save"
-
-**Error:** Clicked save but form not saving
+**Common Validation Issues:**
+- **Weight too low/high** - Check entered value
+- **HbA1c out of range** - Typical range 4-15%
+- **Age negative** - Check date of birth
+- **Missing required field** - Required fields marked with *
 
 **Solutions:**
+1. Review error message
+2. Check entered value is realistic
+3. Correct value
+4. Try saving again
+5. Contact support if value is correct
 
-1. **Look for "Saved" confirmation**
-   - Form should show "Saved ✓" message
-   - If you don't see this, it didn't save
+### Problem: Export File Won't Download
 
-2. **Check required fields**
-   - All required fields must be filled (marked with *)
-   - Scroll through form and check all fields
-   - Fill any missing fields
-   - Try save again
+**Possible Causes:**
+- Browser blocked the download
+- Pop-ups disabled
+- Insufficient disk space
 
-3. **Check for invalid data**
-   - Some fields have format requirements
-   - Phone numbers must be valid format
-   - Dates must be in correct format
-   - Numbers must be actual numbers (not text)
-   - Check error messages on form
+**Solutions:**
+1. Check browser notifications (allow)
+2. Enable pop-ups for this site
+3. Clear browser cache
+4. Try different browser
+5. Contact support if still failing
 
-4. **Try again**
-   - Click "Save" button again
-   - Wait a few seconds
-   - Should see "Saved ✓" message
+### Problem: Forms Disappear
 
-5. **Refresh page if still failing**
-   - Press Ctrl+R (Windows) or Cmd+R (Mac)
-   - Re-enter the form
-   - Try saving again
+**Possible Causes:**
+- Accidentally deleted
+- Sync conflict
+- Cache cleared
 
-### General Troubleshooting Tips
-
-**Before Contacting Support:**
-
-1. ✓ Check internet connection (green indicator)
-2. ✓ Refresh page (Ctrl+R or Cmd+R)
-3. ✓ Try different browser
-4. ✓ Clear browser cache
-5. ✓ Restart your device
-6. ✓ Try logging out and back in
-
-**When Contacting Support, Include:**
-
-- Device type (Desktop/Laptop/Tablet/Mobile)
-- Operating system (Windows/Mac/iOS/Android)
-- Browser (Chrome/Firefox/Safari/Edge)
-- Error message (copy exactly)
-- Steps you took before error
-- Approximate time error occurred
-- Patient ID (if applicable)
+**Recovery:**
+- Check trash/deleted items (if available)
+- Logout and login again
+- Try another browser/device
+- Contact support (may have backup)
 
 ---
 
-## FAQ
+## ❓ FAQ
 
-### Q: Do I need internet every time I use the app?
+### Q: Do I need internet for everything?
 
-**A:** No! After your first login, you can work offline indefinitely until the 30-day period expires. Then just verify online once every 30 days (takes ~30 seconds).
+**A:** No! After first login, you only need internet to:
+- Change password
+- Verify account (once per month)
+- See real-time updates from other doctors
+- Sync new data to server
 
-### Q: Is my offline data actually secure?
-
-**A:** Yes! Your data is encrypted using AES-256 encryption (military-grade). Same security level as banks use. Even if someone steals your device, they can't read your data without your password.
+Everything else works offline.
 
 ### Q: What if I lose my device?
 
-**A:** 
-- Your data is encrypted (can't be read without your password)
-- Contact us immediately and we'll disable your account
-- Your data on the server is still safe and encrypted
-- You can login on a new device using your email and password
-- All your server data will be accessible
+**A:** Your data is safe:
+- Encrypted locally on device
+- Also backed up on server
+- Can login on new device
+- Old device data not accessible without password
 
-### Q: Can I use the app on multiple devices?
+### Q: Can I use on multiple devices?
 
-**A:** Yes! You can use the app on multiple devices (phone, tablet, laptop). Each device stores its own local copy of data. When you go online, all devices sync to the server, so they all have the latest data.
+**A:** Yes! 
+- Login on multiple computers
+- Data syncs automatically
+- Each device has offline cache
+- Changes sync between devices
 
-**Note:** Offline access timer (30 days) is per-device. So if you login online on Device A, you get 30 days offline on that device. Device B has its own 30-day timer.
+### Q: How long does data stay on device?
 
-### Q: What if I'm offline for more than 30 days?
+**A:** Indefinitely until you:
+- Logout
+- Clear browser cache
+- Uninstall app
+- Delete IndexedDB (advanced)
 
-**A:** 
-1. You'll be prompted to verify online when you try to login offline
-2. Just go online and login normally (takes ~30 seconds)
-3. Your credentials are re-verified
-4. Good for another 30 days
-5. All your data is perfectly safe
+### Q: Can multiple doctors access same patient?
 
-### Q: Can I change my password?
+**A:** No, by design:
+- Each patient assigned to one doctor
+- Prevents data conflicts
+- Ensures clear responsibility
+- Contact admin to reassign
 
-**A:** Yes, but you need internet. Go to Settings → "Change Password" and follow the prompts.
+### Q: What if data conflicts online?
 
-**Important:** After changing password, login online once with your new password. Then you can use the new password offline too.
+**A:** Latest version wins:
+- Most recent changes always kept
+- Older changes overwritten
+- Resolved automatically
+- No action needed
 
-### Q: Can I delete a patient record?
+### Q: How do I backup my data?
 
-**A:** Yes, but you need internet. This is a security feature to prevent accidental deletion.
+**A:** Automatic backup:
+- Server always has copy
+- Export to CSV/Excel
+- Backup to external drive
+- Contact IT for full backup
 
-### Q: What happens if I close the app while filling a form?
+### Q: Is the app HIPAA compliant?
 
-**A:** Don't worry! The app auto-saves your work. When you reopen the app and login, your form will still be there with all the data you entered. Continue where you left off.
+**A:** Yes!
+- Patient data anonymized
+- Encryption in transit/at rest
+- Audit logging
+- Access controls
+- See HIPAA_COMPLIANCE_GUIDE.md
 
-### Q: Can another doctor see my patients?
+### Q: What browsers are supported?
 
-**A:** No! Each doctor only sees their own patients. This is a security feature built into the system.
-
-### Q: Can I share patients with another doctor?
-
-**A:** Not through the app directly. Contact your administrator to set up shared access.
-
-### Q: How do I know if my data synced?
-
-**A:** 
-1. Look for the sync indicator (usually at the top)
-2. ✓ = Synced
-3. ⏳ = Syncing in progress
-4. ⚠️ = Pending (will sync when online)
-5. ❌ = Error (will retry automatically)
-
-### Q: Can I export my data?
-
-**A:** Yes! From any patient, click "Export" and choose your format:
-- PDF (for printing)
-- JSON (for analysis)
-- CSV (for Excel)
-
-### Q: Is there an app for iPhone/Android?
-
-**A:** The web application is fully responsive and works great on mobile browsers. No separate app needed - it's optimized for all device sizes.
-
-### Q: How often should I sync my data?
-
-**A:** Sync happens automatically when you go online. You don't need to do anything. Data is secure either way (offline or online).
-
-### Q: What if I see different data online vs offline?
-
-**A:** This shouldn't happen. When you go online, the app syncs all pending data. If you see a difference:
-1. Refresh the page
-2. Wait a few seconds for sync to complete
-3. Check that all data appears
-4. Contact support if still inconsistent
-
-### Q: Can I undo a change I made?
-
-**A:** If you haven't synced yet:
-1. Logout without saving
-2. Login again
-3. The old data will be there
-
-If you've already synced, we keep change history. Contact support to recover older versions of data.
-
-### Q: What's the maximum number of patients I can add?
-
-**A:** Theoretically unlimited. But for performance, we recommend:
-- Max ~100 patients actively working
-- Older patients can be archived
-
-### Q: Does the app work on tablets?
-
-**A:** Yes, fully optimized! Tablets work great - they have the responsive design of mobile with more screen space like desktops.
-
-### Q: What browser should I use?
-
-**A:** Any modern browser works:
-- Chrome (recommended)
+**A:** Latest 2 versions of:
+- Chrome / Chromium
 - Firefox
 - Safari
 - Edge
 
-Use the latest version for best performance and security.
+Minimum: HTML5, IndexedDB, Service Worker support
 
-### Q: Does the app work in dark mode?
+### Q: Can I uninstall and reinstall?
 
-**A:** Yes! The app respects your system dark mode preference and has its own dark mode theme. Go to Settings to choose your preference.
-
----
-
-## Best Practices
-
-### Daily Usage
-
-**Start Your Day:**
-- ✓ Open the app
-- ✓ Login with your credentials
-- ✓ Check patient list
-- ✓ Start your work
-
-**During the Day:**
-- ✓ Enter data as you collect it (don't wait until end of day)
-- ✓ Save forms regularly (every 5-10 minutes)
-- ✓ Don't worry about internet - app handles it
-
-**End of Day:**
-- ✓ Save any open forms
-- ✓ Check sync status (should show ✓)
-- ✓ You're done! Data is backed up
-
-### Weekly Usage
-
-**Weekly Checklist:**
-- ✓ Go online at least once per week (recommended)
-- ✓ Check that all data appears in the system
-- ✓ Verify sync status is showing ✓
-- ✓ Check if any patients need follow-up
-
-### Monthly Usage
-
-**Monthly Checklist:**
-- ✓ Watch for re-verification notification (around day 30)
-- ✓ When you see it, go online and login once (~30 seconds)
-- ✓ You'll get another 30 days offline access
-- ✓ No action needed if you're already working online regularly
-
-### Data Entry
-
-**Good Practices:**
-- ✓ Enter data as you collect it (fresh memory)
-- ✓ Double-check values before saving
-- ✓ Use correct units (kg, mg/dL, etc.)
-- ✓ Save frequently (don't lose work)
-- ✓ Complete forms in order (don't skip sections)
-
-**Things to Avoid:**
-- ❌ Don't wait until end of week to enter data
-- ❌ Don't fill random fields out of order
-- ❌ Don't logout without saving
-- ❌ Don't clear browser cache while working
-- ❌ Don't close app without saving forms
-
-### Offline Work
-
-**Before Going Offline:**
-- ✓ Go online at least once per week
-- ✓ Make sure all sync shows ✓
-- ✓ Verify your patients list is loaded
-
-**While Offline:**
-- ✓ Work normally - just like online
-- ✓ Save forms regularly
-- ✓ Don't worry about internet
-- ✓ All data is saved locally and safely
-
-**When Going Back Online:**
-- ✓ App will automatically sync
-- ✓ You'll see sync progress
-- ✓ Data appears on server within seconds
-- ✓ Check that all data appears correctly
-
-### Security Practices
-
-**Protect Your Account:**
-- ✓ Use a strong password (8+ characters, mixed case, numbers)
-- ✓ Don't share your password
-- ✓ Don't write down your password
-- ✓ Logout when leaving your device
-
-**Protect Your Device:**
-- ✓ Lock your device when away (password/fingerprint)
-- ✓ Don't leave device unattended
-- ✓ Use strong device password
-- ✓ Keep software updated
-
-**Protect Patient Data:**
-- ✓ Don't print patient data unless necessary
-- ✓ Don't share patient data via email
-- ✓ Don't discuss patient IDs in public
-- ✓ Follow your organization's privacy policy
-
-### Backup & Recovery
-
-**Make Regular Backups:**
-- ✓ Export patient reports monthly (as PDF/CSV)
-- ✓ Store exports in secure location
-- ✓ Server has automatic backups (encrypted)
-
-**If Something Goes Wrong:**
-- ✓ Don't panic - data is usually safe
-- ✓ Check server backups first
-- ✓ Contact support with patient ID
-- ✓ We can usually recover data
+**A:** Yes, but:
+- All local data is deleted
+- Data still on server
+- Login again to re-download
+- Cache rebuilds automatically
 
 ---
 
-## Support & Contact
+## 📞 Getting Help
 
-### Getting Help
+### Common Issues
 
-**For Questions About Features:**
-- Check this User Guide (FAQ section)
-- Look in Troubleshooting section above
-- Contact your organization's support team
+**Still having issues?**
+1. Check this guide first
+2. Try troubleshooting section above
+3. Restart the app
+4. Restart your device
+5. Contact IT support
 
-**For Technical Issues:**
-- Follow troubleshooting steps in this guide
-- Try clearing cache and refreshing
-- Check internet connection
-- Try different browser
-- Contact technical support if issue persists
+### Technical Support
 
-**For Account Issues:**
-- Forgot password: Use "Forgot Password" link
-- Can't login: Check email/password spelling
-- Account locked: Contact support
-- Change password: Go to Settings → Change Password
+Contact your IT administrator or:
+- Email: support@example.com
+- Phone: 1-800-XXX-XXXX
+- Help Desk: help@example.com
 
-### Contact Information
+### Report a Bug
 
-**Email Support:** support@kollectcare.com  
-**Emergency (Production):** +1-XXX-XXX-XXXX  
-**Response Time:** 24 hours (business days)
+Found an issue?
+1. Document what happened
+2. Note your browser/device
+3. Include screenshot if possible
+4. Email to support with details
 
----
+### Request a Feature
 
-## Version & Updates
-
-**Current Version:** 1.0.0  
-**Last Updated:** January 27, 2026  
-**Next Review:** Quarterly  
-
-**Changes in This Version:**
-- ✅ Complete offline support (30-day window)
-- ✅ Military-grade AES-256 encryption
-- ✅ Real-time error monitoring (Sentry)
-- ✅ Mobile-responsive design
-- ✅ Automatic sync queue management
-- ✅ Comprehensive documentation
+Have an idea?
+1. Describe the feature
+2. Explain how it helps
+3. Email to support
+4. We'll review and consider
 
 ---
 
-## Summary
+## 💡 Tips & Best Practices
 
-You now have everything you need to use the Clinical Trial Application effectively! 
+### Efficiency Tips
+1. **Create multiple follow-ups** - Don't delete, just add new
+2. **Save drafts regularly** - Every few minutes
+3. **Use compare view** - Analyze response quickly
+4. **Export regularly** - Backup your data
+5. **Sync often** - When online, sync immediately
 
-### Key Takeaways:
+### Data Entry Tips
+1. **Double-check values** - Before submitting
+2. **Keep notes detailed** - For context
+3. **Use correct units** - kg/cm/mg/dL
+4. **Timestamps matter** - For compliance
+5. **Names never in notes** - For privacy
 
-✅ **First login must be online** - Just need internet once  
-✅ **Works offline for 30 days** - After that, verify online once more  
-✅ **Your data is encrypted** - AES-256, military-grade security  
-✅ **Auto-sync** - App handles syncing automatically  
-✅ **Works on all devices** - Desktop, tablet, mobile all fully supported  
-✅ **Full offline support** - View patients, add forms, work completely offline  
+### Offline Tips
+1. **Pre-download patient data** - Login online first
+2. **Check sync status** - Before going offline
+3. **Verify connection** - Before critical work
+4. **Backup device** - Don't lose device
+5. **Logout carefully** - If sharing device
 
-### Quick Command Reference:
-
-| Task | Steps |
-|------|-------|
-| **Login Online** | Email + Password → Click Login |
-| **Login Offline** | Email + Password → Click Login (if within 30 days) |
-| **Add Patient** | Patients → Add Patient → Fill info → Save |
-| **Record Baseline** | Patient → Baseline → Fill form → Save |
-| **Record Follow-up** | Patient → Follow-up → Fill form → Save |
-| **View Comparison** | Patient → Comparison → See results |
-| **Export Data** | Patient → Export → Choose format |
-| **Check Sync** | Look at sync indicator (should show ✓) |
-| **Verify Monthly** | When prompted → Go online → Login once |
-
----
-
-**Happy documenting! The system is ready for you to get started.**
-
-**Questions? See the FAQ or Troubleshooting sections above.**
+### Security Tips
+1. **Never share password** - Not even with IT
+2. **Logout when done** - Especially shared devices
+3. **Update OS regularly** - Security patches
+4. **Lock your device** - Always when away
+5. **Verify site** - Before entering password
 
 ---
 
-*Document prepared for Clinical Trial Application - KC MeSempa RWE Study*  
-*For issues or suggestions, contact: support@kollectcare.com*
+## 📚 Additional Resources
+
+For technical details, see:
+- **[README.md](README.md)** - Complete technical overview
+- **[HIPAA_COMPLIANCE_GUIDE.md](HIPAA_COMPLIANCE_GUIDE.md)** - Privacy & security details
+- **[SERVICE_WORKER_FIX_EXPLANATION.md](SERVICE_WORKER_FIX_EXPLANATION.md)** - Offline technical details
+
+---
+
+**Need help?** Contact your IT administrator  
+**Last Updated:** January 29, 2026  
+**Version:** 2.0
+
