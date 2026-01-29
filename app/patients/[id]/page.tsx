@@ -79,17 +79,40 @@ export default function PatientDetailPage({ params }: Props) {
       (snap) => {
         if (snap.exists()) {
           const patientData = snap.data() as Patient & { baseline?: BaselineData; followups?: FollowUpData[] }
-          setPatient({ ...patientData, id: snap.id } as Patient)
+          
+          // OPTIMIZED: Only update if data actually changed - prevents unnecessary re-renders
+          setPatient(prevPatient => {
+            const newPatientData = { ...patientData, id: snap.id } as Patient
+            if (prevPatient && JSON.stringify(prevPatient) === JSON.stringify(newPatientData)) {
+              return prevPatient
+            }
+            return newPatientData
+          })
           
           // Extract baseline and followups from unified patient document
           if (patientData.baseline) {
-            setBaseline(patientData.baseline)
+            setBaseline(prevBaseline => {
+              if (prevBaseline && JSON.stringify(prevBaseline) === JSON.stringify(patientData.baseline)) {
+                return prevBaseline
+              }
+              return patientData.baseline
+            })
           }
           if (patientData.followups && Array.isArray(patientData.followups)) {
-            setFollowUps(patientData.followups)
+            setFollowUps(prevFollowUps => {
+              if (prevFollowUps && JSON.stringify(prevFollowUps) === JSON.stringify(patientData.followups)) {
+                return prevFollowUps
+              }
+              return patientData.followups
+            })
             // Dynamic visit tabs are now created from followUps array
           } else {
-            setFollowUps([])
+            setFollowUps(prevFollowUps => {
+              if (prevFollowUps && prevFollowUps.length === 0) {
+                return prevFollowUps
+              }
+              return []
+            })
           }
         } else {
           setPatient(null)
