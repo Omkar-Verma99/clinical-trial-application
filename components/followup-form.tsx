@@ -3,8 +3,6 @@
 import type React from "react"
 
 import { useState, memo } from "react"
-import { collection, addDoc, updateDoc, doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import DOMPurify from "dompurify"
 import type { FollowUpData } from "@/lib/types"
@@ -36,11 +34,21 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
   const calculateVisitNumber = (visitDate: string): number => {
     if (!visitDate || !baselineDate) return existingData?.visitNumber || 1
     
-    const baseline = new Date(baselineDate)
-    const visit = new Date(visitDate)
-    const diffDays = Math.floor((visit.getTime() - baseline.getTime()) / (1000 * 60 * 60 * 24))
-    const weeks = Math.max(1, Math.round(diffDays / 7))
-    return weeks
+    try {
+      const baseline = new Date(baselineDate)
+      const visit = new Date(visitDate)
+      
+      // Guard against invalid dates
+      if (isNaN(baseline.getTime()) || isNaN(visit.getTime())) {
+        return existingData?.visitNumber || 1
+      }
+      
+      const diffDays = Math.floor((visit.getTime() - baseline.getTime()) / (1000 * 60 * 60 * 24))
+      const weeks = Math.max(1, Math.round(diffDays / 7))
+      return weeks
+    } catch (e) {
+      return existingData?.visitNumber || 1
+    }
   }
   
   const [visitDate, setVisitDate] = useState(existingData?.visitDate || "")
@@ -61,57 +69,57 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     urinalysisSpecify: existingData?.urinalysis?.startsWith("Abnormal") 
       ? existingData.urinalysis.replace("Abnormal: ", "") 
       : "",
-    hba1cResponse: "",
-    weightChange: "",
-    bpControlAchieved: false,
-    renalOutcome: "",
-    patientContinuingTreatment: true,
-    discontinuationReason: "",
+    hba1cResponse: existingData?.glycemicResponse?.category || "",
+    weightChange: existingData?.outcomes?.weightChange || "",
+    bpControlAchieved: existingData?.outcomes?.bpControlAchieved || false,
+    renalOutcome: existingData?.outcomes?.renalOutcome || "",
+    patientContinuingTreatment: existingData?.adherence?.patientContinuingTreatment ?? true,
+    discontinuationReason: existingData?.adherence?.discontinuationReason || "",
     discontinuationReasonOther: "",
-    missedDoses: "",
-    addOnTherapy: false,
-    addOnTherapyDetails: "",
+    missedDoses: existingData?.adherence?.missedDosesInLast7Days || "",
+    addOnTherapy: existingData?.adherence?.addOnOrChangedTherapy || false,
+    addOnTherapyDetails: existingData?.adherence?.addOnOrChangedTherapyDetails || "",
     adverseEventsPresent: false,
     adverseEventsText: existingData?.adverseEvents || "",
-    hypoglycemiaMild: false,
-    hypoglycemiaModerate: false,
-    hypoglycemiaSevere: false,
-    uti: false,
-    genitalInfection: false,
-    dizzinessDehydration: false,
-    hospitalizationErVisit: false,
-    hospitalizationReason: "",
-    overallEfficacy: existingData?.efficacy || "",
-    overallTolerability: existingData?.tolerability || "",
-    complianceJudgment: existingData?.compliance || "",
-    preferLongTerm: false,
-    uncontrolledT2dm: false,
-    obeseT2dm: false,
-    ckdPatients: false,
-    htnT2dm: false,
-    elderlyPatients: false,
-    overallSatisfaction: existingData?.satisfaction || "",
-    giTolerance: "",
-    confidenceInManaging: "",
-    noPersonalIdentifiers: false,
-    dataAsRoutinePractice: false,
-    patientIdentityMapping: false,
-    physicianConfirmation: false,
+    hypoglycemiaMild: existingData?.eventsOfSpecialInterest?.hypoglycemiaMild || false,
+    hypoglycemiaModerate: existingData?.eventsOfSpecialInterest?.hypoglycemiaModerate || false,
+    hypoglycemiaSevere: existingData?.eventsOfSpecialInterest?.hypoglycemiaSevere || false,
+    uti: existingData?.eventsOfSpecialInterest?.uti || false,
+    genitalInfection: existingData?.eventsOfSpecialInterest?.genitalMycoticInfection || false,
+    dizzinessDehydration: existingData?.eventsOfSpecialInterest?.dizzinessDehydrationSymptoms || false,
+    hospitalizationErVisit: existingData?.eventsOfSpecialInterest?.hospitalizationOrErVisit || false,
+    hospitalizationReason: existingData?.eventsOfSpecialInterest?.hospitalizationReason || "",
+    overallEfficacy: existingData?.physicianAssessment?.overallEfficacy || "",
+    overallTolerability: existingData?.physicianAssessment?.overallTolerability || "",
+    complianceJudgment: existingData?.physicianAssessment?.complianceJudgment || "",
+    preferLongTerm: existingData?.physicianAssessment?.preferKcMeSempaForLongTerm || false,
+    uncontrolledT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.uncontrolledT2dm || false,
+    obeseT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.obeseT2dm || false,
+    ckdPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.ckdPatients || false,
+    htnT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.htnPlusT2dm || false,
+    elderlyPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.elderlyPatients || false,
+    overallSatisfaction: existingData?.patientReportedOutcomes?.overallSatisfaction || "",
+    giTolerance: existingData?.patientReportedOutcomes?.giToleranceVsPriorTherapy || "",
+    confidenceInManaging: existingData?.patientReportedOutcomes?.confidenceInManagingDiabetes || "",
+    noPersonalIdentifiers: existingData?.dataPrivacy?.noPersonalIdentifiersRecorded || false,
+    dataAsRoutinePractice: existingData?.dataPrivacy?.dataCollectedAsRoutineClinicalPractice || false,
+    patientIdentityMapping: existingData?.dataPrivacy?.patientIdentityMappingAtClinicOnly || false,
+    physicianConfirmation: existingData?.physicianDeclaration?.confirmationCheckbox || false,
     additionalComments: existingData?.comments || "",
   })
 
   const [actionTaken, setActionTaken] = useState({
-    None: existingData?.actionTaken?.includes("None") || false,
-    AdjustedDose: existingData?.actionTaken?.includes("Adjusted dose") || false,
-    StoppedMedication: existingData?.actionTaken?.includes("Stopped medication") || false,
-    Referred: existingData?.actionTaken?.includes("Referred") || false,
-    Other: existingData?.actionTaken?.includes("Other") || false,
+    None: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("None") : false,
+    AdjustedDose: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("Adjusted dose") : false,
+    StoppedMedication: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("Stopped medication") : false,
+    Referred: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("Referred") : false,
+    Other: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("Other") : false,
   })
 
   const [outcome, setOutcome] = useState({
-    Resolved: existingData?.outcome?.includes("Resolved") || false,
-    Ongoing: existingData?.outcome?.includes("Ongoing") || false,
-    Unknown: existingData?.outcome?.includes("Unknown") || false,
+    Resolved: Array.isArray(existingData?.outcome) ? existingData.outcome.includes("Resolved") : false,
+    Ongoing: Array.isArray(existingData?.outcome) ? existingData.outcome.includes("Ongoing") : false,
+    Unknown: Array.isArray(existingData?.outcome) ? existingData.outcome.includes("Unknown") : false,
   })
 
   const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
@@ -141,7 +149,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
       if (!formData.hba1cResponse) validationErrors.push("HbA1c response category is required")
       if (!formData.patientContinuingTreatment && !formData.discontinuationReason) validationErrors.push("Please specify discontinuation reason")
-      if (!formData.missedDoses && formData.missedDoses !== "0") validationErrors.push("Missed doses information is required")
+      if (formData.missedDoses === "") validationErrors.push("Missed doses information is required")
       if (!formData.overallEfficacy) validationErrors.push("Overall efficacy is required")
       if (!formData.overallTolerability) validationErrors.push("Overall tolerability is required")
       if (!formData.complianceJudgment) validationErrors.push("Compliance judgment is required")
@@ -158,11 +166,11 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       }
 
       // VALIDATION PHASE 2: Parse and validate numeric ranges
-      const hba1c = Number.parseFloat(formData.hba1c)
-      const fpg = Number.parseFloat(formData.fpg)
-      const weight = Number.parseFloat(formData.weight)
-      const bpSystolic = Number.parseInt(formData.bloodPressureSystolic)
-      const bpDiastolic = Number.parseInt(formData.bloodPressureDiastolic)
+      const hba1c = formData.hba1c ? Number.parseFloat(formData.hba1c) : NaN
+      const fpg = formData.fpg ? Number.parseFloat(formData.fpg) : NaN
+      const weight = formData.weight ? Number.parseFloat(formData.weight) : NaN
+      const bpSystolic = formData.bloodPressureSystolic ? Number.parseInt(formData.bloodPressureSystolic) : NaN
+      const bpDiastolic = formData.bloodPressureDiastolic ? Number.parseInt(formData.bloodPressureDiastolic) : NaN
 
       const rangeErrors: string[] = []
       
@@ -264,7 +272,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         dataPrivacy: {
           noPersonalIdentifiersRecorded: formData.noPersonalIdentifiers,
           dataCollectedAsRoutineClinicalPractice: formData.dataAsRoutinePractice,
-          patientIdentityMappingAtClinicOnly: true,
+          patientIdentityMappingAtClinicOnly: formData.patientIdentityMapping,
         },
         physicianDeclaration: {
           confirmationCheckbox: formData.physicianConfirmation,
@@ -297,62 +305,13 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       }
 
       // Only submit to Firebase if not draft (background sync will handle it)
-      // UNIFIED STRUCTURE: Update or append to patients/{patientId}/followups array
+      // V4 UNIFIED STRUCTURE: Sync hook will manage Firebase updates via sync queue
+      // This ensures offline-first: data saved to IndexedDB first, then queued for Firebase sync
       if (!saveAsDraft) {
-        try {
-          // Get current patient data to check existing followups
-          const patientDocRef = doc(db, "patients", patientId)
-          const patientDoc = await getDoc(patientDocRef)
-          
-          if (patientDoc.exists()) {
-            const patientData = patientDoc.data()
-            const existingFollowups = patientData.followups || []
-            
-            // Check if followup with same visitNumber exists
-            const visitIndex = existingFollowups.findIndex(
-              (f: any) => f.visitNumber === data.visitNumber
-            )
-            
-            if (visitIndex >= 0) {
-              // UPDATE existing followup at that index
-              existingFollowups[visitIndex] = {
-                ...data,
-                formId: formId,
-                syncedToFirebaseAt: new Date().toISOString()
-              }
-            } else {
-              // ADD new followup to array
-              existingFollowups.push({
-                ...data,
-                formId: formId,
-                syncedToFirebaseAt: new Date().toISOString()
-              })
-            }
-            
-            // Update patient document with updated followups array
-            await updateDoc(patientDocRef, {
-              followups: existingFollowups,
-              metadata: {
-                lastSynced: new Date().toISOString(),
-                isDirty: false,
-                syncError: null
-              }
-            })
-            
-            // Store Firebase ID for future updates
-            await saveFormData(
-              formId,
-              'followup',
-              { ...data, firebaseId: patientId, formId: formId },
-              false,
-              validationErrors
-            )
-          }
-        } catch (firebaseError) {
-          // Don't fail - already saved locally, will sync in background
-          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-            console.warn('Firebase save failed, will retry:', firebaseError)
-          }
+        // Note: Firebase sync is handled by useIndexedDBSync hook's performSync()
+        // When user comes online, all queued forms are synced to Firebase automatically
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.log('✓ Form queued for Firebase sync (will sync when online)')
         }
       }
 

@@ -3,8 +3,6 @@
 import type React from "react"
 
 import { useState, memo } from "react"
-import { collection, addDoc, updateDoc, doc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import type { BaselineData } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -98,11 +96,11 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
         }
 
         // VALIDATION PHASE 2: Parse and validate numeric ranges (only for final submission)
-        const hba1c = Number.parseFloat(formData.hba1c)
-        const fpg = Number.parseFloat(formData.fpg)
-        const weight = Number.parseFloat(formData.weight)
-        const bpSystolic = Number.parseInt(formData.bloodPressureSystolic)
-        const bpDiastolic = Number.parseInt(formData.bloodPressureDiastolic)
+        const hba1c = formData.hba1c ? Number.parseFloat(formData.hba1c) : NaN
+        const fpg = formData.fpg ? Number.parseFloat(formData.fpg) : NaN
+        const weight = formData.weight ? Number.parseFloat(formData.weight) : NaN
+        const bpSystolic = formData.bloodPressureSystolic ? Number.parseInt(formData.bloodPressureSystolic) : NaN
+        const bpDiastolic = formData.bloodPressureDiastolic ? Number.parseInt(formData.bloodPressureDiastolic) : NaN
 
         const rangeErrors: string[] = []
         
@@ -193,36 +191,12 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
       }
 
       // Only submit to Firebase if not draft (background sync will handle it)
-      // UNIFIED STRUCTURE: Always update patients/{patientId}/baseline
+      // V4 UNIFIED STRUCTURE: Sync hook manages Firebase updates via sync queue
       if (!saveAsDraft) {
-        try {
-          // Update or create patient document with baseline data
-          await updateDoc(doc(db, "patients", patientId), {
-            baseline: {
-              ...data,
-              formId: formId,
-              syncedToFirebaseAt: new Date().toISOString()
-            },
-            metadata: {
-              lastSynced: new Date().toISOString(),
-              isDirty: false,
-              syncError: null
-            }
-          })
-          
-          // Store Firebase ID for future updates
-          await saveFormData(
-            formId,
-            'baseline',
-            { ...data, firebaseId: patientId, formId: formId },
-            false,
-            validationErrors
-          )
-        } catch (firebaseError) {
-          // Don't fail - already saved locally, will sync in background
-          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-            console.warn('Firebase save failed, will retry:', firebaseError)
-          }
+        // Note: Firebase sync is handled by useIndexedDBSync hook's performSync()
+        // When user comes online, all queued forms are synced to Firebase automatically
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.log('✓ Form queued for Firebase sync (will sync when online)')
         }
       }
 

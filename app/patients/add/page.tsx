@@ -94,9 +94,10 @@ export default function AddPatientPage() {
 
   // Auto-calculate BMI
   const calculateBMI = (height: number, weight: number) => {
-    if (height && weight) {
+    if (height && weight && !isNaN(height) && !isNaN(weight)) {
       const heightM = height / 100
-      return (weight / (heightM * heightM)).toFixed(1)
+      const bmiValue = weight / (heightM * heightM)
+      return isNaN(bmiValue) ? "" : bmiValue.toFixed(1)
     }
     return ""
   }
@@ -106,10 +107,13 @@ export default function AddPatientPage() {
     setFormData(prev => ({ ...prev, height: e.target.value }))
     
     // Auto-calculate BMI if weight is set and BMI hasn't been manually edited
-    if (height && formData.weight && !formData.bmiManuallyEdited) {
-      const calculatedBMI = calculateBMI(height, parseFloat(formData.weight))
-      setFormData(prev => ({ ...prev, bmi: calculatedBMI }))
-      setBmiMismatchWarning(false)
+    if (!isNaN(height) && formData.weight && !formData.bmiManuallyEdited) {
+      const parsedWeight = parseFloat(formData.weight)
+      if (!isNaN(parsedWeight)) {
+        const calculatedBMI = calculateBMI(height, parsedWeight)
+        setFormData(prev => ({ ...prev, bmi: calculatedBMI }))
+        setBmiMismatchWarning(false)
+      }
     }
   }
 
@@ -119,8 +123,8 @@ export default function AddPatientPage() {
     
     setFormData(prev => ({ ...prev, weight: e.target.value }))
     
-    // Auto-calculate BMI if height is set and BMI hasn't been manually edited
-    if (height && weight && !formData.bmiManuallyEdited) {
+    // Auto-calculate BMI if height is valid
+    if (!isNaN(weight) && !isNaN(height) && height > 0 && !formData.bmiManuallyEdited) {
       const calculatedBMI = calculateBMI(height, weight)
       setFormData(prev => ({ ...prev, bmi: calculatedBMI }))
       setBmiMismatchWarning(false)
@@ -148,14 +152,13 @@ export default function AddPatientPage() {
       return
     }
 
-    // Check network connectivity (only required for full enrollment, not drafts)
+    // NOTE: Offline patient creation is allowed - data saves to IndexedDB
+    // and syncs to Firebase when back online. Only warn user about offline mode.
     if (!isOnline && !saveAsDraft) {
       toast({
-        variant: "destructive",
-        title: "No Connection",
-        description: "Please check your internet connection and try again.",
+        title: "Working Offline",
+        description: "Patient will sync to Firebase when connection is restored.",
       })
-      return
     }
 
     // SKIP VALIDATION FOR DRAFTS - user can save incomplete patient data
@@ -234,12 +237,12 @@ export default function AddPatientPage() {
         studySiteCode: sanitizedFormData.studySiteCode,
         investigatorName: sanitizedFormData.investigatorName,
         baselineVisitDate: sanitizedFormData.baselineVisitDate,
-        age: Number.parseInt(sanitizedFormData.age),
+        age: sanitizedFormData.age ? Number.parseInt(sanitizedFormData.age) : NaN,
         gender: sanitizedFormData.gender,
         height: sanitizedFormData.height ? Number.parseFloat(sanitizedFormData.height) : null,
         weight: sanitizedFormData.weight ? Number.parseFloat(sanitizedFormData.weight) : null,
         bmi: sanitizedFormData.bmi ? Number.parseFloat(sanitizedFormData.bmi) : null,
-        durationOfDiabetes: Number.parseFloat(sanitizedFormData.durationOfDiabetes),
+        durationOfDiabetes: sanitizedFormData.durationOfDiabetes ? Number.parseFloat(sanitizedFormData.durationOfDiabetes) : NaN,
         smokingStatus: sanitizedFormData.smokingStatus || null,
         alcoholIntake: sanitizedFormData.alcoholIntake || null,
         physicalActivityLevel: sanitizedFormData.physicalActivityLevel || null,
@@ -308,8 +311,8 @@ export default function AddPatientPage() {
         return
       }
 
-      // Only submit to Firebase if not draft
-      if (!saveAsDraft) {
+      // Only submit to Firebase if not draft AND online
+      if (!saveAsDraft && isOnline) {
         try {
           const docRef = await addDoc(collection(db, "patients"), patientData)
 

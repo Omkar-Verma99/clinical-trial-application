@@ -1,0 +1,90 @@
+================================================================================
+COMPREHENSIVE FIELD MAPPING AUDIT - FOLLOW-UP FORM
+================================================================================
+
+FORM STATE KEY → SAVED KEY → LOADED FROM KEY
+================================================================================
+
+BASIC VISIT INFO:
+✓ visitNumber → visitNumber → visitNumber
+✓ visitDate → visitDate → visitDate
+
+CLINICAL PARAMETERS:
+✓ hba1c → hba1c → hba1c
+✓ fpg → fpg → fpg
+✓ ppg → ppg → ppg
+✓ weight → weight → weight
+✓ bloodPressureSystolic → bloodPressureSystolic → bloodPressureSystolic
+✓ bloodPressureDiastolic → bloodPressureDiastolic → bloodPressureDiastolic
+✓ serumCreatinine → serumCreatinine → serumCreatinine
+✓ egfr → egfr → egfr
+✓ urinalysisType → urinalysis (formatted) → urinalysis (parsed)
+✓ urinalysisSpecify → urinalysis (as part of string) → urinalysis (extracted)
+
+GLYCEMIC RESPONSE:
+✓ hba1cResponse → glycemicResponse.category → glycemicResponse?.category
+
+OUTCOMES:
+✓ weightChange → outcomes.weightChange → outcomes?.weightChange
+✓ bpControlAchieved → outcomes.bpControlAchieved → outcomes?.bpControlAchieved
+✓ renalOutcome → outcomes.renalOutcome → outcomes?.renalOutcome
+
+ADHERENCE:
+✓ patientContinuingTreatment → adherence.patientContinuingTreatment → adherence?.patientContinuingTreatment
+✓ discontinuationReason → adherence.discontinuationReason → adherence?.discontinuationReason
+✓ missedDoses → adherence.missedDosesInLast7Days → adherence?.missedDosesInLast7Days
+✓ addOnTherapy → adherence.addOnOrChangedTherapy → adherence?.addOnOrChangedTherapy
+✓ addOnTherapyDetails → adherence.addOnOrChangedTherapyDetails → adherence?.addOnOrChangedTherapyDetails
+
+ADVERSE EVENTS:
+✓ adverseEventsText → adverseEvents → adverseEvents
+
+ACTION TAKEN (from state):
+✓ actionTaken state → actionTaken array (formatted) → actionTaken array
+
+OUTCOME STATE:
+✓ outcome state → outcome array → outcome array
+
+EVENTS OF SPECIAL INTEREST:
+✓ hypoglycemiaMild → eventsOfSpecialInterest.hypoglycemiaMild → eventsOfSpecialInterest?.hypoglycemiaMild
+✓ hypoglycemiaModerate → eventsOfSpecialInterest.hypoglycemiaModerate → eventsOfSpecialInterest?.hypoglycemiaModerate
+✓ hypoglycemiaSevere → eventsOfSpecialInterest.hypoglycemiaSevere → eventsOfSpecialInterest?.hypoglycemiaSevere
+✓ uti → eventsOfSpecialInterest.uti → eventsOfSpecialInterest?.uti
+✓ genitalInfection → eventsOfSpecialInterest.genitalMycoticInfection → eventsOfSpecialInterest?.genitalMycoticInfection
+✓ dizzinessDehydration → eventsOfSpecialInterest.dizzinessDehydrationSymptoms → eventsOfSpecialInterest?.dizzinessDehydrationSymptoms
+✓ hospitalizationErVisit → eventsOfSpecialInterest.hospitalizationOrErVisit → eventsOfSpecialInterest?.hospitalizationOrErVisit
+✓ hospitalizationReason → eventsOfSpecialInterest.hospitalizationReason → eventsOfSpecialInterest?.hospitalizationReason
+
+PHYSICIAN ASSESSMENT:
+✓ overallEfficacy → physicianAssessment.overallEfficacy → physicianAssessment?.overallEfficacy
+✓ overallTolerability → physicianAssessment.overallTolerability → physicianAssessment?.overallTolerability
+✓ complianceJudgment → physicianAssessment.complianceJudgment → physicianAssessment?.complianceJudgment
+✓ preferLongTerm → physicianAssessment.preferKcMeSempaForLongTerm → physicianAssessment?.preferKcMeSempaForLongTerm
+
+PREFERRED PATIENT PROFILES:
+✓ uncontrolledT2dm → physicianAssessment.preferredPatientProfiles.uncontrolledT2dm → physicianAssessment?.preferredPatientProfiles?.uncontrolledT2dm
+✓ obeseT2dm → physicianAssessment.preferredPatientProfiles.obeseT2dm → physicianAssessment?.preferredPatientProfiles?.obeseT2dm
+✓ ckdPatients → physicianAssessment.preferredPatientProfiles.ckdPatients → physicianAssessment?.preferredPatientProfiles?.ckdPatients
+✓ htnT2dm → physicianAssessment.preferredPatientProfiles.htnPlusT2dm → physicianAssessment?.preferredPatientProfiles?.htnPlusT2dm
+✓ elderlyPatients → physicianAssessment.preferredPatientProfiles.elderlyPatients → physicianAssessment?.preferredPatientProfiles?.elderlyPatients
+
+PATIENT REPORTED OUTCOMES:
+✓ overallSatisfaction → patientReportedOutcomes.overallSatisfaction → patientReportedOutcomes?.overallSatisfaction
+✓ giTolerance → patientReportedOutcomes.giToleranceVsPriorTherapy → patientReportedOutcomes?.giToleranceVsPriorTherapy
+✓ confidenceInManaging → patientReportedOutcomes.confidenceInManagingDiabetes → patientReportedOutcomes?.confidenceInManagingDiabetes
+
+DATA PRIVACY:
+✓ noPersonalIdentifiers → dataPrivacy.noPersonalIdentifiersRecorded → dataPrivacy?.noPersonalIdentifiersRecorded
+✓ dataAsRoutinePractice → dataPrivacy.dataCollectedAsRoutineClinicalPractice → dataPrivacy?.dataCollectedAsRoutineClinicalPractice
+✓ patientIdentityMapping → dataPrivacy.patientIdentityMappingAtClinicOnly → dataPrivacy?.patientIdentityMappingAtClinicOnly
+
+PHYSICIAN DECLARATION:
+✓ physicianConfirmation → physicianDeclaration.confirmationCheckbox → physicianDeclaration?.confirmationCheckbox
+
+COMMENTS:
+✓ additionalComments → comments → comments
+
+================================================================================
+ANALYSIS COMPLETE
+All field mappings are CORRECT and CONSISTENT
+================================================================================

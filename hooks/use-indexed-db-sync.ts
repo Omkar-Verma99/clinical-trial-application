@@ -24,7 +24,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { indexedDBService, type StoredFormData, type SyncQueueItem } from '@/lib/indexeddb-service'
 import { db } from '@/lib/firebase'
-import { collection, addDoc, updateDoc, doc, onSnapshot, query, where, getDocs } from 'firebase/firestore'
+import { collection, addDoc, updateDoc, doc, onSnapshot, query, where, getDocs, getDoc } from 'firebase/firestore'
+import { generateChecksum, detectConflict } from '@/lib/conflict-detection'
 
 // Helper to detect development environment safely on client-side
 const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
@@ -49,6 +50,7 @@ export function useIndexedDBSync(patientId: string) {
   const syncIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const lastSeenDataRef = useRef<Map<string, any>>(new Map())
+  const performSyncRef = useRef<(() => void) | null>(null)
   const syncStatusRef = useRef<SyncStatus>({
     isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
     isSyncing: false,
@@ -136,10 +138,14 @@ export function useIndexedDBSync(patientId: string) {
 
   /**
    * Handle online event - trigger sync
+   * Uses useRef callback to avoid circular dependency with performSync
    */
   const handleOnline = useCallback(() => {
     setSyncStatus(prev => ({ ...prev, isOnline: true }))
-    performSync()
+    // Defer to performSync via ref to avoid circular dependency
+    if (performSyncRef.current) {
+      performSyncRef.current()
+    }
   }, [])
 
   /**
@@ -206,9 +212,10 @@ export function useIndexedDBSync(patientId: string) {
           // Load baseline data
           let baselineData = undefined
           if (baselineForm) {
-            const baselineDb = await indexedDBService.loadForm(baselineForm.formId || '')
+            const baselineDb = await indexedDBService.loadForm(baselineForm.formId || '', patientId)
             if (baselineDb?.data) {
-              baselineData = baselineDb.data
+              // Copy data before mutation to avoid modifying IndexedDB cache
+              baselineData = { ...baselineDb.data }
               delete (baselineData as any).createdAt // Don't overwrite server createdAt
             }
           }
@@ -216,9 +223,10 @@ export function useIndexedDBSync(patientId: string) {
           // Load followup data
           const followupsData: any[] = []
           for (const followupForm of followupForms) {
-            const followupDb = await indexedDBService.loadForm(followupForm.formId || '')
+            const followupDb = await indexedDBService.loadForm(followupForm.formId || '', patientId)
             if (followupDb?.data) {
-              const followupData = followupDb.data
+              // Copy data before mutation to avoid modifying IndexedDB cache
+              const followupData = { ...followupDb.data }
               delete (followupData as any).createdAt // Don't overwrite server createdAt
               followupsData.push(followupData)
             }
@@ -240,10 +248,68 @@ export function useIndexedDBSync(patientId: string) {
 
           // Add followups if exist (replace entire array)
           if (followupsData.length > 0) {
-            updateData.followUps = followupsData
+            updateData.followups = followupsData
             if (isDevelopmentEnv()) {
               console.log(`📝 Syncing ${followupsData.length} followup(s) for patient ${patientId}`)
             }
+          }
+
+          // GUARD: Skip write if nothing to sync (only updatedAt is not useful)
+          if (!baselineData && followupsData.length === 0) {
+            if (isDevelopmentEnv()) {
+              console.log(`⏭️ Skipping sync for patient ${patientId} - no baseline or followups to sync`)
+            }
+            for (const item of items) {
+              await indexedDBService.markAsSynced(item.id)
+            }
+            return
+          }
+
+          // CRITICAL FIX #2: Check for conflicts before writing
+          // Prevents overwriting server changes with stale local data
+          try {
+            const serverDocRef = doc(db, 'patients', patientId)
+            const serverDoc = await getDoc(serverDocRef)
+            
+            if (serverDoc.exists()) {
+              const serverData = serverDoc.data()
+              const localChecksum = generateChecksum(updateData)
+              const serverChecksum = generateChecksum(serverData)
+              
+              if (localChecksum !== serverChecksum) {
+                // Data differs - check for conflicts
+                const conflict = await detectConflict(
+                  updateData,
+                  serverData,
+                  updateData._version || 0,
+                  serverData._version || 0
+                )
+                
+                if (conflict.hasConflict && conflict.resolution === 'use-server') {
+                  if (isDevelopmentEnv()) {
+                    console.warn(`⚠️ Conflict detected for patient ${patientId} - skipping sync (server version preferred)`)
+                  }
+                  // Don't write - server version is newer/better
+                  for (const item of items) {
+                    await indexedDBService.markAsSynced(item.id)
+                  }
+                  return
+                }
+                
+                // Mark data with new version to indicate this is newer write
+                updateData._version = (serverData._version || 0) + 1
+                updateData._syncChecksum = localChecksum
+                
+                if (isDevelopmentEnv()) {
+                  console.log(`🔄 Conflict resolution: using local version ${updateData._version}`)
+                }
+              }
+            }
+          } catch (conflictCheckError) {
+            if (isDevelopmentEnv()) {
+              console.warn('⚠️ Could not check for conflicts, proceeding with sync:', conflictCheckError)
+            }
+            // Continue anyway - this shouldn't block sync
           }
 
           // Single write to unified patient document
@@ -293,6 +359,11 @@ export function useIndexedDBSync(patientId: string) {
       }
     }
   }, [updateSyncStatus, addError])
+
+  // Store performSync in ref for handleOnline callback to use without circular dependency
+  useEffect(() => {
+    performSyncRef.current = performSync
+  }, [performSync])
 
   /**
    * Start event-driven sync (NO POLLING)
@@ -344,9 +415,9 @@ export function useIndexedDBSync(patientId: string) {
         }
         await updateSyncStatus()
 
-        // Trigger sync if online and not a draft
-        if (!isDraft && syncStatus.isOnline) {
-          setTimeout(() => performSync(), 100)
+        // Trigger sync if online and not a draft (use ref for current state)
+        if (!isDraft && syncStatusRef.current.isOnline) {
+          setTimeout(() => performSyncRef.current?.(), 100)
         }
 
         return { success: true, error: null }
@@ -356,7 +427,7 @@ export function useIndexedDBSync(patientId: string) {
         throw error
       }
     },
-    [patientId, updateSyncStatus, syncStatus.isOnline, performSync, addError]
+    [patientId, updateSyncStatus, performSync, addError]
   )
 
   /**
@@ -433,7 +504,7 @@ export function useIndexedDBSync(patientId: string) {
 
     try {
       // V4 SCHEMA: Listen to unified PATIENT document (all data in one place)
-      // Contains: baseline + followUps arrays in single patient doc
+      // Contains: baseline + followups arrays in single patient doc
       const patientDocRef = doc(db, 'patients', patientId)
       
       const unsubscribePatient = onSnapshot(
@@ -448,6 +519,22 @@ export function useIndexedDBSync(patientId: string) {
             }
 
             const patientData = docSnapshot.data()
+            const serverUpdatedAt = patientData?.updatedAt || new Date().toISOString()
+
+            // CRITICAL FIX #1: Don't overwrite if local data is newer
+            // This prevents the real-time listener from reverting user's fresh saves
+            const localPatient = await indexedDBService.getPatient(patientId)
+            if (localPatient?.patientInfo?.updatedAt) {
+              // Proper timestamp comparison (not string comparison!)
+              const localTime = new Date(localPatient.patientInfo.updatedAt).getTime()
+              const serverTime = new Date(serverUpdatedAt).getTime()
+              if (localTime > serverTime) {
+                if (isDevelopmentEnv()) {
+                  console.log(`⏭️ Skipping listener update - local data is newer (local: ${localPatient.patientInfo.updatedAt} vs server: ${serverUpdatedAt})`)
+                }
+                return
+              }
+            }
 
             // Save patient info
             await indexedDBService.saveForm(
@@ -475,9 +562,9 @@ export function useIndexedDBSync(patientId: string) {
             }
 
             // Save all followup data (array in patient doc)
-            if (patientData.followUps && Array.isArray(patientData.followUps)) {
-              for (let i = 0; i < patientData.followUps.length; i++) {
-                const followupData = patientData.followUps[i]
+            if (patientData.followups && Array.isArray(patientData.followups)) {
+              for (let i = 0; i < patientData.followups.length; i++) {
+                const followupData = patientData.followups[i]
                 await indexedDBService.saveForm(
                   `${patientId}-followup-${i}`,
                   'followup',
@@ -488,7 +575,7 @@ export function useIndexedDBSync(patientId: string) {
                 )
               }
               if (isDevelopmentEnv()) {
-                console.log(`✓ Real-time sync: ${patientData.followUps.length} followup records`)
+                console.log(`✓ Real-time sync: ${patientData.followups.length} followup records`)
               }
             }
 
