@@ -64,13 +64,6 @@
       ".vscode",
       ".zencoder",
       ".zenflow"
-    ],
-    "backends": [
-      {
-        "codebase": "default",
-        "backendId": "app",
-        "location": "us-central1"
-      }
     ]
   }
 }
