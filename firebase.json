@@ -47,5 +47,11 @@
         ]
       }
     ]
-  }
+  },
+  "apphosting": [
+    {
+      "backendId": "app",
+      "location": "us-central1"
+    }
+  ]
 }
