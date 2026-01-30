@@ -51,25 +51,25 @@
   "apphosting": {
     "backendId": "app",
     "rootDir": ".",
+    "ignore": [
+      "node_modules",
+      ".next",
+      ".git",
+      ".gitignore",
+      "*.log",
+      ".DS_Store",
+      ".env.local",
+      ".vercel",
+      ".venv",
+      ".vscode",
+      ".zencoder",
+      ".zenflow"
+    ],
     "backends": [
       {
         "codebase": "default",
         "backendId": "app",
-        "location": "us-central1",
-        "ignore": [
-          "node_modules",
-          ".next",
-          ".git",
-          ".gitignore",
-          "*.log",
-          ".DS_Store",
-          ".env.local",
-          ".vercel",
-          ".venv",
-          ".vscode",
-          ".zencoder",
-          ".zenflow"
-        ]
+        "location": "us-central1"
       }
     ]
   }
