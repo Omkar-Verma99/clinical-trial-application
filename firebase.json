@@ -49,6 +49,7 @@
     ]
   },
   "apphosting": {
+    "backendId": "app",
     "rootDir": ".",
     "backends": [
       {
