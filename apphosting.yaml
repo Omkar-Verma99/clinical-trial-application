@@ -17,13 +17,28 @@ envVariables:
     value: kollectcare-rwe-study.firebasestorage.app
     available_at: BUILD_AND_RUNTIME
   - name: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
-    value: "716627719667"
+    value: "940369281340"
     available_at: BUILD_AND_RUNTIME
   - name: NEXT_PUBLIC_FIREBASE_APP_ID
-    value: 1:716627719667:web:a828412396c68af35b8e86
+    value: 1:940369281340:web:d6b3f7e8c4a9b2f1e5d8c9a
     available_at: BUILD_AND_RUNTIME
   - name: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     value: G-QTWVYF3R19
+    available_at: BUILD_AND_RUNTIME
+  - name: NEXT_PUBLIC_ENCRYPTION_KEY
+    value: 906af497b3f4d5b3ff46dde386dd4aa6325b65c845d1cea23d24a47798f78a5d
+    available_at: BUILD_AND_RUNTIME
+  - name: NEXT_PUBLIC_SENTRY_DSN
+    value: https://95157db84eaa8da9b088a216917afd3b@o4510782332665856.ingest.us.sentry.io/4510782335156224
+    available_at: BUILD_AND_RUNTIME
+  - name: NEXT_PUBLIC_SENTRY_ENVIRONMENT
+    value: production
+    available_at: BUILD_AND_RUNTIME
+  - name: NEXT_PUBLIC_APP_VERSION
+    value: 2.0.0
+    available_at: BUILD_AND_RUNTIME
+  - name: SENTRY_DSN
+    value: https://95157db84eaa8da9b088a216917afd3b@o4510782332665856.ingest.us.sentry.io/4510782335156224
     available_at: BUILD_AND_RUNTIME
 
 scaling:
