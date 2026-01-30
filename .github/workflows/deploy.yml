@@ -73,6 +73,6 @@ jobs:
         shell: bash
 
       - name: Deploy to Firebase App Hosting
-        run: firebase deploy --only apphosting
+        run: firebase deploy --only apphosting --quiet
         env:
           GOOGLE_APPLICATION_CREDENTIALS: firebase-key.json
