@@ -47,10 +47,5 @@
         ]
       }
     ]
-  },
-  "apphosting": {
-    "rootDir": ".",
-    "backendId": "app",
-    "location": "us-central1"
   }
 }
