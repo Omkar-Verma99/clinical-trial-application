@@ -224,7 +224,7 @@ async function syncSingleItem(db, item) {
   const { collection, doc, setDoc, updateDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js')
   
   if (item.type === 'patient_create') {
-    // Create new patient
+    // Create new patient using setDoc with consistent ID
     await setDoc(doc(db, 'patients', item.patientId), {
       ...item.data,
       createdAt: serverTimestamp(),
@@ -237,13 +237,41 @@ async function syncSingleItem(db, item) {
       updatedAt: serverTimestamp()
     })
   } else if (item.type === 'form_submit') {
-    // Submit form (patient/{patientId}/baseline or /followups)
-    const [formType, formIndex] = item.data.formType.split('-')
-    await setDoc(doc(db, 'patients', item.patientId, formType, item.data.formId), {
-      ...item.data,
-      createdAt: serverTimestamp(),
-      syncedAt: serverTimestamp()
-    }, { merge: true })
+    // V4 UNIFIED SCHEMA: Update patient doc with baseline/followups arrays
+    // NOT creating subcollections like the old code tried to do
+    const patientId = item.patientId
+    const formData = item.data
+    const formType = formData.formType || 'baseline'
+    
+    if (formType === 'baseline') {
+      // Update baseline field in patient document
+      await updateDoc(doc(db, 'patients', patientId), {
+        baseline: {
+          ...formData,
+          syncedAt: serverTimestamp()
+        },
+        updatedAt: serverTimestamp()
+      })
+    } else if (formType === 'followup') {
+      // Update followups array in patient document
+      const patientRef = doc(db, 'patients', patientId)
+      const patientSnap = await (await import('https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js')).getDoc(patientRef)
+      const patientData = patientSnap.data() || {}
+      const followups = patientData.followups || []
+      
+      // Check if followup already exists by formId
+      const existingIndex = followups.findIndex(f => f.formId === formData.formId)
+      if (existingIndex >= 0) {
+        followups[existingIndex] = { ...formData, syncedAt: serverTimestamp() }
+      } else {
+        followups.push({ ...formData, syncedAt: serverTimestamp() })
+      }
+      
+      await updateDoc(patientRef, {
+        followups,
+        updatedAt: serverTimestamp()
+      })
+    }
   }
 }
 

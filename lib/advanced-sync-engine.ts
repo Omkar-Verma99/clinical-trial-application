@@ -260,19 +260,41 @@ class AdvancedSyncEngine {
   ): Promise<void> {
     const formData = change.data
     const patientId = result.tempToRealIdMap.get(change.patientId) || change.patientId
+    const formType = formData.formType || 'baseline'
 
-    const formRef = doc(
-      collection(db, 'patients', patientId, 'forms')
-    )
-
-    await setDoc(formRef, {
-      ...formData,
-      id: formRef.id,
-      patientId: patientId,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      syncedFromOffline: true
-    })
+    // V4 UNIFIED SCHEMA: Update patient doc with baseline/followups arrays
+    // NOT creating subcollections like the old code tried to do
+    const patientRef = doc(db, 'patients', patientId)
+    
+    if (formType === 'baseline') {
+      // Update baseline field in patient document
+      await updateDoc(patientRef, {
+        baseline: {
+          ...formData,
+          syncedAt: serverTimestamp(),
+          syncedFromOffline: true
+        },
+        updatedAt: serverTimestamp()
+      })
+    } else if (formType === 'followup') {
+      // Update followups array in patient document
+      const patientSnap = await getDoc(patientRef)
+      const patientDocData = patientSnap.data() || {}
+      const followups = patientDocData.followups || []
+      
+      // Check if followup already exists by formId
+      const existingIndex = followups.findIndex(f => f.formId === formData.formId)
+      if (existingIndex >= 0) {
+        followups[existingIndex] = { ...formData, syncedAt: serverTimestamp(), syncedFromOffline: true }
+      } else {
+        followups.push({ ...formData, syncedAt: serverTimestamp(), syncedFromOffline: true })
+      }
+      
+      await updateDoc(patientRef, {
+        followups,
+        updatedAt: serverTimestamp()
+      })
+    }
 
     // Mark form as synced
     await offlineFormHandler.markFormAsSynced(formData.id, patientId)

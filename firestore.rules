@@ -79,5 +79,77 @@ service cloud.firestore {
       
       allow delete: if false; // Prevent accidental deletion
     }
+
+    // ===== ADMINS COLLECTION =====
+    // Admin accounts and credentials (separate from doctors)
+    match /admins/{adminId} {
+      // Admins can read their own document only
+      allow read: if isAuthenticated() && 
+        request.auth.uid == adminId;
+      
+      // Only system/cloud functions can create admins
+      allow create: if false;
+      
+      // Admins can update their own password/settings
+      allow update: if isAuthenticated() && 
+        request.auth.uid == adminId;
+      
+      // Prevent admin deletion
+      allow delete: if false;
+    }
+
+    // ===== FORM RESPONSES COLLECTION =====
+    // All form submissions (baseline + followups)
+    match /formResponses/{responseId} {
+      // Doctors can read their own patient's forms
+      allow read: if isAuthenticated() &&
+        resource.data.doctorId == request.auth.uid;
+      
+      // Doctors can submit new forms for their patients
+      allow create: if isAuthenticated() &&
+        request.resource.data.doctorId == request.auth.uid &&
+        exists(/databases/{database}/documents/patients/$(request.resource.data.patientId)) &&
+        get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data.doctorId == request.auth.uid;
+      
+      // Doctors cannot modify submitted forms
+      allow update: if false;
+      allow delete: if false;
+
+      // Admins can read all forms (if authenticated as admin)
+      match /admin/{adminId} {
+        allow read: if isAuthenticated();
+      }
+    }
+
+    // ===== AUDIT LOGS COLLECTION =====
+    // Track all admin actions (super admin only)
+    match /auditLogs/{logId} {
+      // Only super admins can view audit logs
+      allow read: if isAuthenticated() &&
+        exists(/databases/{database}/documents/admins/$(request.auth.uid)) &&
+        get(/databases/{database}/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
+      
+      // Only cloud functions can write audit logs
+      allow create, write, update, delete: if false;
+    }
+
+    // ===== EXPORTS COLLECTION =====
+    // Track data exports
+    match /exports/{exportId} {
+      // Admins can read their own exports
+      allow read: if isAuthenticated() &&
+        resource.data.adminId == request.auth.uid;
+      
+      // Only cloud functions can create/modify exports
+      allow create, write, update, delete: if false;
+    }
+
+    // ===== ADMIN PANEL COLLECTION =====
+    // Admin panel settings and configuration
+    match /adminPanel/{document=**} {
+      // Only authenticated admins can access
+      allow read: if isAuthenticated();
+      allow write: if false; // Only system admin can modify
+    }
   }
 }

@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState, memo } from "react"
+import { v4 as uuidv4 } from "uuid"
 import { useAuth } from "@/contexts/auth-context"
 import DOMPurify from "dompurify"
 import type { FollowUpData } from "@/lib/types"
@@ -285,7 +286,8 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       }
 
       // CRITICAL: Save to IndexedDB FIRST (immediate, offline-safe)
-      const formId = (existingData as any)?.id || `followup-${patientId}-${Date.now()}`
+      // Use UUID for collision-proof form ID generation
+      const formId = (existingData as any)?.id || `followup-${uuidv4()}`
       const idbResult = await saveFormData(
         formId,
         'followup',

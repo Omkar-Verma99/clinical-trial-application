@@ -384,6 +384,50 @@ class IndexedDBService {
         const patientStore = transaction.objectStore(PATIENT_DATA_STORE)
         const syncStore = transaction.objectStore(SYNC_QUEUE_STORE)
 
+        // SPECIAL CASE: Creating a new patient
+        if (formType === 'patient') {
+          const newPatient: PatientDataRecord = {
+            id: patientId,
+            ...data,
+            baseline: null,
+            followups: [],
+            metadata: {
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+              isDirty: !isDraft,
+              syncError: errors.length > 0 ? errors.join('; ') : null,
+            }
+          }
+
+          const putReq = patientStore.put(newPatient)
+          putReq.onsuccess = () => {
+            // Queue for sync if not draft
+            if (!isDraft) {
+              const syncItem: SyncQueueItem = {
+                id: `${patientId}-${Date.now()}`,
+                patientId,
+                dataType: 'patient',
+                action: 'create',
+                data,
+                formId: patientId,
+                formType: 'patient',
+                createdAt: new Date().toISOString(),
+                retryCount: 0,
+                maxRetries: 5,
+                backoffMs: 1000,
+              }
+              const syncReq = syncStore.add(syncItem)
+              syncReq.onsuccess = () => resolve()
+              syncReq.onerror = () => reject(syncReq.error)
+            } else {
+              resolve()
+            }
+          }
+          putReq.onerror = () => reject(putReq.error)
+          return
+        }
+
+        // NORMAL CASE: Saving baseline/followup form for existing patient
         const getReq = patientStore.get(patientId)
         getReq.onsuccess = () => {
           const patient = getReq.result as PatientDataRecord | undefined
@@ -599,6 +643,74 @@ class IndexedDBService {
         console.error('Error clearing IndexedDB:', transaction.error)
         reject(transaction.error)
       }
+    })
+  }
+
+  /**
+   * Migrate patient from temporary ID to real Firestore ID
+   * CRITICAL for new patient creation - avoids duplicate entries
+   * 
+   * Flow:
+   * 1. Patient saved offline with temp ID: patient-uid-timestamp
+   * 2. When online, Firestore assigns real ID: docRef.id
+   * 3. This function renames the temp ID to real ID (single entry)
+   * 4. No duplicates - just one patient record with the real ID
+   */
+  async migratePatientId(tempPatientId: string, realFirestoreId: string): Promise<void> {
+    if (!this.db) await this.initialize()
+
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([PATIENT_DATA_STORE], 'readwrite')
+      const store = transaction.objectStore(PATIENT_DATA_STORE)
+
+      // Get the patient record with the temporary ID
+      const getReq = store.get(tempPatientId)
+      
+      getReq.onsuccess = () => {
+        const patient = getReq.result as PatientDataRecord | undefined
+        
+        if (!patient) {
+          // If temp ID doesn't exist, nothing to migrate
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            console.warn(`Temp patient ${tempPatientId} not found for migration`)
+          }
+          resolve()
+          return
+        }
+
+        // Update the patient record with the real Firestore ID
+        const migratedPatient: PatientDataRecord = {
+          ...patient,
+          patientId: realFirestoreId, // Use real ID as the primary key
+          firebaseId: realFirestoreId,
+          metadata: {
+            ...patient.metadata,
+            isSynced: true, // Mark as synced since we just saved to Firebase
+            lastSyncTime: new Date().toISOString(),
+          }
+        }
+
+        // Delete the old temp ID entry
+        const deleteReq = store.delete(tempPatientId)
+        
+        deleteReq.onsuccess = () => {
+          // Now add the new entry with the real Firestore ID
+          const putReq = store.put(migratedPatient)
+          
+          putReq.onsuccess = () => {
+            if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+              console.log(`✓ Migrated patient from temp ID to Firestore ID: ${realFirestoreId}`)
+            }
+            resolve()
+          }
+          
+          putReq.onerror = () => reject(putReq.error)
+        }
+        
+        deleteReq.onerror = () => reject(deleteReq.error)
+      }
+      
+      getReq.onerror = () => reject(getReq.error)
     })
   }
 }

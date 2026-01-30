@@ -291,3 +291,6 @@ class OfflineQueue {
 
 // Export singleton instance
 export const offlineQueue = new OfflineQueue()
+
+// Export class for direct instantiation if needed
+export { OfflineQueue }

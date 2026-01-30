@@ -6,7 +6,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { collection, addDoc } from "firebase/firestore"
+import { collection, setDoc, doc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,9 @@ import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
 import { useNetworkStatus } from "@/lib/network"
 import Link from "next/link"
+import { v4 as uuidv4 } from "uuid"
+
+const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
 
 export default function AddPatientPage() {
   const { user, doctor } = useAuth()
@@ -31,6 +34,7 @@ export default function AddPatientPage() {
   const { saveFormData } = useIndexedDBSync("")
   const [loading, setLoading] = useState(false)
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
+  const [createdPatientId, setCreatedPatientId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     patientCode: "",
@@ -291,12 +295,22 @@ export default function AddPatientPage() {
         createdAt: new Date().toISOString(),
       }
 
-      // CRITICAL: Save to IndexedDB FIRST (immediate, offline-safe)
-      const patientId = `patient-${user.uid}-${Date.now()}`
+      // CRITICAL: Generate UUID for this patient (works offline & online)
+      // Same ID will be used in both IndexedDB AND Firestore
+      // This ensures no duplication and proper sync
+      const patientId = uuidv4()
+
+      // Add ID to patient data
+      const patientDataWithId = {
+        ...patientData,
+        id: patientId,
+      }
+
+      // Save to IndexedDB FIRST (immediate, works offline)
       const idbResult = await saveFormData(
         patientId,
         'patient',
-        patientData,
+        patientDataWithId,
         saveAsDraft,
         []
       )
@@ -311,28 +325,52 @@ export default function AddPatientPage() {
         return
       }
 
-      // Only submit to Firebase if not draft AND online
+      if (isDevelopmentEnv()) {
+        console.log(`✓ Patient saved to IndexedDB with UUID: ${patientId}`)
+      }
+
+      // Try to submit to Firebase if online and not a draft
       if (!saveAsDraft && isOnline) {
         try {
-          const docRef = await addDoc(collection(db, "patients"), patientData)
+          // Use setDoc with same UUID to ensure consistent ID across systems
+          await setDoc(doc(collection(db, "patients"), patientId), patientDataWithId)
 
-          if (!docRef.id) {
-            throw new Error("Failed to create patient record")
+          if (isDevelopmentEnv()) {
+            console.log(`✓ Patient saved to Firestore with same UUID: ${patientId}`)
           }
 
-          // Update IndexedDB with Firebase ID
-          await saveFormData(
-            patientId,
-            'patient',
-            { ...patientData, firebaseId: docRef.id },
-            false,
-            []
-          )
+          // Store the Firebase patient ID for later reference
+          setCreatedPatientId(patientId)
         } catch (firebaseError) {
-          // Don't fail - already saved locally, will sync in background
+          // Don't fail - patient already saved offline in IndexedDB
+          // Background sync will upload when online
           if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-            console.warn('Firebase save failed, will retry:', firebaseError)
+            console.warn('⏳ Firebase save delayed, will sync in background:', firebaseError)
           }
+          
+          // Queue for background sync
+          try {
+            const { OfflineQueue } = await import('@/lib/offline-queue')
+            const queue = new OfflineQueue()
+            await queue.addToQueue('patient_create', patientId, patientDataWithId, patientId)
+            if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+              console.log('✓ Patient queued for background sync')
+            }
+          } catch (queueError) {
+            console.error('Failed to queue for sync:', queueError)
+          }
+        }
+      } else if (!isOnline && !saveAsDraft) {
+        // Offline mode - queue for sync when online
+        try {
+          const { OfflineQueue } = await import('@/lib/offline-queue')
+          const queue = new OfflineQueue()
+          await queue.addToQueue('patient_create', tempPatientId, patientData, tempPatientId)
+          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            console.log('✓ Patient queued for sync (offline mode)')
+          }
+        } catch (queueError) {
+          console.error('Failed to queue for sync:', queueError)
         }
       }
 
