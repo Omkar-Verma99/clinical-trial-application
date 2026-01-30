@@ -67,12 +67,11 @@ jobs:
       - name: Build Next.js Application
         run: pnpm build
 
-      - name: Decode and setup Firebase credentials
-        run: |
-          echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}" | base64 -d > firebase-key.json
-        shell: bash
+      - name: Authenticate to Google Cloud with Workload Identity Federation
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: projects/716627719667/locations/global/workloadIdentityPools/github-pool/providers/github-provider
+          service_account: github-actions-sa@kollectcare-rwe-study.iam.gserviceaccount.com
 
-      - name: Deploy Firestore Rules
-        run: firebase deploy --only firestore:rules --debug
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: firebase-key.json
+      - name: Deploy to Firebase (Firestore & App Hosting)
+        run: firebase deploy --only firestore:rules,apphosting --debug
