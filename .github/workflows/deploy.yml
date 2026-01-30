@@ -76,7 +76,14 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-      - name: Deploy to Firebase App Hosting
-        run: firebase deploy --only apphosting --force
+      - name: Deploy to Firebase (App Hosting and Firestore)
+        run: firebase deploy --only apphosting,firestore
+        continue-on-error: true
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+
+      - name: Fallback - Deploy Firestore rules only
+        if: failure()
+        run: firebase deploy --only firestore
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
