@@ -25,6 +25,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import { indexedDBService, type StoredFormData, type SyncQueueItem } from '@/lib/indexeddb-service'
 import { db } from '@/lib/firebase'
 import { collection, addDoc, updateDoc, doc, onSnapshot, query, where, getDocs, getDoc } from 'firebase/firestore'
+import { registerBackgroundSync } from '@/lib/background-sync'
 import { generateChecksum, detectConflict } from '@/lib/conflict-detection'
 
 // Helper to detect development environment safely on client-side
@@ -58,6 +59,8 @@ export function useIndexedDBSync(patientId: string) {
     lastSyncTime: null,
     errors: [],
   })
+  const isTabVisibleRef = useRef<boolean>(true)
+  const listenerRestartRef = useRef<(() => void) | null>(null)
 
   /**
    * Initialize IndexedDB and set up listeners
@@ -71,6 +74,9 @@ export function useIndexedDBSync(patientId: string) {
         // Set up online/offline listeners
         window.addEventListener('online', handleOnline)
         window.addEventListener('offline', handleOffline)
+        
+        // Set up tab visibility listener (handles network suspension)
+        document.addEventListener('visibilitychange', handleVisibilityChange)
 
         // Start background sync
         startBackgroundSync()
@@ -101,6 +107,7 @@ export function useIndexedDBSync(patientId: string) {
       
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current)
         syncIntervalRef.current = null
@@ -153,6 +160,38 @@ export function useIndexedDBSync(patientId: string) {
    */
   const handleOffline = useCallback(() => {
     setSyncStatus(prev => ({ ...prev, isOnline: false }))
+  }, [])
+
+  /**
+   * Handle tab visibility changes - restart listeners when tab becomes visible
+   * Fixes: net::ERR_NETWORK_IO_SUSPENDED when switching tabs
+   */
+  const handleVisibilityChange = useCallback(() => {
+    const isVisible = !document.hidden
+    isTabVisibleRef.current = isVisible
+
+    if (isVisible && syncStatusRef.current.isOnline) {
+      // Tab became visible and we're online - restart listeners and sync
+      if (isDevelopmentEnv()) {
+        console.log('📱 Tab became visible - restarting Firebase listeners')
+      }
+      
+      // Unsubscribe from old listener
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current()
+        unsubscribeRef.current = null
+      }
+
+      // Restart listeners
+      if (listenerRestartRef.current) {
+        listenerRestartRef.current()
+      }
+
+      // Trigger sync for any pending items
+      if (performSyncRef.current) {
+        performSyncRef.current()
+      }
+    }
   }, [])
 
   /**
@@ -415,6 +454,10 @@ export function useIndexedDBSync(patientId: string) {
         }
         await updateSyncStatus()
 
+        // Register background sync (will sync even if app closes)
+        // Battery efficient - browser triggers it when online
+        await registerBackgroundSync()
+
         // Trigger sync if online and not a draft (use ref for current state)
         if (!isDraft && syncStatusRef.current.isOnline) {
           setTimeout(() => performSyncRef.current?.(), 100)
@@ -604,6 +647,9 @@ export function useIndexedDBSync(patientId: string) {
       unsubscribeRef.current = () => {
         unsubscribers.forEach(unsub => unsub())
       }
+
+      // Store restart function for tab visibility changes
+      listenerRestartRef.current = setupRealtimeSync
 
       if (isDevelopmentEnv()) {
         console.log('✓ Real-time listener set up for unified patient schema:', patientId)

@@ -126,7 +126,7 @@ export const reducer = (state: State, action: Action): State => {
   }
 }
 
-const listeners: Array<(state: State) => void> = []
+const listeners: Set<(state: State) => void> = new Set()  // ✅ Changed to Set for O(1) add/remove
 
 let memoryState: State = { toasts: [] }
 
@@ -171,15 +171,15 @@ function toast({ ...props }: Toast) {
 function useToast() {
   const [state, setState] = React.useState<State>(memoryState)
 
+  // ✅ FIX: Empty dependency array - only run on mount/unmount
+  // This prevents the effect from running on every state change
+  // which was causing listener duplication
   React.useEffect(() => {
-    listeners.push(setState)
+    listeners.add(setState)  // ✅ Using Set.add() - O(1) operation
     return () => {
-      const index = listeners.indexOf(setState)
-      if (index > -1) {
-        listeners.splice(index, 1)
-      }
+      listeners.delete(setState)  // ✅ Using Set.delete() - O(1) operation
     }
-  }, [state])
+  }, [])  // ✅ CRITICAL: Empty deps ensures this runs only once
 
   return {
     ...state,

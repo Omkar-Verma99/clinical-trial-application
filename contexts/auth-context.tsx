@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, useMemo, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, useMemo, useCallback, type ReactNode, useRef } from "react"
 import { useRouter } from "next/navigation"
 import {
   type User,
@@ -43,7 +43,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [loading, setLoading] = useState(true)
   const [networkOnline, setNetworkOnline] = useState(typeof window !== "undefined" ? navigator.onLine : true)
-  const unsubscribePatientsRef = { current: null as (() => void) | null }
+  const unsubscribePatientsRef = useRef<(() => void) | null>(null)
+  const setupPatientsListenerRef = useRef<(() => void) | null>(null)
+  const isTabVisibleRef = useRef(true)
 
   // Monitor network connectivity
   useEffect(() => {
@@ -111,55 +113,82 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             
             // Cached patients to IndexedDB
 
-            // Set up real-time listener for patient changes (additions, updates, deletions)
-            // CRITICAL: Store the unsubscribe function for cleanup
-            unsubscribePatientsRef.current = onSnapshot(
-              patientsQuery,
-              async (snapshot) => {
-                try {
-                  for (const doc of snapshot.docs) {
-                    const patientData = doc.data()
-                    // Update patient index with latest data
-                    await indexedDBService.savePatientIndex({
-                      id: doc.id,
-                      patientCode: patientData.patientCode || '',
-                      age: patientData.age || 0,
-                      gender: patientData.gender || '',
-                      durationOfDiabetes: patientData.durationOfDiabetes || 0,
-                      createdAt: patientData.createdAt || new Date().toISOString(),
-                      updatedAt: patientData.updatedAt || new Date().toISOString(),
-                      hasBaseline: patientData.hasBaseline || false,
-                      hasFollowUp: patientData.hasFollowUp || false,
-                      doctorId: user.uid
+            // FUNCTION: Set up real-time listener for patient changes
+            // Can be called on login and when tab visibility changes
+            const setupPatientsListener = () => {
+              unsubscribePatientsRef.current = onSnapshot(
+                patientsQuery,
+                async (snapshot) => {
+                  try {
+                    for (const doc of snapshot.docs) {
+                      const patientData = doc.data()
+                      // Update patient index with latest data
+                      await indexedDBService.savePatientIndex({
+                        id: doc.id,
+                        patientCode: patientData.patientCode || '',
+                        age: patientData.age || 0,
+                        gender: patientData.gender || '',
+                        durationOfDiabetes: patientData.durationOfDiabetes || 0,
+                        createdAt: patientData.createdAt || new Date().toISOString(),
+                        updatedAt: patientData.updatedAt || new Date().toISOString(),
+                        hasBaseline: patientData.hasBaseline || false,
+                        hasFollowUp: patientData.hasFollowUp || false,
+                        doctorId: user.uid
+                      })
+                    }
+                    // Real-time sync completed
+                  } catch (syncError) {
+                    logError(syncError as Error, {
+                      action: "realtimeSyncPatients",
+                      userId: user.uid,
+                      severity: "medium"
                     })
                   }
-                  // Real-time sync completed
-                } catch (syncError) {
-                  logError(syncError as Error, {
-                    action: "realtimeSyncPatients",
-                    userId: user.uid,
-                    severity: "medium"
-                  })
+                },
+                (error) => {
+                  // Suppress permission errors after logout (user is null)
+                  if (!user) {
+                    return
+                  }
+                  
+                  if (error.code === 'permission-denied') {
+                    logError(error as Error, {
+                      action: "patientsListener",
+                      userId: user.uid,
+                      severity: "medium",
+                      message: "Permission denied accessing patients"
+                    })
+                  } else if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+                    console.error('Patient real-time sync error:', error)
+                  }
                 }
-              },
-              (error) => {
-                // Suppress permission errors after logout (user is null)
-                if (!user) {
-                  return
+              )
+            }
+
+            // Store the setup function for visibility change handler
+            setupPatientsListenerRef.current = setupPatientsListener
+
+            // Initial setup
+            setupPatientsListener()
+
+            // Handle tab visibility changes - restart listener when tab becomes visible
+            // Fixes: net::ERR_NETWORK_IO_SUSPENDED error
+            const handleVisibilityChange = () => {
+              const isVisible = !document.hidden
+              isTabVisibleRef.current = isVisible
+
+              if (isVisible && setupPatientsListenerRef.current) {
+                // Tab became visible - restart listener
+                if (unsubscribePatientsRef.current) {
+                  unsubscribePatientsRef.current()
+                  unsubscribePatientsRef.current = null
                 }
-                
-                if (error.code === 'permission-denied') {
-                  logError(error as Error, {
-                    action: "patientsListener",
-                    userId: user.uid,
-                    severity: "medium",
-                    message: "Permission denied accessing patients"
-                  })
-                } else if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-                  console.error('Patient real-time sync error:', error)
-                }
+                setupPatientsListenerRef.current()
               }
-            )
+            }
+
+            document.addEventListener('visibilitychange', handleVisibilityChange)
+
           } catch (cacheError) {
             // Don't fail auth if caching fails
             logError(cacheError as Error, {
@@ -189,6 +218,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         unsubscribePatientsRef.current()
         unsubscribePatientsRef.current = null
       }
+      // Clean up visibility listener
+      document.removeEventListener('visibilitychange', () => {})
     }
   }, [])
 

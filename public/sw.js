@@ -102,27 +102,172 @@ self.addEventListener('fetch', (event) => {
   )
 })
 
-// Background sync for offline forms (when online returns)
+/**
+ * Background Sync Event Handler
+ * Triggered by browser when:
+ * 1. Network comes online
+ * 2. Device has adequate battery
+ * Works even if app tab is closed
+ */
 self.addEventListener('sync', (event) => {
-  if (event.tag === 'sync-offline-data') {
+  if (event.tag === 'sync-clinical-data' || event.tag === 'sync-offline-data') {
     event.waitUntil(
       (async () => {
         try {
-          // Notify client to start sync
+          console.log('🔄 Background sync triggered - syncing pending changes...')
+          
+          // Open IndexedDB to get pending changes
+          const db = await openClinicalDB()
+          const pending = await getPendingChanges(db)
+          
+          if (pending.length === 0) {
+            console.log('✅ No pending changes to sync')
+            return
+          }
+          
+          console.log(`📤 Syncing ${pending.length} pending items...`)
+          
+          // Import Firebase SDK dynamically
+          const { initializeApp, getApps } = await import('https://www.gstatic.com/firebasejs/10.5.0/firebase-app.js')
+          const { getFirestore, collection, doc, setDoc, updateDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js')
+          
+          // Get Firebase config from window or use hardcoded (should match app config)
+          const firebaseConfig = {
+            apiKey: "AIzaSyDAn3llTqhmCmysQ0_lcX79RvuJsQMB2ks",
+            authDomain: "kollectcare-rwe-study.firebaseapp.com",
+            projectId: "kollectcare-rwe-study",
+            storageBucket: "kollectcare-rwe-study.firebasestorage.app",
+            messagingSenderId: "716627719667",
+            appId: "1:716627719667:web:a828412396c68af35b8e86"
+          }
+          
+          // Initialize Firebase
+          const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig)
+          const db_firebase = getFirestore(app)
+          
+          // Sync each pending change
+          let syncedCount = 0
+          let failedCount = 0
+          
+          for (const item of pending) {
+            try {
+              await syncSingleItem(db_firebase, item)
+              // Mark as synced in IndexedDB
+              await markAsSynced(db, item.id)
+              syncedCount++
+            } catch (error) {
+              console.error(`Failed to sync item ${item.id}:`, error)
+              failedCount++
+            }
+          }
+          
+          console.log(`✅ Background sync complete: ${syncedCount} synced, ${failedCount} failed`)
+          
+          // Notify any open clients
           const clients = await self.clients.matchAll()
           clients.forEach((client) => {
             client.postMessage({
-              type: 'START_SYNC',
+              type: 'SYNC_COMPLETE',
+              syncedCount,
+              failedCount,
               timestamp: Date.now()
             })
           })
         } catch (error) {
-          console.error('Background sync failed:', error)
+          console.error('Background sync error:', error)
+          
+          // Notify clients of failure
+          const clients = await self.clients.matchAll()
+          clients.forEach((client) => {
+            client.postMessage({
+              type: 'SYNC_FAILED',
+              error: error.message,
+              timestamp: Date.now()
+            })
+          })
         }
       })()
     )
   }
 })
+
+/**
+ * Helper: Open clinical trial database
+ */
+function openClinicalDB() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('clinical-trial-db', 1)
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve(request.result)
+  })
+}
+
+/**
+ * Helper: Get pending changes from IndexedDB
+ */
+function getPendingChanges(db) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('offline_queue', 'readonly')
+    const store = tx.objectStore('offline_queue')
+    const index = store.index('synced')
+    const request = index.getAll(false)
+    
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => resolve(request.result || [])
+  })
+}
+
+/**
+ * Helper: Sync single item to Firebase
+ */
+async function syncSingleItem(db, item) {
+  const { collection, doc, setDoc, updateDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/10.5.0/firebase-firestore.js')
+  
+  if (item.type === 'patient_create') {
+    // Create new patient
+    await setDoc(doc(db, 'patients', item.patientId), {
+      ...item.data,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    })
+  } else if (item.type === 'patient_update') {
+    // Update existing patient
+    await updateDoc(doc(db, 'patients', item.patientId), {
+      ...item.data,
+      updatedAt: serverTimestamp()
+    })
+  } else if (item.type === 'form_submit') {
+    // Submit form (patient/{patientId}/baseline or /followups)
+    const [formType, formIndex] = item.data.formType.split('-')
+    await setDoc(doc(db, 'patients', item.patientId, formType, item.data.formId), {
+      ...item.data,
+      createdAt: serverTimestamp(),
+      syncedAt: serverTimestamp()
+    }, { merge: true })
+  }
+}
+
+/**
+ * Helper: Mark item as synced in IndexedDB
+ */
+function markAsSynced(db, itemId) {
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('offline_queue', 'readwrite')
+    const store = tx.objectStore('offline_queue')
+    const request = store.get(itemId)
+    
+    request.onerror = () => reject(request.error)
+    request.onsuccess = () => {
+      const item = request.result
+      if (item) {
+        item.synced = true
+        item.syncedAt = Date.now()
+        store.put(item)
+        resolve()
+      }
+    }
+  })
+}
 
 // Message handler for client communication
 self.addEventListener('message', (event) => {

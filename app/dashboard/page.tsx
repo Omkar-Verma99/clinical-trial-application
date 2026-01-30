@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
@@ -251,6 +251,9 @@ export default function DashboardPage() {
   const [pagination, setPagination] = useState({ offset: 0, limit: 15, hasMore: false })
   const [paginationLoading, setPaginationLoading] = useState(false)
   const [indexedDBReady, setIndexedDBReady] = useState(false)
+  const unsubscribeRef = useRef<(() => void) | null>(null)
+  const listenerRestartRef = useRef<(() => void) | null>(null)
+  const isTabVisibleRef = useRef(true)
 
   // Debounced pagination handler
   const debounce = (func: Function, delay: number) => {
@@ -284,12 +287,14 @@ export default function DashboardPage() {
     }
   }, [user, loading, router])
 
-  useEffect(() => {
+  /**
+   * Set up real-time listener for patient list
+   * Handles tab visibility changes to prevent ERR_NETWORK_IO_SUSPENDED
+   */
+  const setupRealtimeListener = useCallback(() => {
     if (!user || !db) return
 
     // Set up real-time listener for patient list
-    // Optimized query: Use limit to fetch only necessary patients (pagination-aware)
-    // Fetching limit + 1 to check if hasMore
     const q = query(
       collection(db, "patients"),
       where("doctorId", "==", user.uid),
@@ -348,11 +353,49 @@ export default function DashboardPage() {
       }
     )
 
+    unsubscribeRef.current = unsubscribe
     return () => {
       unsubscribe()
       clearTimeout(timeoutId)
     }
-  }, [user, pagination.offset])
+  }, [user, pagination.offset, loadingPatients])
+
+  /**
+   * Handle tab visibility changes - restart listener when tab becomes visible
+   * Fixes: net::ERR_NETWORK_IO_SUSPENDED error
+   */
+  const handleVisibilityChange = useCallback(() => {
+    const isVisible = !document.hidden
+    isTabVisibleRef.current = isVisible
+
+    if (isVisible) {
+      // Tab became visible - restart listener
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current()
+        unsubscribeRef.current = null
+      }
+      
+      // Restart the listener
+      setupRealtimeListener()
+    }
+  }, [setupRealtimeListener])
+
+  // Initialize listener and visibility handler
+  useEffect(() => {
+    // Setup real-time listener
+    setupRealtimeListener()
+
+    // Add visibility change handler
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      // Cleanup
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current()
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [setupRealtimeListener, handleVisibilityChange])
 
   const getNextStatus = useCallback((patient: PatientWithStatus) => {
     if (!patient.hasBaseline) {

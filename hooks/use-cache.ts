@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 
 interface CacheEntry<T> {
   data: T
@@ -16,39 +16,62 @@ export function useCache<T>(
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+  const mountedRef = useRef(true)
 
   const fetchData = useCallback(async () => {
+    // ✅ Check if component is still mounted
+    if (!mountedRef.current) return
+
     // Check cache first
     const cached = cache.get(key)
     if (cached && Date.now() - cached.timestamp < cached.ttl) {
-      setData(cached.data)
-      setLoading(false)
+      if (mountedRef.current) {
+        setData(cached.data)
+        setLoading(false)
+      }
       return
     }
 
     try {
       setLoading(true)
       const result = await fetchFn()
-      setData(result)
-      setError(null)
+      
+      // ✅ Only update state if still mounted
+      if (mountedRef.current) {
+        setData(result)
+        setError(null)
 
-      // Store in cache
-      cache.set(key, {
-        data: result,
-        timestamp: Date.now(),
-        ttl,
-      })
+        // Store in cache
+        cache.set(key, {
+          data: result,
+          timestamp: Date.now(),
+          ttl,
+        })
+      }
     } catch (err) {
-      setError(err instanceof Error ? err : new Error(String(err)))
-      setData(null)
+      // ✅ Only update state if still mounted
+      if (mountedRef.current) {
+        setError(err instanceof Error ? err : new Error(String(err)))
+        setData(null)
+      }
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+      }
     }
   }, [key, fetchFn, ttl])
 
+  // ✅ FIX: Run once on mount only, not on every fetchData change
   useEffect(() => {
     fetchData()
-  }, [fetchData])
+  }, [key, fetchFn, ttl])  // Dependencies are stable primitives/functions, not fetchData itself
+
+  // ✅ FIX: Cleanup on unmount to prevent setState on unmounted component
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   return { data, loading, error, refetch: fetchData }
 }
