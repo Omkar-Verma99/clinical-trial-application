@@ -72,7 +72,7 @@ jobs:
           echo "${{ secrets.FIREBASE_SERVICE_ACCOUNT_B64 }}" | base64 -d > firebase-key.json
         shell: bash
 
-      - name: Deploy to Firebase App Hosting
-        run: firebase deploy --only apphosting --debug
+      - name: Deploy Firestore Rules
+        run: firebase deploy --only firestore:rules --debug
         env:
           GOOGLE_APPLICATION_CREDENTIALS: firebase-key.json
