@@ -1,31 +1,84 @@
 # Kollectcare Clinical Trial Management System - Complete Technical Documentation
 
-A professional, HIPAA-compliant clinical trial management platform for healthcare providers to manage Real World Evidence (RWE) trials with **complete offline-first support**. Built with Next.js 16, Firebase, TypeScript, and IndexedDB.
+A professional, **HIPAA-compliant** clinical trial management platform for healthcare providers to manage Real World Evidence (RWE) trials with **complete offline-first support**. Built with Next.js 16, Firebase, TypeScript, and IndexedDB.
 
 **Current Status:** Production Ready | **Deployed:** Google Cloud Platform (App Hosting)
+
+## 🎯 Core Capabilities
+
+### ✅ HIPAA Compliance
+- **BAA-Ready Architecture** - Business Associate Agreement support
+- **PHI Protection** - Patient health information encrypted at rest and in transit
+- **De-identification** - Patient names not exported, only code identifiers used in reports
+- **Audit Logging** - Track all user actions and data modifications with timestamps
+- **Access Controls** - Doctor-specific patient lists, role-based permissions
+- **Data Encryption** - AES-256 for local storage, TLS 1.3 for cloud transmission
+- **Compliance Features:**
+  - Automatic session expiration (configurable)
+  - Secure password reset workflows
+  - No sensitive data in browser cache
+  - Encrypted credential storage
+  - Compliant export formats (reports without identifiers)
+
+### 📱 Offline-First Capability
+The application works **completely offline** for extended periods - ideal for field clinics, rural areas, or unreliable networks.
+
+**How It Works:**
+1. **Initial Setup** - Download patient data locally (IndexedDB)
+2. **Offline Mode** - Fill forms, save data, manage patients - all locally
+3. **Auto-Sync** - When online, automatically syncs all changes to Firebase
+4. **Conflict Resolution** - Smart merge if data changed on both ends
+5. **30-Day Cache** - Works offline for 30 days before re-authentication needed
+
+**Key Features:**
+- ✅ Add/edit patients offline
+- ✅ Create baseline and follow-up forms offline
+- ✅ See patient list and history (cached)
+- ✅ Auto-save drafts every 10 seconds
+- ✅ Seamless sync when reconnected
+- ✅ No data loss on network interruptions
+- ✅ Works on any device (desktop, tablet, offline)
+
+### 🔄 Smart Synchronization
+- **Real-Time Listener** - Detects server changes and updates locally
+- **Queue Management** - Tracks pending syncs and retries failed operations
+- **Conflict Detection** - Compares timestamps and versions
+- **Background Sync** - Service Worker continues syncing in background
+- **Network Status** - Automatic online/offline detection
+- **Bandwidth Efficient** - Only syncs changed fields, not entire records
+
+### 📊 Clinical Workflow
+1. **Doctor Logs In** - Email/password auth (works offline for 30 days)
+2. **Manage Patients** - Add new patients or search existing ones
+3. **Baseline Assessment** - Comprehensive health data collection at enrollment
+4. **Follow-up Visits** - Track patient progress at Week 4, 8, 12
+5. **Outcomes Analysis** - Automatic HbA1c improvement, BMI changes, treatment response
+6. **Generate Reports** - Export de-identified data for analysis
+7. **Sync Changes** - Automatic sync to Firebase when online
 
 ---
 
 ## 📖 Table of Contents
 
 1. [Quick Start](#quick-start)
-2. [Complete Feature Overview](#complete-feature-overview)
-3. [Trial Protocol](#trial-protocol)
-4. [Tech Stack](#tech-stack)
-5. [Project Structure](#project-structure)
-6. [Core Architecture](#core-architecture)
-7. [Data Management & Storage](#data-management--storage)
-8. [Offline-First System (Deep Dive)](#offline-first-system-deep-dive)
-9. [Clinical Features Details](#clinical-features-details)
-10. [Form Management & Validation](#form-management--validation)
-11. [Outcomes Calculation & Analysis](#outcomes-calculation--analysis)
-12. [Real-Time Synchronization](#real-time-synchronization)
-13. [Setup & Configuration](#setup--configuration)
-14. [Service Worker & PWA](#service-worker--pwa)
-15. [Deployment](#deployment)
-16. [Security & HIPAA Compliance](#security--hipaa-compliance)
-17. [Performance Optimization](#performance-optimization)
-18. [Troubleshooting & Debugging](#troubleshooting--debugging)
+2. [Application Architecture & Data Flow](#application-architecture--data-flow)
+3. [Complete Feature Overview](#complete-feature-overview)
+4. [Trial Protocol](#trial-protocol)
+5. [Tech Stack](#tech-stack)
+6. [Project Structure](#project-structure)
+7. [Core Architecture](#core-architecture)
+8. [Data Management & Storage](#data-management--storage)
+9. [Offline-First System (Deep Dive)](#offline-first-system-deep-dive)
+10. [Clinical Features Details](#clinical-features-details)
+11. [Form Management & Validation](#form-management--validation)
+12. [Outcomes Calculation & Analysis](#outcomes-calculation--analysis)
+13. [Real-Time Synchronization](#real-time-synchronization)
+14. [Setup & Configuration](#setup--configuration)
+15. [Service Worker & PWA](#service-worker--pwa)
+16. [Deployment](#deployment)
+17. [Security & HIPAA Compliance](#security--hipaa-compliance)
+18. [Performance Optimization](#performance-optimization)
+19. [Troubleshooting & Debugging](#troubleshooting--debugging)
 
 ---
 
@@ -56,6 +109,160 @@ pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) - app ready to use!
+
+---
+
+## 🏗️ Application Architecture & Data Flow
+
+### High-Level System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              DOCTOR'S BROWSER (CLIENT LAYER)                │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ Next.js Frontend (React + TypeScript)               │   │
+│  │ - Login/Signup Pages                                │   │
+│  │ - Patient Management Dashboard                      │   │
+│  │ - Baseline Form, Follow-up Forms                    │   │
+│  │ - Reports & Analytics                              │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ LOCAL DATA LAYER (IndexedDB)                        │   │
+│  │ - Patient list (cached)                             │   │
+│  │ - Form drafts (auto-saved)                          │   │
+│  │ - Sync queue (pending changes)                      │   │
+│  │ - Authentication cache (encrypted)                  │   │
+│  └─────────────────────────────────────────────────────┘   │
+│  ┌─────────────────────────────────────────────────────┐   │
+│  │ SERVICE WORKER (Background Sync)                    │   │
+│  │ - Offline detection                                 │   │
+│  │ - Queued sync management                            │   │
+│  │ - Background updates                                │   │
+│  └─────────────────────────────────────────────────────┘   │
+└──────────────────┬──────────────────────────────────────────┘
+                   │ HTTP/HTTPS (TLS 1.3)
+                   │ Firebase REST API
+                   │
+        ┌──────────▼───────────────────────┐
+        │   FIREBASE CLOUD (BACKEND)       │
+        │ ┌──────────────────────────────┐ │
+        │ │ Authentication                │ │
+        │ │ - Email/Password Auth         │ │
+        │ │ - Session Management          │ │
+        │ │ - Credential Verification     │ │
+        │ └──────────────────────────────┘ │
+        │ ┌──────────────────────────────┐ │
+        │ │ Firestore Database            │ │
+        │ │ - Doctors (users)             │ │
+        │ │ - Patients (encrypted PHI)    │ │
+        │ │ - Baseline forms              │ │
+        │ │ - Follow-up forms             │ │
+        │ │ - Audit logs                  │ │
+        │ └──────────────────────────────┘ │
+        │ ┌──────────────────────────────┐ │
+        │ │ Real-Time Listeners           │ │
+        │ │ - Sync triggers               │ │
+        │ │ - Conflict detection          │ │
+        │ │ - Change notifications        │ │
+        │ └──────────────────────────────┘ │
+        └──────────────────────────────────┘
+```
+
+### Data Flow: Offline Workflow
+
+**Scenario: Doctor working at clinic with no WiFi**
+
+```
+1. LOGIN (Initial - requires internet once)
+   ┌─────────────────┐
+   │ Doctor enters   │──[TLS 1.3]──→ Firebase Auth ──→ ✅ Token
+   │ email/password  │              [Server Validates]
+   └─────────────────┘
+   └─→ Encrypted locally in IndexedDB
+
+2. PATIENT MANAGEMENT (Works Offline)
+   ┌──────────────────────────┐
+   │ Doctor searches patient  │──→ IndexedDB (cached) ──→ ✅ Found
+   │ from local database      │    [No internet needed]
+   └──────────────────────────┘
+
+3. BASELINE FORM (Works Offline)
+   ┌──────────────────────────┐
+   │ Doctor fills baseline    │──→ Auto-save every 10s──→ IndexedDB
+   │ HbA1c, BP, Weight, etc.  │    [Pending sync queue]  [Queued]
+   └──────────────────────────┘
+   └─→ Form status: "Draft" (local only)
+
+4. FOLLOW-UP FORM (Works Offline)
+   ┌──────────────────────────┐
+   │ Doctor enters week 4     │──→ Auto-save every 10s──→ IndexedDB
+   │ follow-up measurements   │    [Pending sync queue]  [Queued]
+   └──────────────────────────┘
+   └─→ Form status: "Draft" (local only)
+
+5. RECONNECT TO INTERNET
+   ┌─────────────────────────────────┐
+   │ Service Worker detects online   │
+   │ (Network status changed)        │
+   └──────────┬──────────────────────┘
+              │
+              ▼
+   ┌─────────────────────────────────┐
+   │ Automatic Sync Triggered        │
+   │ 1. Timestamp comparison         │
+   │ 2. Conflict detection           │
+   │ 3. Send to Firebase             │
+   └──────────┬──────────────────────┘
+              │
+              ▼
+   ┌─────────────────────────────────┐
+   │ Firebase Firestore              │
+   │ ✅ Patient data updated         │
+   │ ✅ Baseline form saved          │
+   │ ✅ Follow-up form saved         │
+   │ ✅ Audit logs created           │
+   └──────────┬──────────────────────┘
+              │
+              ▼
+   ┌─────────────────────────────────┐
+   │ Real-Time Listener Updated      │
+   │ (Other doctors see changes)     │
+   └─────────────────────────────────┘
+```
+
+### HIPAA Compliance Checkpoints
+
+```
+DATA ENTRY
+├─ PHI (names) captured locally, encrypted with AES-256
+├─ Patient codes used instead of names in exports
+└─ Timestamps logged for audit trail
+
+LOCAL STORAGE (IndexedDB)
+├─ Encryption: AES-256 symmetric key
+├─ Access: Doctor's browser only (no sharing)
+├─ Lifetime: 30 days max before re-auth required
+└─ Cleanup: Automatic on logout
+
+TRANSMISSION (Network)
+├─ Protocol: HTTPS with TLS 1.3
+├─ Encryption: End-to-end (Firebase handles)
+├─ Rate limiting: Prevents brute force attacks
+└─ Logging: All requests logged and audited
+
+CLOUD STORAGE (Firebase)
+├─ Database: Firestore with access controls
+├─ De-identification: Names not exported
+├─ Backup: Google Cloud automatic backups (encrypted)
+├─ Access: Only authenticated doctors can access
+└─ Audit: All changes logged with doctor ID & timestamp
+
+EXPORT & REPORTING
+├─ Format: De-identified CSV (no patient names)
+├─ Content: Patient code, measurements, outcomes only
+├─ Encryption: Optional file-level encryption
+└─ Access: Logged and auditable export history
+```
 
 ---
 
