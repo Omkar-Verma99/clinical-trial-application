@@ -1,7 +1,7 @@
 {
-  "version": "3.0.0",
-  "features": ["offline-first", "auto-sync", "patient-creation", "form-queuing"],
-  "lastUpdated": "2026-01-29T14:00:00Z",
+  "version": "3.0.1",
+  "features": ["offline-first", "auto-sync", "patient-creation", "form-queuing", "uuid-ids", "auth-routing-fixes"],
+  "lastUpdated": "2026-02-02T00:00:00Z",
   "minAppVersion": "1.0.0",
   "offlineSyncEnabled": true
 }
