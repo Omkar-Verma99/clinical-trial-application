@@ -4,7 +4,8 @@ export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
 
   // DOCTOR ROUTES PROTECTION
-  const doctorProtectedRoutes = ['/dashboard', '/patients', '/reports', '/forgot-password'];
+  // NOTE: /forgot-password is NOT protected - users can access it without login
+  const doctorProtectedRoutes = ['/dashboard', '/patients', '/reports'];
   
   if (doctorProtectedRoutes.some((route) => pathname.startsWith(route))) {
     const doctorAuth = request.cookies.get('doctorAuth');
@@ -47,6 +48,15 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL('/admin/dashboard', request.url));
     }
   }
+  
+  // Prevent logged-in doctors from accessing login/signup/forgot-password
+  if (['/login', '/signup'].includes(pathname)) {
+    const doctorAuth = request.cookies.get('doctorAuth');
+    
+    if (doctorAuth) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+  }
 
   // Redirect root to /dashboard or /admin based on auth type
   if (pathname === '/' || pathname === '') {
@@ -73,7 +83,8 @@ export const config = {
     '/dashboard/:path*',
     '/patients/:path*',
     '/reports/:path*',
-    '/forgot-password/:path*',
+    '/login',
+    '/signup',
     '/admin/:path*',
     '/',
   ],

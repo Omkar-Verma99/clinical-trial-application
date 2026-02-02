@@ -63,6 +63,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setUser(user)
 
+      // Set doctor auth cookie for middleware protection
+      if (user) {
+        // Set cookie to indicate user is authenticated
+        if (typeof window !== 'undefined') {
+          document.cookie = `doctorAuth=true; path=/; max-age=${7 * 24 * 60 * 60}`; // 7 days
+        }
+      } else {
+        // Clear cookie on logout
+        if (typeof window !== 'undefined') {
+          document.cookie = `doctorAuth=; path=/; max-age=0`;
+        }
+      }
+
       // Clean up previous real-time listeners when user changes
       if (unsubscribePatientsRef.current) {
         unsubscribePatientsRef.current()
@@ -302,6 +315,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     await signOut(auth)
+    
+    // Clear doctorAuth cookie on logout
+    if (typeof window !== 'undefined') {
+      document.cookie = `doctorAuth=; path=/; max-age=0`;
+    }
+    
     logInfo("User logged out successfully")
     router.push("/login")
   }, [router])

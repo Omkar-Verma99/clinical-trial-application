@@ -44,8 +44,10 @@ function LoginFormContent() {
         title: "Welcome back!",
         description: "You have successfully logged in.",
       })
-      // Redirect to original URL or dashboard
-      router.push(redirectTo)
+      // Wait a moment for auth state to update, then redirect
+      setTimeout(() => {
+        router.push(redirectTo)
+      }, 500)
     } catch (error: any) {
       const errorInfo = getAuthErrorMessage(error)
       toast({

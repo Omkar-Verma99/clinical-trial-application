@@ -11,7 +11,15 @@ export interface AuthErrorInfo {
 }
 
 export function getAuthErrorMessage(error: any): AuthErrorInfo {
-  const errorCode = error?.code || ""
+  // Ensure error is an object
+  if (!error || typeof error !== 'object') {
+    return {
+      title: "Error",
+      description: "An unexpected error occurred. Please try again.",
+    }
+  }
+  
+  const errorCode = error?.code || error?.message || ""
   const errorMessage = error?.message || ""
 
   // Handle Firebase auth errors
