@@ -456,10 +456,10 @@ export const ComparisonView = memo(function ComparisonView({ baseline, followUp,
           )}
 
           {/* Comments */}
-          {(followUp.comments || (patientOutcomes as any)?.additionalComments) && (
+          {followUp.comments && (
             <div className="pt-4 border-t">
               <h3 className="font-semibold text-lg mb-2">Additional Comments</h3>
-              <p className="text-sm text-muted-foreground">{followUp.comments || (patientOutcomes as any)?.additionalComments}</p>
+              <p className="text-sm text-muted-foreground">{followUp.comments}</p>
             </div>
           )}
         </CardContent>
