@@ -19,7 +19,7 @@ import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
 import { useNetworkStatus } from "@/lib/network"
 import Link from "next/link"
-import { v4 as uuidv4 } from "uuid"
+import { generateSecureUUID } from "@/lib/secure-id"
 
 const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
 
@@ -298,7 +298,7 @@ export default function AddPatientPage() {
       // CRITICAL: Generate UUID for this patient (works offline & online)
       // Same ID will be used in both IndexedDB AND Firestore
       // This ensures no duplication and proper sync
-      const patientId = uuidv4()
+      const patientId = generateSecureUUID()
 
       // Add ID to patient data
       const patientDataWithId = {
@@ -331,10 +331,11 @@ export default function AddPatientPage() {
       }
 
       // Try to submit to Firebase if online and not a draft
+      let firebaseSyncSuccessful = false
       if (!saveAsDraft && isOnline) {
         try {
           // Use setDoc with same UUID to ensure consistent ID across systems
-          await setDoc(doc(collection(db, "patients"), patientId), patientDataWithId)
+          await setDoc(doc(db, "patients", patientId), patientDataWithId)
 
           if (isDevelopmentEnv()) {
             console.log(`✓ Patient saved to Firestore with same UUID: ${patientId}`)
@@ -342,23 +343,25 @@ export default function AddPatientPage() {
 
           // Store the Firebase patient ID for later reference
           setCreatedPatientId(patientId)
+          firebaseSyncSuccessful = true
         } catch (firebaseError) {
           // Don't fail - patient already saved offline in IndexedDB
           // Background sync will upload when online
-          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-            console.warn('⏳ Firebase save delayed, will sync in background:', firebaseError)
-          }
+          logInfo('Firebase sync delayed, will retry in background', { patientId, error: firebaseError })
           
           // Queue for background sync
           try {
             const { OfflineQueue } = await import('@/lib/offline-queue')
             const queue = new OfflineQueue()
             await queue.addToQueue('patient_create', patientId, patientDataWithId, patientId)
-            if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+            if (isDevelopmentEnv()) {
               console.log('✓ Patient queued for background sync')
             }
           } catch (queueError) {
-            console.error('Failed to queue for sync:', queueError)
+            logError(queueError as Error, {
+              action: "queuePatientSync",
+              severity: "medium"
+            })
           }
         }
       } else if (!isOnline && !saveAsDraft) {
@@ -366,12 +369,15 @@ export default function AddPatientPage() {
         try {
           const { OfflineQueue } = await import('@/lib/offline-queue')
           const queue = new OfflineQueue()
-          await queue.addToQueue('patient_create', tempPatientId, patientData, tempPatientId)
-          if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          await queue.addToQueue('patient_create', patientId, patientDataWithId, patientId)
+          if (isDevelopmentEnv()) {
             console.log('✓ Patient queued for sync (offline mode)')
           }
         } catch (queueError) {
-          console.error('Failed to queue for sync:', queueError)
+          logError(queueError as Error, {
+            action: "queuePatientSync",
+            severity: "medium"
+          })
         }
       }
 
@@ -381,7 +387,10 @@ export default function AddPatientPage() {
         description: `Patient ${formData.patientCode} has been ${actionMsg}.`,
       })
 
+      // Wait a moment for Firebase to propagate before redirecting
+      // This ensures the dashboard will show the new patient
       if (!saveAsDraft) {
+        await new Promise(resolve => setTimeout(resolve, firebaseSyncSuccessful ? 500 : 1000))
         await router.push("/dashboard")
       }
     } catch (error) {

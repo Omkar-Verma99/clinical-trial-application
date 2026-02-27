@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import Image from "next/image"
 import { doc, onSnapshot, query, collection, where } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { indexedDBService } from "@/lib/indexeddb-service"
 import type { Patient, BaselineData, FollowUpData } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -71,6 +72,35 @@ export default function PatientDetailPage({ params }: Props) {
     setLoading(true)
     const unsubscribers: (() => void)[] = []
 
+    // OPTIMIZED: Load from IndexedDB first for immediate display (offline-first)
+    const loadLocalData = async () => {
+      try {
+        const localPatient = await indexedDBService.loadForm(patientId)
+        if (localPatient) {
+          setPatient(prevPatient => {
+            const newPatientData = { ...localPatient } as Patient
+            if (prevPatient && JSON.stringify(prevPatient) === JSON.stringify(newPatientData)) {
+              return prevPatient
+            }
+            return newPatientData
+          })
+
+          // Extract baseline and followups from local patient document
+          if ((localPatient as any).baseline) {
+            setBaseline((localPatient as any).baseline)
+          }
+          if ((localPatient as any).followups && Array.isArray((localPatient as any).followups)) {
+            setFollowUps((localPatient as any).followups)
+          }
+        }
+      } catch (error) {
+        console.debug("Could not load from IndexedDB:", error)
+      }
+    }
+
+    // Load local data first (shows immediately while offline or before Firebase syncs)
+    loadLocalData()
+
     // OPTIMIZED: Get patient document (now includes baseline and followups array)
     const patientRef = doc(db, `patients/${patientId}`)
 
@@ -115,9 +145,9 @@ export default function PatientDetailPage({ params }: Props) {
             })
           }
         } else {
-          setPatient(null)
-          setBaseline(null)
-          setFollowUps([])
+          // Patient not found in Firebase - keep local data if available
+          // This allows offline-first to work: user can still see local data
+          console.log("Patient not found in Firebase, using local data if available")
         }
         setLoading(false)
       },
@@ -130,7 +160,7 @@ export default function PatientDetailPage({ params }: Props) {
           return
         }
         console.error("Error fetching patient:", error)
-        setPatient(null)
+        // Don't clear patient on error - keep local data if available
         setLoading(false)
       }
     )
