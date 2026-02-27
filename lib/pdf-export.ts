@@ -40,6 +40,14 @@ function drawCheckbox(doc: jsPDF, label: string, checked: boolean, yPos: number,
 	return yPos + 3.5
 }
 
+function drawRadio(doc: jsPDF, label: string, selected: boolean, yPos: number, col2Start: number): number {
+	doc.setFontSize(9)
+	doc.setFont("helvetica", "normal")
+	const radio = selected ? "●" : "○"
+	doc.text(`${radio} ${label}`, col2Start, yPos)
+	return yPos + 3.5
+}
+
 export async function generatePatientPDF(
 	patient: Patient,
 	baseline: BaselineData | null,
@@ -61,19 +69,22 @@ export async function generatePatientPDF(
 	// HEADER WITH LOGO
 	doc.setFillColor(25, 100, 165)
 	doc.rect(0, 0, pageWidth, 32, "F")
-  
-	doc.setFillColor(41, 128, 185)
-	doc.rect(margin, 4, 10, 10, "F")
-	doc.setTextColor(255, 255, 255)
-	doc.setFontSize(14)
-	doc.setFont("helvetica", "bold")
-	doc.text("KC", margin + 2, 10)
-  
+	// Add custom logo
+	try {
+		doc.addImage("/logo.jpg", "JPEG", margin, 4, 18, 18)
+	} catch (e) {
+		// fallback: KC box
+		doc.setFillColor(41, 128, 185)
+		doc.rect(margin, 4, 10, 10, "F")
+		doc.setTextColor(255, 255, 255)
+		doc.setFontSize(14)
+		doc.setFont("helvetica", "bold")
+		doc.text("KC", margin + 2, 10)
+	}
 	doc.setTextColor(255, 255, 255)
 	doc.setFontSize(18)
 	doc.setFont("helvetica", "bold")
-	doc.text("KC MeSempa - RWE Study", margin + 15, 9)
-  
+	doc.text("KC MeSempa - RWE Study", margin + 25, 9)
 	doc.setFontSize(8)
 	doc.setFont("helvetica", "normal")
 	doc.text("Case Record Form (CRF) - Complete Patient Assessment", pageWidth / 2, 18, { align: "center" })
@@ -89,31 +100,52 @@ export async function generatePatientPDF(
 	yPos = drawKeyValue(doc, "Investigator:", patient.investigatorName || doctor?.name || "—", yPos, margin, col1Width, col2Start)
 	yPos = drawKeyValue(doc, "Baseline Date:", patient.baselineVisitDate, yPos, margin, col1Width, col2Start)
 	yPos = drawKeyValue(doc, "Age (years):", patient.age, yPos, margin, col1Width, col2Start)
-	yPos = drawKeyValue(doc, "Gender:", patient.gender, yPos, margin, col1Width, col2Start)
+	// Gender (radio)
+	yPos = drawRadio(doc, "Male", patient.gender === "Male", yPos, col2Start)
+	yPos = drawRadio(doc, "Female", patient.gender === "Female", yPos, col2Start)
+	yPos = drawRadio(doc, "Other", patient.gender === "Other", yPos, col2Start)
 	yPos = drawKeyValue(doc, "Height (cm):", patient.height, yPos, margin, col1Width, col2Start)
 	yPos = drawKeyValue(doc, "Weight (kg):", patient.weight, yPos, margin, col1Width, col2Start)
 	yPos = drawKeyValue(doc, "BMI (kg/m²):", patient.bmi, yPos, margin, col1Width, col2Start)
-	yPos = drawKeyValue(doc, "Smoking:", patient.smokingStatus, yPos, margin, col1Width, col2Start)
-	yPos = drawKeyValue(doc, "Alcohol:", patient.alcoholIntake, yPos, margin, col1Width, col2Start)
-	yPos = drawKeyValue(doc, "Physical Activity:", patient.physicalActivityLevel, yPos, margin, col1Width, col2Start)
+	// Smoking (radio)
+	yPos = drawRadio(doc, "Never", patient.smokingStatus === "Never", yPos, col2Start)
+	yPos = drawRadio(doc, "Current", patient.smokingStatus === "Current", yPos, col2Start)
+	yPos = drawRadio(doc, "Former", patient.smokingStatus === "Former", yPos, col2Start)
+	// Alcohol (radio)
+	yPos = drawRadio(doc, "No", patient.alcoholIntake === "No", yPos, col2Start)
+	yPos = drawRadio(doc, "Occasional", patient.alcoholIntake === "Occasional", yPos, col2Start)
+	yPos = drawRadio(doc, "Regular", patient.alcoholIntake === "Regular", yPos, col2Start)
+	// Physical Activity (radio)
+	yPos = drawRadio(doc, "Sedentary", patient.physicalActivityLevel === "Sedentary", yPos, col2Start)
+	yPos = drawRadio(doc, "Moderate", patient.physicalActivityLevel === "Moderate", yPos, col2Start)
+	yPos = drawRadio(doc, "Active", patient.physicalActivityLevel === "Active", yPos, col2Start)
 	yPos += 2
 
 	// DIABETES HISTORY
 	if (yPos > pageHeight - 80) { doc.addPage(); yPos = margin }
 	yPos = addSectionHeading(doc, "2. DIABETES HISTORY & CLINICAL PHENOTYPE", yPos, margin, pageWidth)
 	yPos = drawKeyValue(doc, "Duration (years):", patient.durationOfDiabetes, yPos, margin, col1Width, col2Start)
-	yPos = drawKeyValue(doc, "Baseline Severity:", patient.baselineGlycemicSeverity, yPos, margin, col1Width, col2Start)
-	yPos = drawKeyValue(doc, "Previous Treatment:", patient.previousTreatmentType, yPos, margin, col1Width, col2Start)
+	// Baseline Severity (radio)
+	yPos = drawRadio(doc, "HbA1c <7.5%", patient.baselineGlycemicSeverity === "HbA1c <7.5%", yPos, col2Start)
+	yPos = drawRadio(doc, "HbA1c 7.5–8.5%", patient.baselineGlycemicSeverity === "HbA1c 7.5–8.5%", yPos, col2Start)
+	yPos = drawRadio(doc, "HbA1c 8.6–10%", patient.baselineGlycemicSeverity === "HbA1c 8.6–10%", yPos, col2Start)
+	yPos = drawRadio(doc, "HbA1c >10%", patient.baselineGlycemicSeverity === "HbA1c >10%", yPos, col2Start)
+	// Previous Treatment (radio)
+	yPos = drawRadio(doc, "Drug-naïve", patient.previousTreatmentType === "Drug-naïve", yPos, col2Start)
+	yPos = drawRadio(doc, "Oral drugs only", patient.previousTreatmentType === "Oral drugs only", yPos, col2Start)
+	yPos = drawRadio(doc, "Insulin only", patient.previousTreatmentType === "Insulin only", yPos, col2Start)
+	yPos = drawRadio(doc, "Oral drugs + Insulin", patient.previousTreatmentType === "Oral drugs + Insulin", yPos, col2Start)
 	if (patient.diabetesComplications) {
 		doc.setFontSize(9)
 		doc.setFont("helvetica", "bold")
 		doc.text("Complications:", margin, yPos)
 		yPos += 3.5
 		doc.setFont("helvetica", "normal")
-		if (patient.diabetesComplications.neuropathy) yPos = drawCheckbox(doc, "Neuropathy", true, yPos, col2Start)
-		if (patient.diabetesComplications.retinopathy) yPos = drawCheckbox(doc, "Retinopathy", true, yPos, col2Start)
-		if (patient.diabetesComplications.nephropathy) yPos = drawCheckbox(doc, "Nephropathy", true, yPos, col2Start)
-		if (patient.diabetesComplications.cadOrStroke) yPos = drawCheckbox(doc, "CAD/Stroke", true, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Neuropathy", !!patient.diabetesComplications.neuropathy, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Retinopathy", !!patient.diabetesComplications.retinopathy, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Nephropathy", !!patient.diabetesComplications.nephropathy, yPos, col2Start)
+		yPos = drawCheckbox(doc, "CAD/Stroke", !!patient.diabetesComplications.cadOrStroke, yPos, col2Start)
+		yPos = drawCheckbox(doc, "None", !patient.diabetesComplications.neuropathy && !patient.diabetesComplications.retinopathy && !patient.diabetesComplications.nephropathy && !patient.diabetesComplications.cadOrStroke, yPos, col2Start)
 	}
 	yPos += 2
 
@@ -122,13 +154,19 @@ export async function generatePatientPDF(
 	yPos = addSectionHeading(doc, "3. COMORBIDITIES", yPos, margin, pageWidth)
 	if (patient.comorbidities) {
 		doc.setFont("helvetica", "normal")
-		if (patient.comorbidities.hypertension) yPos = drawCheckbox(doc, "Hypertension", true, yPos, col2Start)
-		if (patient.comorbidities.dyslipidemia) yPos = drawCheckbox(doc, "Dyslipidemia", true, yPos, col2Start)
-		if (patient.comorbidities.obesity) yPos = drawCheckbox(doc, "Obesity", true, yPos, col2Start)
-		if (patient.comorbidities.ascvd) yPos = drawCheckbox(doc, "ASCVD", true, yPos, col2Start)
-		if (patient.comorbidities.heartFailure) yPos = drawCheckbox(doc, "Heart Failure", true, yPos, col2Start)
-		if (patient.comorbidities.chronicKidneyDisease) yPos = drawCheckbox(doc, "Chronic Kidney Disease", true, yPos, col2Start)
-		if (patient.comorbidities.ckdEgfrCategory) yPos = drawKeyValue(doc, "CKD eGFR Category:", patient.comorbidities.ckdEgfrCategory, yPos, margin, col1Width, col2Start)
+		yPos = drawCheckbox(doc, "Hypertension", !!patient.comorbidities.hypertension, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Dyslipidemia", !!patient.comorbidities.dyslipidemia, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Obesity", !!patient.comorbidities.obesity, yPos, col2Start)
+		yPos = drawCheckbox(doc, "ASCVD", !!patient.comorbidities.ascvd, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Heart Failure", !!patient.comorbidities.heartFailure, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Chronic Kidney Disease", !!patient.comorbidities.chronicKidneyDisease, yPos, col2Start)
+		yPos = drawCheckbox(doc, "None", !patient.comorbidities.hypertension && !patient.comorbidities.dyslipidemia && !patient.comorbidities.obesity && !patient.comorbidities.ascvd && !patient.comorbidities.heartFailure && !patient.comorbidities.chronicKidneyDisease, yPos, col2Start)
+		// CKD eGFR Category dropdown
+		const egfrOptions = ["≥90", "60–89", "45–59", "30–44"];
+		egfrOptions.forEach(opt => {
+			const selected = !!(patient.comorbidities && patient.comorbidities.ckdEgfrCategory === opt);
+			yPos = drawRadio(doc, `CKD eGFR Category: ${opt}`, selected, yPos, col2Start);
+		});
 	}
 	yPos += 2
 
@@ -137,12 +175,17 @@ export async function generatePatientPDF(
 	yPos = addSectionHeading(doc, "4. PRIOR ANTI-DIABETIC THERAPY", yPos, margin, pageWidth)
 	if (patient.previousDrugClasses) {
 		doc.setFont("helvetica", "normal")
-		if (patient.previousDrugClasses.metformin) yPos = drawCheckbox(doc, "Metformin", true, yPos, col2Start)
-		if (patient.previousDrugClasses.sulfonylurea) yPos = drawCheckbox(doc, "Sulfonylurea", true, yPos, col2Start)
-		if (patient.previousDrugClasses.dpp4Inhibitor) yPos = drawCheckbox(doc, "DPP4 Inhibitor", true, yPos, col2Start)
-		if (patient.previousDrugClasses.sglt2Inhibitor) yPos = drawCheckbox(doc, "SGLT2 Inhibitor", true, yPos, col2Start)
-		if (patient.previousDrugClasses.tzd) yPos = drawCheckbox(doc, "TZD", true, yPos, col2Start)
-		if (patient.previousDrugClasses.insulin) yPos = drawCheckbox(doc, "Insulin", true, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Metformin", !!patient.previousDrugClasses.metformin, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Sulfonylurea", !!patient.previousDrugClasses.sulfonylurea, yPos, col2Start)
+		yPos = drawCheckbox(doc, "DPP4 Inhibitor", !!patient.previousDrugClasses.dpp4Inhibitor, yPos, col2Start)
+		yPos = drawCheckbox(doc, "SGLT2 Inhibitor", !!patient.previousDrugClasses.sglt2Inhibitor, yPos, col2Start)
+		yPos = drawCheckbox(doc, "TZD", !!patient.previousDrugClasses.tzd, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Insulin", !!patient.previousDrugClasses.insulin, yPos, col2Start)
+		if (patient.previousDrugClasses.other && patient.previousDrugClasses.other.length > 0) {
+			patient.previousDrugClasses.other.forEach(opt => {
+				yPos = drawCheckbox(doc, `Other: ${opt}`, true, yPos, col2Start);
+			});
+		}
 	}
 	yPos += 2
 
@@ -151,13 +194,18 @@ export async function generatePatientPDF(
 	yPos = addSectionHeading(doc, "5. REASON FOR KC MESEMPA INITIATION", yPos, margin, pageWidth)
 	if (patient.reasonForTripleFDC) {
 		doc.setFont("helvetica", "normal")
-		if (patient.reasonForTripleFDC.inadequateGlycemicControl) yPos = drawCheckbox(doc, "Inadequate Glycemic Control", true, yPos, col2Start)
-		if (patient.reasonForTripleFDC.weightConcerns) yPos = drawCheckbox(doc, "Weight Concerns", true, yPos, col2Start)
-		if (patient.reasonForTripleFDC.hypoglycemiaOnPriorTherapy) yPos = drawCheckbox(doc, "Hypoglycemia on Prior Therapy", true, yPos, col2Start)
-		if (patient.reasonForTripleFDC.highPillBurden) yPos = drawCheckbox(doc, "High Pill Burden", true, yPos, col2Start)
-		if (patient.reasonForTripleFDC.poorAdherence) yPos = drawCheckbox(doc, "Poor Adherence", true, yPos, col2Start)
-		if (patient.reasonForTripleFDC.costConsiderations) yPos = drawCheckbox(doc, "Cost Considerations", true, yPos, col2Start)
-		if (patient.reasonForTripleFDC.physicianClinicalJudgment) yPos = drawCheckbox(doc, "Physician Clinical Judgment", true, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Inadequate Glycemic Control", !!patient.reasonForTripleFDC.inadequateGlycemicControl, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Weight Concerns", !!patient.reasonForTripleFDC.weightConcerns, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Hypoglycemia on Prior Therapy", !!patient.reasonForTripleFDC.hypoglycemiaOnPriorTherapy, yPos, col2Start)
+		yPos = drawCheckbox(doc, "High Pill Burden", !!patient.reasonForTripleFDC.highPillBurden, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Poor Adherence", !!patient.reasonForTripleFDC.poorAdherence, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Cost Considerations", !!patient.reasonForTripleFDC.costConsiderations, yPos, col2Start)
+		yPos = drawCheckbox(doc, "Physician Clinical Judgment", !!patient.reasonForTripleFDC.physicianClinicalJudgment, yPos, col2Start)
+		if (patient.reasonForTripleFDC.other && patient.reasonForTripleFDC.other.length > 0) {
+			patient.reasonForTripleFDC.other.forEach(opt => {
+				yPos = drawCheckbox(doc, `Other: ${opt}`, true, yPos, col2Start);
+			});
+		}
 	}
 	yPos += 2
 
@@ -248,16 +296,16 @@ export async function generatePatientPDF(
 			yPos += 1
 			doc.setFont("helvetica", "bold")
 			doc.setFontSize(9)
-			doc.text("Adverse Events/Safety:", margin, yPos)
+			doc.text("Events of Special Interest (tick all that apply):", margin, yPos)
 			yPos += 3
 			doc.setFont("helvetica", "normal")
-			if (visit.eventsOfSpecialInterest.hypoglycemiaMild) yPos = drawCheckbox(doc, "Mild Hypoglycemia", true, yPos, col2Start)
-			if (visit.eventsOfSpecialInterest.hypoglycemiaModerate) yPos = drawCheckbox(doc, "Moderate Hypoglycemia", true, yPos, col2Start)
-			if (visit.eventsOfSpecialInterest.hypoglycemiaSevere) yPos = drawCheckbox(doc, "Severe Hypoglycemia", true, yPos, col2Start)
-			if (visit.eventsOfSpecialInterest.uti) yPos = drawCheckbox(doc, "UTI", true, yPos, col2Start)
-			if (visit.eventsOfSpecialInterest.genitalMycoticInfection) yPos = drawCheckbox(doc, "Genital Infection", true, yPos, col2Start)
-			if (visit.eventsOfSpecialInterest.dizzinessDehydrationSymptoms) yPos = drawCheckbox(doc, "Dizziness/Dehydration", true, yPos, col2Start)
-			if (visit.eventsOfSpecialInterest.hospitalizationOrErVisit) yPos = drawCheckbox(doc, "Hospitalization/ER Visit", true, yPos, col2Start)
+			yPos = drawCheckbox(doc, "Hypoglycemia – mild (ADA Level 1-Blood Glucose <70 mg/dL and ≥54 mg/dL)", !!visit.eventsOfSpecialInterest.hypoglycemiaMild, yPos, col2Start)
+			yPos = drawCheckbox(doc, "Hypoglycemia – moderate (ADA Level 2 - Blood glucose <54 mg/dL)", !!visit.eventsOfSpecialInterest.hypoglycemiaModerate, yPos, col2Start)
+			yPos = drawCheckbox(doc, "Hypoglycemia – severe", !!visit.eventsOfSpecialInterest.hypoglycemiaSevere, yPos, col2Start)
+			yPos = drawCheckbox(doc, "UTI", !!visit.eventsOfSpecialInterest.uti, yPos, col2Start)
+			yPos = drawCheckbox(doc, "Genital mycotic infection", !!visit.eventsOfSpecialInterest.genitalMycoticInfection, yPos, col2Start)
+			yPos = drawCheckbox(doc, "Dizziness / dehydration symptoms", !!visit.eventsOfSpecialInterest.dizzinessDehydrationSymptoms, yPos, col2Start)
+			yPos = drawCheckbox(doc, "Hospitalization / ER visit", !!visit.eventsOfSpecialInterest.hospitalizationOrErVisit, yPos, col2Start)
 		}
 		if (visit.physicianAssessment) {
 			yPos += 1
@@ -292,18 +340,26 @@ export async function generatePatientPDF(
 	yPos += 8
 	doc.setFont("helvetica", "bold")
 	doc.text("Physician Name:", margin, yPos)
+	doc.setFont("helvetica", "normal")
+	doc.text(doctor?.name || "—", col2Start, yPos)
 	yPos += 5
 	doc.setDrawColor(100, 100, 100)
 	doc.setLineWidth(0.3)
 	doc.line(col2Start, yPos - 2, pageWidth - margin, yPos - 2)
 	yPos += 3
+	doc.setFont("helvetica", "bold")
 	doc.text("Qualification:", margin, yPos)
+	doc.setFont("helvetica", "normal")
+	doc.text(doctor?.qualification || "—", col2Start, yPos)
 	yPos += 5
 	doc.line(col2Start, yPos - 2, pageWidth - margin, yPos - 2)
 	yPos += 5
+	doc.setFont("helvetica", "bold")
 	doc.text("Date:", margin, yPos)
+	doc.setFont("helvetica", "normal")
 	doc.text(dateStr, col2Start, yPos)
 	yPos += 8
+	doc.setFont("helvetica", "bold")
 	doc.text("Signature:", margin, yPos)
 	yPos += 8
 	doc.line(col2Start, yPos - 2, pageWidth - margin, yPos - 2)
