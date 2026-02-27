@@ -306,10 +306,11 @@ export default function AddPatientPage() {
       const patientDocRef = doc(collection(db, "patients"))
       const patientId = patientDocRef.id
 
-      // Add ID to patient data
+      // Add ID fields to satisfy security rules (patientId required) and for querying
       const patientDataWithId = {
         ...patientData,
         id: patientId,
+        patientId: patientId,
       }
 
       // Save directly to Firebase (online-only) using batch to minimize roundtrips

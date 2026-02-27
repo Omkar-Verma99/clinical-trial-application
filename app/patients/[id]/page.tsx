@@ -41,6 +41,14 @@ export default function PatientDetailPage({ params }: Props) {
   const [patient, setPatient] = useState<Patient | null>(null)
   const [baseline, setBaseline] = useState<BaselineData | null>(null)
   const [followUps, setFollowUps] = useState<FollowUpData[]>([])
+  // Ensure at least one follow-up tab exists after baseline
+  const followUpsWithDefault = useMemo(() => {
+    if (baseline && followUps.length === 0) {
+      // Create a placeholder for the first follow-up
+      return [{} as FollowUpData]
+    }
+    return followUps
+  }, [baseline, followUps])
   const [creatingFollowUp, setCreatingFollowUp] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
@@ -535,14 +543,14 @@ export default function PatientDetailPage({ params }: Props) {
           )}
 
           {/* Dynamic Visit Tabs */}
-          {followUps.map((visit, visitIndex) => (
+          {followUpsWithDefault.map((visit, visitIndex) => (
             <TabsContent key={`visit-content-${visitIndex}`} value={`visit-${visitIndex}`}>
               {baseline ? (
                 <div className="space-y-6">
                   {/* Form for this visit */}
                   <MemoizedFollowUpForm
                     patientId={patient.id}
-                    existingData={visit}
+                    existingData={Object.keys(visit).length === 0 ? null : visit}
                     baselineDate={patient.baselineVisitDate}
                     allFollowUps={followUps}
                     onSuccess={() => {
@@ -555,7 +563,7 @@ export default function PatientDetailPage({ params }: Props) {
                   <div className="border-t pt-6" />
 
                   {/* Add New FollowUp Button */}
-                  {visitIndex === followUps.length - 1 && (
+                  {visitIndex === followUpsWithDefault.length - 1 && (
                     <div className="flex justify-center">
                       <Button
                         onClick={startNewFollowUp}
@@ -563,7 +571,7 @@ export default function PatientDetailPage({ params }: Props) {
                         className="gap-2"
                         disabled={creatingFollowUp}
                       >
-                        <span>+ ADD NEW FOLLOW UP (Follow Up {followUps.length + 1})</span>
+                        <span>+ ADD NEW FOLLOW UP (Follow Up {followUpsWithDefault.length + 1})</span>
                       </Button>
                     </div>
                   )}
@@ -571,7 +579,7 @@ export default function PatientDetailPage({ params }: Props) {
               ) : (
                 <Card className="p-8 text-center">
                   <p className="text-muted-foreground">Please complete baseline assessment first</p>
-                  <Button className="mt-4" onClick={() => setActiveTab("baseline")}>
+                  <Button className="mt-4" onClick={() => setActiveTab("baseline")}> 
                     Go to Baseline
                   </Button>
                 </Card>
