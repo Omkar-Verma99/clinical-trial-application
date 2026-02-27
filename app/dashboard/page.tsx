@@ -250,10 +250,7 @@ export default function DashboardPage() {
   const [loadingPatients, setLoadingPatients] = useState(true)
   const [pagination, setPagination] = useState({ offset: 0, limit: 15, hasMore: false })
   const [paginationLoading, setPaginationLoading] = useState(false)
-  const [indexedDBReady, setIndexedDBReady] = useState(false)
   const unsubscribeRef = useRef<(() => void) | null>(null)
-  const listenerRestartRef = useRef<(() => void) | null>(null)
-  const isTabVisibleRef = useRef(true)
 
   // Debounced pagination handler
   const debounce = (func: Function, delay: number) => {
@@ -280,7 +277,7 @@ export default function DashboardPage() {
     debouncedPaginationChange(Math.max(0, pagination.offset - pagination.limit))
   }, [pagination, debouncedPaginationChange])
 
-  // Initialize patient list with pagination from optimized IndexedDB
+  // Redirect to login if the session expires before loading completes
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login?from=/dashboard")
@@ -331,7 +328,6 @@ export default function DashboardPage() {
 
           setPatients(paginatedPatients)
           setLoadingPatients(false)
-          setIndexedDBReady(true)
           setPagination(prev => ({
             ...prev,
             hasMore: querySnapshot.docs.length > pagination.offset + pagination.limit
@@ -366,7 +362,6 @@ export default function DashboardPage() {
    */
   const handleVisibilityChange = useCallback(() => {
     const isVisible = !document.hidden
-    isTabVisibleRef.current = isVisible
 
     if (isVisible) {
       // Tab became visible - restart listener

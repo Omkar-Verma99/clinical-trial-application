@@ -6,7 +6,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { collection, setDoc, doc } from "firebase/firestore"
+import { setDoc, doc, collection } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,12 +14,9 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { useIndexedDBSync } from "@/hooks/use-indexed-db-sync"
 import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
-import { logError, logInfo } from "@/lib/error-tracking"
-import { useNetworkStatus } from "@/lib/network"
+import { logError } from "@/lib/error-tracking"
 import Link from "next/link"
-import { generateSecureUUID } from "@/lib/secure-id"
 
 const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
 
@@ -27,14 +24,8 @@ export default function AddPatientPage() {
   const { user, doctor } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-  const isOnline = useNetworkStatus()
-  // NOTE: Pass empty string as patientId since we're creating a new patient
-  // The real patientId will be generated after patient creation
-  // This prevents real-time listeners from trying to sync non-existent data
-  const { saveFormData } = useIndexedDBSync("")
   const [loading, setLoading] = useState(false)
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
-  const [createdPatientId, setCreatedPatientId] = useState<string | null>(null)
 
   const [formData, setFormData] = useState({
     patientCode: "",
@@ -145,7 +136,7 @@ export default function AddPatientPage() {
     }))
   }
 
-  const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user || !user.uid || !db) {
       toast({
@@ -156,58 +147,46 @@ export default function AddPatientPage() {
       return
     }
 
-    // NOTE: Offline patient creation is allowed - data saves to IndexedDB
-    // and syncs to Firebase when back online. Only warn user about offline mode.
-    if (!isOnline && !saveAsDraft) {
+    // Validate required fields before saving to Firestore
+    const requiredFields = [
+      { field: formData.patientCode, name: "Patient Code" },
+      { field: formData.age, name: "Age" },
+      { field: formData.gender, name: "Gender" },
+      { field: formData.durationOfDiabetes, name: "Duration of Diabetes" },
+      { field: previousTreatmentType, name: "Previous Treatment Type" },
+    ]
+
+    const missingFields = requiredFields.filter(f => !f.field).map(f => f.name)
+
+    if (missingFields.length > 0) {
       toast({
-        title: "Working Offline",
-        description: "Patient will sync to Firebase when connection is restored.",
+        variant: "destructive",
+        title: "Missing Required Fields",
+        description: `Please fill in: ${missingFields.join(", ")}`,
       })
+      return
     }
 
-    // SKIP VALIDATION FOR DRAFTS - user can save incomplete patient data
-    if (!saveAsDraft) {
-      // Validate required fields (only for full enrollment)
-      const requiredFields = [
-        { field: formData.patientCode, name: "Patient Code" },
-        { field: formData.age, name: "Age" },
-        { field: formData.gender, name: "Gender" },
-        { field: formData.durationOfDiabetes, name: "Duration of Diabetes" },
-        { field: previousTreatmentType, name: "Previous Treatment Type" },
-      ]
+    // Check if at least one reason for triple FDC is selected
+    if (!Object.values(reasonForTripleFDC).some(v => v)) {
+      toast({
+        variant: "destructive",
+        title: "Missing Selection",
+        description: "Please select at least one reason for KC MeSempa initiation",
+      })
+      return
+    }
 
-      const missingFields = requiredFields.filter(f => !f.field).map(f => f.name)
-      
-      if (missingFields.length > 0) {
-        toast({
-          variant: "destructive",
-          title: "Missing Required Fields",
-          description: `Please fill in: ${missingFields.join(", ")}`,
-        })
-        return
-      }
-
-      // Check if at least one reason for triple FDC is selected
-      if (!Object.values(reasonForTripleFDC).some(v => v)) {
-        toast({
-          variant: "destructive",
-          title: "Missing Selection",
-          description: "Please select at least one reason for KC MeSempa initiation",
-        })
-        return
-      }
-
-      // Validate BMI if provided
-      const height = parseFloat(formData.height)
-      const weight = parseFloat(formData.bmi)
-      if (height && weight && bmiMismatchWarning) {
-        toast({
-          variant: "destructive",
-          title: "BMI Validation Error",
-          description: "The entered BMI does not match the calculated value from height/weight. Please correct the values.",
-        })
-        return
-      }
+    // Validate BMI consistency when manually edited
+    const height = parseFloat(formData.height)
+    const bmiValue = parseFloat(formData.bmi)
+    if (height && bmiValue && bmiMismatchWarning) {
+      toast({
+        variant: "destructive",
+        title: "BMI Validation Error",
+        description: "The entered BMI does not match the calculated value from height/weight. Please correct the values.",
+      })
+      return
     }
 
     setLoading(true)
@@ -295,10 +274,9 @@ export default function AddPatientPage() {
         createdAt: new Date().toISOString(),
       }
 
-      // CRITICAL: Generate UUID for this patient (works offline & online)
-      // Same ID will be used in both IndexedDB AND Firestore
-      // This ensures no duplication and proper sync
-      const patientId = generateSecureUUID()
+      // Generate a Firestore document with an auto ID
+      const patientDocRef = doc(collection(db, "patients"))
+      const patientId = patientDocRef.id
 
       // Add ID to patient data
       const patientDataWithId = {
@@ -306,93 +284,35 @@ export default function AddPatientPage() {
         id: patientId,
       }
 
-      // Save to IndexedDB FIRST (immediate, works offline)
-      const idbResult = await saveFormData(
-        patientId,
-        'patient',
-        patientDataWithId,
-        saveAsDraft,
-        [],
-        patientId  // Pass patientId as override for new patient creation
-      )
+      // Save directly to Firebase (online-only)
+      try {
+        await setDoc(patientDocRef, patientDataWithId)
 
-      if (!idbResult.success) {
+        if (isDevelopmentEnv()) {
+          console.log(`✓ Patient saved to Firebase: ${patientId}`)
+        }
+      } catch (firebaseError) {
+        logError(firebaseError as Error, {
+          action: "addPatient",
+          severity: "high"
+        })
         toast({
           variant: "destructive",
-          title: "Error saving locally",
-          description: idbResult.error || "Failed to save to local storage",
+          title: "Error saving patient",
+          description: "Failed to save patient to database. Please try again.",
         })
         setLoading(false)
         return
       }
 
-      if (isDevelopmentEnv()) {
-        console.log(`✓ Patient saved to IndexedDB with UUID: ${patientId}`)
-      }
-
-      // Try to submit to Firebase if online and not a draft
-      let firebaseSyncSuccessful = false
-      if (!saveAsDraft && isOnline) {
-        try {
-          // Use setDoc with same UUID to ensure consistent ID across systems
-          await setDoc(doc(db, "patients", patientId), patientDataWithId)
-
-          if (isDevelopmentEnv()) {
-            console.log(`✓ Patient saved to Firestore with same UUID: ${patientId}`)
-          }
-
-          // Store the Firebase patient ID for later reference
-          setCreatedPatientId(patientId)
-          firebaseSyncSuccessful = true
-        } catch (firebaseError) {
-          // Don't fail - patient already saved offline in IndexedDB
-          // Background sync will upload when online
-          logInfo('Firebase sync delayed, will retry in background', { patientId, error: firebaseError })
-          
-          // Queue for background sync
-          try {
-            const { OfflineQueue } = await import('@/lib/offline-queue')
-            const queue = new OfflineQueue()
-            await queue.addToQueue('patient_create', patientId, patientDataWithId, patientId)
-            if (isDevelopmentEnv()) {
-              console.log('✓ Patient queued for background sync')
-            }
-          } catch (queueError) {
-            logError(queueError as Error, {
-              action: "queuePatientSync",
-              severity: "medium"
-            })
-          }
-        }
-      } else if (!isOnline && !saveAsDraft) {
-        // Offline mode - queue for sync when online
-        try {
-          const { OfflineQueue } = await import('@/lib/offline-queue')
-          const queue = new OfflineQueue()
-          await queue.addToQueue('patient_create', patientId, patientDataWithId, patientId)
-          if (isDevelopmentEnv()) {
-            console.log('✓ Patient queued for sync (offline mode)')
-          }
-        } catch (queueError) {
-          logError(queueError as Error, {
-            action: "queuePatientSync",
-            severity: "medium"
-          })
-        }
-      }
-
-      const actionMsg = saveAsDraft ? "saved as draft" : "enrolled in the trial"
       toast({
         title: "Patient added successfully",
-        description: `Patient ${formData.patientCode} has been ${actionMsg}.`,
+        description: `Patient ${formData.patientCode} has been enrolled in the trial.`,
       })
 
-      // Wait a moment for Firebase to propagate before redirecting
-      // This ensures the dashboard will show the new patient
-      if (!saveAsDraft) {
-        await new Promise(resolve => setTimeout(resolve, firebaseSyncSuccessful ? 500 : 1000))
-        await router.push("/dashboard")
-      }
+      // Redirect to dashboard after successful enrollment
+      await new Promise(resolve => setTimeout(resolve, 500))
+      await router.push("/dashboard")
     } catch (error) {
       logError(error as Error, {
         action: "addPatient",
@@ -760,15 +680,6 @@ export default function AddPatientPage() {
               <div className="flex gap-3 pt-4">
                 <Button type="submit" className="flex-1" disabled={loading}>
                   {loading ? "Enrolling Patient..." : "Enroll Patient"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="flex-1 bg-transparent"
-                  disabled={loading}
-                  onClick={() => handleSubmit(new Event('click') as any, true)}
-                >
-                  Save as Draft
                 </Button>
                 <Link href="/dashboard" className="flex-1">
                   <Button type="button" variant="outline" className="w-full bg-transparent">

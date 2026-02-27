@@ -3,17 +3,17 @@
 import type React from "react"
 
 import { useState, memo } from "react"
-import { generateSecureUUID } from "@/lib/secure-id"
 import { useAuth } from "@/contexts/auth-context"
+import { setDoc, doc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 import type { BaselineData } from "@/lib/types"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { useIndexedDBSync } from "@/hooks/use-indexed-db-sync"
-import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Button } from "@/components/ui/button"
+import { sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
 
 interface BaselineFormProps {
@@ -25,7 +25,6 @@ interface BaselineFormProps {
 export const BaselineForm = memo(function BaselineForm({ patientId, existingData, onSuccess }: BaselineFormProps) {
   const { toast } = useToast()
   const { user } = useAuth()
-  const { saveFormData } = useIndexedDBSync(patientId)
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -54,7 +53,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
     hydrationAdvice: (existingData as any)?.counseling?.hydrationAdvice || false,
   })
 
-  const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     // CRITICAL: Verify user is loaded and has uid before saving
@@ -74,56 +73,50 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
     const validationErrors: string[] = []
 
     try {
-      // SKIP VALIDATION FOR DRAFTS - user can save incomplete forms
-      if (!saveAsDraft) {
-        // VALIDATION PHASE 1: Check required fields (only for final submission)
-        
-        if (!formData.hba1c) validationErrors.push("HbA1c is required")
-        if (!formData.fpg) validationErrors.push("FPG is required")
-        if (!formData.weight) validationErrors.push("Weight is required")
-        if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
-        if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
-        if (!formData.dosePrescribed) validationErrors.push("Dose prescribed is required")
-        if (!formData.treatmentInitiationDate) validationErrors.push("Treatment initiation date is required")
+      // VALIDATION PHASE 1: Check required fields
+      if (!formData.hba1c) validationErrors.push("HbA1c is required")
+      if (!formData.fpg) validationErrors.push("FPG is required")
+      if (!formData.weight) validationErrors.push("Weight is required")
+      if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
+      if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
+      if (!formData.dosePrescribed) validationErrors.push("Dose prescribed is required")
+      if (!formData.treatmentInitiationDate) validationErrors.push("Treatment initiation date is required")
 
-        if (validationErrors.length > 0) {
-          setLoading(false)
-          toast({
-            variant: "destructive",
-            title: "Missing required fields",
-            description: validationErrors.join(", "),
-          })
-          return
-        }
+      if (validationErrors.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Missing required fields",
+          description: validationErrors.join(", "),
+        })
+        return
+      }
 
-        // VALIDATION PHASE 2: Parse and validate numeric ranges (only for final submission)
-        const hba1c = formData.hba1c ? Number.parseFloat(formData.hba1c) : NaN
-        const fpg = formData.fpg ? Number.parseFloat(formData.fpg) : NaN
-        const weight = formData.weight ? Number.parseFloat(formData.weight) : NaN
-        const bpSystolic = formData.bloodPressureSystolic ? Number.parseInt(formData.bloodPressureSystolic) : NaN
-        const bpDiastolic = formData.bloodPressureDiastolic ? Number.parseInt(formData.bloodPressureDiastolic) : NaN
+      // VALIDATION PHASE 2: Parse and validate numeric ranges
+      const hba1c = formData.hba1c ? Number.parseFloat(formData.hba1c) : NaN
+      const fpg = formData.fpg ? Number.parseFloat(formData.fpg) : NaN
+      const weight = formData.weight ? Number.parseFloat(formData.weight) : NaN
+      const bpSystolic = formData.bloodPressureSystolic ? Number.parseInt(formData.bloodPressureSystolic) : NaN
+      const bpDiastolic = formData.bloodPressureDiastolic ? Number.parseInt(formData.bloodPressureDiastolic) : NaN
 
-        const rangeErrors: string[] = []
-        
-        if (isNaN(hba1c) || hba1c < 4 || hba1c > 15) rangeErrors.push("HbA1c must be between 4-15%")
-        if (isNaN(fpg) || fpg < 50 || fpg > 500) rangeErrors.push("FPG must be between 50-500 mg/dL")
-        if (isNaN(weight) || weight < 30 || weight > 200) rangeErrors.push("Weight must be between 30-200 kg")
-        if (isNaN(bpSystolic) || bpSystolic < 70 || bpSystolic > 200) rangeErrors.push("BP Systolic must be between 70-200 mmHg")
-        if (isNaN(bpDiastolic) || bpDiastolic < 40 || bpDiastolic > 130) rangeErrors.push("BP Diastolic must be between 40-130 mmHg")
+      const rangeErrors: string[] = []
+      
+      if (isNaN(hba1c) || hba1c < 4 || hba1c > 15) rangeErrors.push("HbA1c must be between 4-15%")
+      if (isNaN(fpg) || fpg < 50 || fpg > 500) rangeErrors.push("FPG must be between 50-500 mg/dL")
+      if (isNaN(weight) || weight < 30 || weight > 200) rangeErrors.push("Weight must be between 30-200 kg")
+      if (isNaN(bpSystolic) || bpSystolic < 70 || bpSystolic > 200) rangeErrors.push("BP Systolic must be between 70-200 mmHg")
+      if (isNaN(bpDiastolic) || bpDiastolic < 40 || bpDiastolic > 130) rangeErrors.push("BP Diastolic must be between 40-130 mmHg")
 
-        if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify) {
-          rangeErrors.push("Please specify abnormality for urinalysis")
-        }
+      if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify) {
+        rangeErrors.push("Please specify abnormality for urinalysis")
+      }
 
-        if (rangeErrors.length > 0) {
-          setLoading(false)
-          toast({
-            variant: "destructive",
-            title: "Invalid Values",
-            description: rangeErrors.join(", "),
-          })
-          return
-        }
+      if (rangeErrors.length > 0) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Values",
+          description: rangeErrors.join(", "),
+        })
+        return
       }
 
       // Sanitize text inputs
@@ -165,52 +158,41 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
         dietAdvice: counseling.dietAndLifestyle,
         counselingProvided: Object.values(counseling).some(v => v),
         
-        isDraft: saveAsDraft,
         createdAt: existingData?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
 
-      // CRITICAL: Save to IndexedDB FIRST (immediate, offline-safe)
-      // Then sync to Firebase in background
-      // Use UUID for collision-proof form ID generation
-      const formId = (existingData as any)?.id || `baseline-${generateSecureUUID()}`
-      const idbResult = await saveFormData(
-        formId,
-        'baseline',
-        data,
-        saveAsDraft,
-        saveAsDraft ? [] : validationErrors
-      )
+      try {
+        // Save to Firebase
+        const patientDocRef = doc(db, "patients", patientId)
+        await setDoc(patientDocRef, {
+          baseline: data,
+          updatedAt: new Date().toISOString()
+        }, { merge: true })
 
-      if (!idbResult.success) {
-        setLoading(false)
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.log('✓ Form saved to Firebase')
+        }
+      } catch (error) {
+        logError(error as Error, {
+          action: "saveBaselineData",
+          severity: "high"
+        })
         toast({
           variant: "destructive",
-          title: "Error saving locally",
-          description: idbResult.error || "Failed to save to local storage",
+          title: "Error saving data",
+          description: error instanceof Error ? error.message : "Please try again.",
         })
         return
       }
 
-      // Only submit to Firebase if not draft (background sync will handle it)
-      // V4 UNIFIED STRUCTURE: Sync hook manages Firebase updates via sync queue
-      if (!saveAsDraft) {
-        // Note: Firebase sync is handled by useIndexedDBSync hook's performSync()
-        // When user comes online, all queued forms are synced to Firebase automatically
-        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-          console.log('✓ Form queued for Firebase sync (will sync when online)')
-        }
-      }
-
       toast({
-        title: saveAsDraft ? "✓ Saved as draft" : "✓ Baseline data saved",
-        description: saveAsDraft ? "You can continue editing later." : "Week 0 assessment has been recorded.",
+        title: "✓ Baseline data saved",
+        description: "Week 0 assessment has been recorded.",
       })
 
-      setLoading(false)
       onSuccess()
     } catch (error) {
-      setLoading(false)
       logError(error as Error, {
         action: "saveBaselineData",
         severity: "high"
@@ -464,15 +446,6 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
           <div className="flex gap-3 pt-4 border-t">
             <Button type="submit" disabled={loading} className="flex-1">
               {loading ? "Saving..." : "Save Assessment"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={(e) => handleSubmit(e as any, true)}
-              disabled={loading}
-              className="flex-1 bg-transparent"
-            >
-              Save as Draft
             </Button>
           </div>
         </form>

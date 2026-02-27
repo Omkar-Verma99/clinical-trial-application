@@ -33,45 +33,6 @@ export const metadata: Metadata = {
   },
 }
 
-// Service Worker Registration Component
-function ServiceWorkerRegister() {
-  return (
-    <script
-      dangerouslySetInnerHTML={{
-        __html: `
-          if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-              navigator.serviceWorker.register('/sw.js').then(
-                (registration) => {
-                  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-                    console.log('✓ Service Worker registered:', registration);
-                  }
-                },
-                (error) => {
-                  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-                    console.log('Service Worker registration failed:', error);
-                  }
-                }
-              );
-            });
-          }
-          
-          // Suppress Firebase token errors in console
-          const originalError = console.error;
-          console.error = function(...args) {
-            const message = args[0]?.toString?.() || '';
-            // Suppress Firebase securetoken errors (non-critical initialization errors)
-            if (message.includes('securetoken.googleapis.com') || message.includes('FIREBASE')) {
-              return;
-            }
-            originalError.apply(console, args);
-          };
-        `,
-      }}
-    />
-  )
-}
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -86,7 +47,6 @@ export default function RootLayout({
             <Toaster />
           </AdminAuthProvider>
         </AuthProvider>
-        <ServiceWorkerRegister />
       </body>
     </html>
   )

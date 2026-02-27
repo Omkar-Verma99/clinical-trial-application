@@ -125,8 +125,6 @@ export interface FollowUpData {
   patientId: string
   visitNumber?: number                // Visit week number (1, 2, 3, etc., calculated from date)
   visitDate?: string                  // Week 12 visit date (NEW)
-  status?: "draft" | "submitted"      // Form submission status
-  isDraft?: boolean                   // Explicitly track if form is saved (not draft)
   
   // SECTION H - Follow-up Clinical & Lab Parameters
   hba1c: number
@@ -158,6 +156,7 @@ export interface FollowUpData {
   adherence?: {
     patientContinuingTreatment: boolean
     discontinuationReason?: "Adverse event" | "Lack of efficacy" | "Cost" | "Patient preference" | "Other"
+    discontinuationReasonOtherDetails?: string
     missedDosesInLast7Days?: 0 | "1–2" | "3–5" | ">5"
     addOnOrChangedTherapy: boolean
     addOnOrChangedTherapyDetails?: string
@@ -183,6 +182,8 @@ export interface FollowUpData {
     hospitalizationOrErVisit: boolean
     hospitalizationReason?: string
   }
+
+  adverseEventsPresent?: boolean
   
   // SECTION M - Physician Global Assessment (UPDATED)
   physicianAssessment?: {

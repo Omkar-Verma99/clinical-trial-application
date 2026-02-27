@@ -4,10 +4,9 @@ import { useEffect, useState, useCallback, useMemo, Suspense, lazy, memo } from 
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import Image from "next/image"
-import { doc, onSnapshot, query, collection, where } from "firebase/firestore"
+import { doc, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { indexedDBService } from "@/lib/indexeddb-service"
-import type { Patient, BaselineData, FollowUpData } from "@/lib/types"
+import type { Patient, BaselineData, FollowUpData, Doctor } from "@/lib/types"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -42,10 +41,12 @@ export default function PatientDetailPage({ params }: Props) {
   const [patient, setPatient] = useState<Patient | null>(null)
   const [baseline, setBaseline] = useState<BaselineData | null>(null)
   const [followUps, setFollowUps] = useState<FollowUpData[]>([])
+  const [creatingFollowUp, setCreatingFollowUp] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const [exporting, setExporting] = useState(false)
   // Note: selectedFollowUp removed - now using dynamic visit tabs from followUps array
+  const doctorForExports: Doctor | undefined = doctor ?? undefined
 
   // Auth guard: redirect to login if not authenticated
   useEffect(() => {
@@ -64,6 +65,39 @@ export default function PatientDetailPage({ params }: Props) {
   }, [params])
 
   useEffect(() => {
+    if (!baseline && creatingFollowUp) {
+      setCreatingFollowUp(false)
+      if (activeTab === "new-followup") {
+        setActiveTab("overview")
+      }
+    }
+  }, [baseline, creatingFollowUp, activeTab])
+
+  const tabColumnCount = useMemo(
+    () => 3 + followUps.length + (creatingFollowUp ? 1 : 0),
+    [followUps.length, creatingFollowUp]
+  )
+
+  const startNewFollowUp = useCallback(() => {
+    if (creatingFollowUp) {
+      setActiveTab("new-followup")
+      return
+    }
+
+    if (!baseline) {
+      toast({
+        title: "Baseline required",
+        description: "Please complete the baseline assessment before adding a follow-up.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setCreatingFollowUp(true)
+    setActiveTab("new-followup")
+  }, [baseline, creatingFollowUp])
+
+  useEffect(() => {
     // CRITICAL: Check authentication BEFORE setting up any listeners
     if (!patientId || !user?.uid || !db) {
       return () => {} // No cleanup needed
@@ -72,36 +106,7 @@ export default function PatientDetailPage({ params }: Props) {
     setLoading(true)
     const unsubscribers: (() => void)[] = []
 
-    // OPTIMIZED: Load from IndexedDB first for immediate display (offline-first)
-    const loadLocalData = async () => {
-      try {
-        const localPatient = await indexedDBService.loadForm(patientId)
-        if (localPatient) {
-          setPatient(prevPatient => {
-            const newPatientData = { ...localPatient } as Patient
-            if (prevPatient && JSON.stringify(prevPatient) === JSON.stringify(newPatientData)) {
-              return prevPatient
-            }
-            return newPatientData
-          })
-
-          // Extract baseline and followups from local patient document
-          if ((localPatient as any).baseline) {
-            setBaseline((localPatient as any).baseline)
-          }
-          if ((localPatient as any).followups && Array.isArray((localPatient as any).followups)) {
-            setFollowUps((localPatient as any).followups)
-          }
-        }
-      } catch (error) {
-        console.debug("Could not load from IndexedDB:", error)
-      }
-    }
-
-    // Load local data first (shows immediately while offline or before Firebase syncs)
-    loadLocalData()
-
-    // OPTIMIZED: Get patient document (now includes baseline and followups array)
+    // Get patient document from Firebase
     const patientRef = doc(db, `patients/${patientId}`)
 
     const unsubPatient = onSnapshot(
@@ -120,34 +125,26 @@ export default function PatientDetailPage({ params }: Props) {
           })
           
           // Extract baseline and followups from unified patient document
-          if (patientData.baseline) {
-            setBaseline(prevBaseline => {
-              if (prevBaseline && JSON.stringify(prevBaseline) === JSON.stringify(patientData.baseline)) {
-                return prevBaseline
-              }
-              return patientData.baseline
-            })
-          }
-          if (patientData.followups && Array.isArray(patientData.followups)) {
-            setFollowUps(prevFollowUps => {
-              if (prevFollowUps && JSON.stringify(prevFollowUps) === JSON.stringify(patientData.followups)) {
-                return prevFollowUps
-              }
-              return patientData.followups
-            })
-            // Dynamic visit tabs are now created from followUps array
-          } else {
-            setFollowUps(prevFollowUps => {
-              if (prevFollowUps && prevFollowUps.length === 0) {
-                return prevFollowUps
-              }
-              return []
-            })
-          }
+          const latestBaseline = patientData.baseline ?? null
+          setBaseline(prevBaseline => {
+            if (prevBaseline && latestBaseline && JSON.stringify(prevBaseline) === JSON.stringify(latestBaseline)) {
+              return prevBaseline
+            }
+            return latestBaseline
+          })
+
+          const latestFollowUps = Array.isArray(patientData.followups) ? (patientData.followups as FollowUpData[]) : []
+          setFollowUps(prevFollowUps => {
+            if (JSON.stringify(prevFollowUps) === JSON.stringify(latestFollowUps)) {
+              return prevFollowUps
+            }
+            return latestFollowUps
+          })
+          // Dynamic visit tabs are now created from followUps array
         } else {
-          // Patient not found in Firebase - keep local data if available
-          // This allows offline-first to work: user can still see local data
-          console.log("Patient not found in Firebase, using local data if available")
+          setPatient(null)
+          setBaseline(null)
+          setFollowUps([])
         }
         setLoading(false)
       },
@@ -160,7 +157,7 @@ export default function PatientDetailPage({ params }: Props) {
           return
         }
         console.error("Error fetching patient:", error)
-        // Don't clear patient on error - keep local data if available
+        setPatient(null)
         setLoading(false)
       }
     )
@@ -177,7 +174,7 @@ export default function PatientDetailPage({ params }: Props) {
     setExporting(true)
     try {
       // Pass all followups for trend analysis
-      await downloadPatientPDF(patient, baseline, followUps.length > 0 ? followUps[0] : null, followUps, doctor || undefined)
+      await downloadPatientPDF(patient, baseline, followUps.length > 0 ? followUps[0] : null, followUps, doctorForExports)
       toast({
         title: "Success",
         description: "Patient data exported to PDF successfully",
@@ -192,12 +189,12 @@ export default function PatientDetailPage({ params }: Props) {
     } finally {
       setExporting(false)
     }
-  }, [patient, baseline, followUps, doctor])
+  }, [patient, baseline, followUps, doctorForExports])
 
   const handleExportCSV = useCallback(() => {
     if (!patient) return
     try {
-      downloadCSV(patient, baseline, followUps.length > 0 ? followUps[0] : null, doctor)
+      downloadCSV(patient, baseline, followUps.length > 0 ? followUps[0] : null, doctorForExports)
       toast({
         title: "Success",
         description: "Patient data exported to CSV successfully",
@@ -210,12 +207,12 @@ export default function PatientDetailPage({ params }: Props) {
         variant: "destructive",
       })
     }
-  }, [patient, baseline, followUps, doctor])
+  }, [patient, baseline, followUps, doctorForExports])
 
   const handleExportExcel = useCallback(() => {
     if (!patient) return
     try {
-      downloadExcel(patient, baseline, followUps.length > 0 ? followUps[0] : null, doctor)
+      downloadExcel(patient, baseline, followUps.length > 0 ? followUps[0] : null, doctorForExports)
       toast({
         title: "Success",
         description: "Patient data exported to Excel successfully",
@@ -228,7 +225,7 @@ export default function PatientDetailPage({ params }: Props) {
         variant: "destructive",
       })
     }
-  }, [patient, baseline, followUps, doctor])
+  }, [patient, baseline, followUps, doctorForExports])
 
   if (loading) {
     return (
@@ -346,7 +343,10 @@ export default function PatientDetailPage({ params }: Props) {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full gap-0 bg-muted p-0" style={{ gridTemplateColumns: `repeat(${3 + followUps.length + 1}, minmax(0, 1fr))` }}>
+          <TabsList
+            className="grid w-full gap-0 bg-muted p-0"
+            style={{ gridTemplateColumns: `repeat(${tabColumnCount}, minmax(0, 1fr))` }}
+          >
             <TabsTrigger value="overview" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Overview</TabsTrigger>
             <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Baseline</TabsTrigger>
             
@@ -356,6 +356,12 @@ export default function PatientDetailPage({ params }: Props) {
                 Follow Up {index + 1}
               </TabsTrigger>
             ))}
+
+            {creatingFollowUp && (
+              <TabsTrigger value="new-followup" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
+                Follow Up {followUps.length + 1}
+              </TabsTrigger>
+            )}
             
             <TabsTrigger value="comparison" disabled={!baseline || followUps.length === 0} className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
               Comparison
@@ -406,38 +412,13 @@ export default function PatientDetailPage({ params }: Props) {
                         </Button>
                       )}
                       
-                      {baseline && followUps.length === 0 && (
+                      {baseline && (
                         <Button 
-                          onClick={() => {
-                            const firstVisit: FollowUpData = {
-                              visitNumber: 1,
-                              visitDate: "",
-                              hba1c: null as any,
-                              fpg: null as any,
-                              ppg: null as any,
-                              weight: null as any,
-                              bloodPressureSystolic: null as any,
-                              bloodPressureDiastolic: null as any,
-                              serumCreatinine: null as any,
-                              egfr: null as any,
-                              urinalysis: "",
-                              efficacy: "",
-                              tolerability: "",
-                              compliance: "",
-                              satisfaction: "",
-                              comments: "",
-                              actionTaken: [],
-                              outcome: [],
-                              adverseEvents: "",
-                              isDraft: true,
-                              status: "draft",
-                            } as FollowUpData
-                            setFollowUps([firstVisit])
-                            setActiveTab("visit-0")
-                          }}
+                          onClick={startNewFollowUp}
                           className="w-full bg-green-600 hover:bg-green-700 text-xs h-8"
+                          disabled={creatingFollowUp}
                         >
-                          + Add Follow-up
+                          {followUps.length === 0 ? "+ Add Follow-up" : "+ New Follow-up"}
                         </Button>
                       )}
                       
@@ -573,57 +554,17 @@ export default function PatientDetailPage({ params }: Props) {
                   {/* Divider */}
                   <div className="border-t pt-6" />
 
-                  {/* Add New FollowUp Button - Only if current one is saved (not draft) */}
-                  {visitIndex === followUps.length - 1 && visit.isDraft !== true && (
+                  {/* Add New FollowUp Button */}
+                  {visitIndex === followUps.length - 1 && (
                     <div className="flex justify-center">
                       <Button
-                        onClick={() => {
-                          // Create new empty followup entry
-                          const newFollowUp: FollowUpData = {
-                            visitNumber: followUps.length + 1,
-                            visitDate: "",
-                            hba1c: null as any,
-                            fpg: null as any,
-                            ppg: null as any,
-                            weight: null as any,
-                            bloodPressureSystolic: null as any,
-                            bloodPressureDiastolic: null as any,
-                            serumCreatinine: null as any,
-                            egfr: null as any,
-                            urinalysis: "",
-                            efficacy: "",
-                            tolerability: "",
-                            compliance: "",
-                            satisfaction: "",
-                            comments: "",
-                            actionTaken: [],
-                            outcome: [],
-                            adverseEvents: "",
-                            isDraft: true,
-                            status: "draft",
-                          } as FollowUpData
-                          
-                          // Add to followUps and switch to new followup
-                          const updatedFollowUps = [...followUps, newFollowUp]
-                          setFollowUps(updatedFollowUps)
-                          setActiveTab(`visit-${updatedFollowUps.length - 1}`)
-                        }}
+                        onClick={startNewFollowUp}
                         size="lg"
                         className="gap-2"
+                        disabled={creatingFollowUp}
                       >
                         <span>+ ADD NEW FOLLOW UP (Follow Up {followUps.length + 1})</span>
                       </Button>
-                    </div>
-                  )}
-                  
-                  {/* Show message if user tries to add without saving current */}
-                  {visitIndex === followUps.length - 1 && visit.isDraft === true && (
-                    <div className="flex justify-center">
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center max-w-md">
-                        <p className="text-sm text-amber-800">
-                          <strong>Save Follow Up {visitIndex + 1} first</strong> before adding the next follow-up visit.
-                        </p>
-                      </div>
                     </div>
                   )}
                 </div>
@@ -638,26 +579,45 @@ export default function PatientDetailPage({ params }: Props) {
             </TabsContent>
           ))}
 
-          {/* Show form for first visit if no visits exist yet */}
-          {baseline && followUps.length === 0 && activeTab !== "overview" && activeTab !== "baseline" && activeTab !== "comparison" && (
-            <TabsContent value="new-visit">
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Add First Follow-up Visit</CardTitle>
-                    <CardDescription>Complete the follow-up assessment</CardDescription>
-                  </CardHeader>
+          {creatingFollowUp && (
+            <TabsContent value="new-followup">
+              {baseline ? (
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold">Add Follow-up {followUps.length + 1}</h3>
+                      <p className="text-sm text-muted-foreground">Record the Week 12 ±2 weeks assessment</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setCreatingFollowUp(false)
+                        setActiveTab(followUps.length > 0 ? `visit-${followUps.length - 1}` : "overview")
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                  <MemoizedFollowUpForm
+                    patientId={patient.id}
+                    existingData={null}
+                    baselineDate={patient.baselineVisitDate}
+                    allFollowUps={followUps}
+                    onSuccess={() => {
+                      setCreatingFollowUp(false)
+                      setActiveTab("overview")
+                    }}
+                  />
+                </div>
+              ) : (
+                <Card className="p-8 text-center">
+                  <p className="text-muted-foreground">Please complete baseline assessment first</p>
+                  <Button className="mt-4" onClick={() => setActiveTab("baseline")}>
+                    Go to Baseline
+                  </Button>
                 </Card>
-                <MemoizedFollowUpForm
-                  patientId={patient.id}
-                  existingData={null}
-                  baselineDate={patient.baselineVisitDate}
-                  allFollowUps={[]}
-                  onSuccess={() => {
-                    setActiveTab("overview")
-                  }}
-                />
-              </div>
+              )}
             </TabsContent>
           )}
 

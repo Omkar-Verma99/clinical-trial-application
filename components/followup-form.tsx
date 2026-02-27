@@ -3,8 +3,9 @@
 import type React from "react"
 
 import { useState, memo } from "react"
-import { generateSecureUUID } from "@/lib/secure-id"
 import { useAuth } from "@/contexts/auth-context"
+import { setDoc, doc, arrayUnion } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 import DOMPurify from "dompurify"
 import type { FollowUpData } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -13,8 +14,8 @@ import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { useIndexedDBSync } from "@/hooks/use-indexed-db-sync"
 import { Textarea } from "@/components/ui/textarea"
+import { logError } from "@/lib/error-tracking"
 
 interface FollowUpFormProps {
   patientId: string
@@ -27,7 +28,6 @@ interface FollowUpFormProps {
 export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess, baselineDate, allFollowUps = [] }: FollowUpFormProps) {
   const { toast } = useToast()
   const { user } = useAuth()
-  const { saveFormData } = useIndexedDBSync(patientId)
   const [loading, setLoading] = useState(false)
   
   // Calculate visitNumber based on date difference from baseline (in weeks)
@@ -120,7 +120,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     Unknown: Array.isArray(existingData?.outcome) ? existingData.outcome.includes("Unknown") : false,
   })
 
-  const handleSubmit = async (e: React.FormEvent, saveAsDraft = false) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     // CRITICAL: Verify user is loaded and has uid before saving
@@ -152,8 +152,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       if (!formData.overallTolerability) validationErrors.push("Overall tolerability is required")
       if (!formData.complianceJudgment) validationErrors.push("Compliance judgment is required")
 
-      if (!saveAsDraft && validationErrors.length > 0) {
-        setLoading(false)
+      if (validationErrors.length > 0) {
         toast({
           variant: "destructive",
           title: "Missing required fields",
@@ -177,8 +176,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       if (formData.bloodPressureSystolic && (isNaN(bpSystolic) || bpSystolic < 70 || bpSystolic > 200)) rangeErrors.push("BP Systolic must be between 70-200 mmHg")
       if (formData.bloodPressureDiastolic && (isNaN(bpDiastolic) || bpDiastolic < 40 || bpDiastolic > 130)) rangeErrors.push("BP Diastolic must be between 40-130 mmHg")
 
-      if (!saveAsDraft && rangeErrors.length > 0) {
-        setLoading(false)
+      if (rangeErrors.length > 0) {
         toast({
           variant: "destructive",
           title: "Invalid Values",
@@ -270,53 +268,44 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           confirmationCheckbox: formData.physicianConfirmation,
         },
         comments: formData.additionalComments,
-        isDraft: saveAsDraft,
-        status: saveAsDraft ? "draft" : "submitted",
         createdAt: existingData?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }
 
-      // CRITICAL: Save to IndexedDB FIRST (immediate, offline-safe)
-      // Use UUID for collision-proof form ID generation
-      const formId = (existingData as any)?.id || `followup-${generateSecureUUID()}`
-      const idbResult = await saveFormData(
-        formId,
-        'followup',
-        data,
-        saveAsDraft,
-        saveAsDraft ? [] : validationErrors
-      )
+      try {
+        // Save followup to Firebase by updating patient document
+        const patientDocRef = doc(db, "patients", patientId)
+        await setDoc(patientDocRef, {
+          followups: arrayUnion(data),
+          updatedAt: new Date().toISOString()
+        }, { merge: true })
 
-      if (!idbResult.success) {
-        setLoading(false)
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.log('✓ Follow-up form saved to Firebase')
+        }
+      } catch (error) {
+        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+          console.error("Error saving follow-up data:", error)
+        }
+        logError(error as Error, {
+          action: "saveFollowUpData",
+          severity: "high"
+        })
         toast({
           variant: "destructive",
-          title: "Error saving locally",
-          description: idbResult.error || "Failed to save to local storage",
+          title: "Error saving data",
+          description: error instanceof Error ? error.message : "Please try again.",
         })
         return
       }
 
-      // Only submit to Firebase if not draft (background sync will handle it)
-      // V4 UNIFIED STRUCTURE: Sync hook will manage Firebase updates via sync queue
-      // This ensures offline-first: data saved to IndexedDB first, then queued for Firebase sync
-      if (!saveAsDraft) {
-        // Note: Firebase sync is handled by useIndexedDBSync hook's performSync()
-        // When user comes online, all queued forms are synced to Firebase automatically
-        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-          console.log('✓ Form queued for Firebase sync (will sync when online)')
-        }
-      }
-
       toast({
-        title: saveAsDraft ? "✓ Saved as draft" : "✓ Follow-up assessment saved",
-        description: saveAsDraft ? "You can continue editing later." : "Week 12 assessment has been recorded.",
+        title: "✓ Follow-up assessment saved",
+        description: "Week 12 assessment has been recorded.",
       })
 
-      setLoading(false)
       onSuccess()
     } catch (error) {
-      setLoading(false)
       if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
         console.error("Error saving follow-up data:", error)
       }
@@ -1226,15 +1215,6 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           <div className="flex gap-3 pt-4 border-t">
             <Button type="submit" disabled={loading} className="flex-1">
               {loading ? "Saving..." : "Save Follow-up Assessment"}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={(e) => handleSubmit(e as any, true)}
-              disabled={loading}
-              className="flex-1 bg-transparent"
-            >
-              Save as Draft
             </Button>
           </div>
         </form>
