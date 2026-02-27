@@ -107,15 +107,7 @@ export const ComparisonView = memo(function ComparisonView({ baseline, followUp,
     }
   }, [followUp])
 
-  // Get structured patient outcomes
-  const patientOutcomes = useMemo(() => {
-    const outcomes = (followUp as any).patientReportedOutcomes
-    return outcomes || {
-      overallSatisfaction: followUp.satisfaction || "Not recorded",
-      giToleranceVsPriorTherapy: "Not recorded",
-      confidenceInManagingDiabetes: followUp.energyLevels || "Not recorded",
-    }
-  }, [followUp])
+  // SECTION N (Patient Reported Outcomes) has been removed from CRF
 
   // Get adherence data
   const adherenceData = useMemo(() => {
@@ -352,31 +344,7 @@ export const ComparisonView = memo(function ComparisonView({ baseline, followUp,
           </div>
 
           {/* SECTION N - PATIENT REPORTED OUTCOMES */}
-          {patientOutcomes && (
-            <div className="pt-4 border-t">
-              <h3 className="font-semibold text-lg mb-4">Patient Reported Outcomes</h3>
-              <div className="grid md:grid-cols-3 gap-4">
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-sm text-muted-foreground uppercase font-semibold mb-2">Overall Satisfaction</p>
-                    <p className="text-lg font-bold text-purple-700">{patientOutcomes.overallSatisfaction}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-sm text-muted-foreground uppercase font-semibold mb-2">GI Tolerance</p>
-                    <p className="text-lg font-bold text-purple-700">{patientOutcomes.giToleranceVsPriorTherapy || "Not recorded"}</p>
-                  </CardContent>
-                </Card>
-                <Card>
-                  <CardContent className="pt-4">
-                    <p className="text-sm text-muted-foreground uppercase font-semibold mb-2">Confidence in Diabetes Management</p>
-                    <p className="text-lg font-bold text-purple-700">{patientOutcomes.confidenceInManagingDiabetes}</p>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          )}
+
 
           {/* Multi-Visit Trends (if available) */}
           {followUps && followUps.length > 1 && (

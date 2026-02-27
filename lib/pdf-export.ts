@@ -289,34 +289,21 @@ export async function generatePatientPDF(
       yPos = drawKeyValue(doc, "Prefer Long-term:", visit.physicianAssessment.preferKcMeSempaForLongTerm, yPos, margin, col1Width, col2Start)
     }
 
-    // Patient Reported Outcomes
-    if (visit.patientReportedOutcomes) {
-      yPos += 1
-      doc.setFont("helvetica", "bold")
-      doc.setFontSize(9)
-      doc.text("Patient Reported Outcomes:", margin, yPos)
-      yPos += 3
-      doc.setFont("helvetica", "normal")
-      yPos = drawKeyValue(doc, "Overall Satisfaction:", visit.patientReportedOutcomes.overallSatisfaction, yPos, margin, col1Width, col2Start)
-      yPos = drawKeyValue(doc, "GI Tolerance:", visit.patientReportedOutcomes.giToleranceVsPriorTherapy, yPos, margin, col1Width, col2Start)
-      yPos = drawKeyValue(doc, "Diabetes Confidence:", visit.patientReportedOutcomes.confidenceInManagingDiabetes, yPos, margin, col1Width, col2Start)
-    }
-
     yPos += 2
   })
 
-  // ===== DATA PRIVACY & CONFIDENTIALITY =====
+  // ===== DATA PRIVACY & CONFIDENTIALITY ===== (SECTION O - From Follow-up form, NOT Baseline)
   if (yPos > pageHeight - 60) { doc.addPage(); yPos = margin }
-  yPos = addSectionHeading(doc, "8. DATA PRIVACY & CONFIDENTIALITY", yPos, margin, pageWidth)
+  yPos = addSectionHeading(doc, "7. DATA PRIVACY & CONFIDENTIALITY", yPos, margin, pageWidth)
   doc.setFont("helvetica", "normal")
-  yPos = drawCheckbox(doc, "No personal identifiers recorded", baseline?.dataPrivacy?.noPersonalIdentifiersRecorded || false, yPos, col2Start)
-  yPos = drawCheckbox(doc, "Data collected as routine clinical practice", baseline?.dataPrivacy?.dataCollectedAsRoutineClinicalPractice || false, yPos, col2Start)
-  yPos = drawCheckbox(doc, "Patient identity mapping at clinic only", baseline?.dataPrivacy?.patientIdentityMappingAtClinicOnly || false, yPos, col2Start)
+  yPos = drawCheckbox(doc, "No personal identifiers recorded", followUp?.dataPrivacy?.noPersonalIdentifiersRecorded || false, yPos, col2Start)
+  yPos = drawCheckbox(doc, "Data collected as routine clinical practice", followUp?.dataPrivacy?.dataCollectedAsRoutineClinicalPractice || false, yPos, col2Start)
+  yPos = drawCheckbox(doc, "Patient identity mapping at clinic only", followUp?.dataPrivacy?.patientIdentityMappingAtClinicOnly || false, yPos, col2Start)
   yPos += 3
 
-  // ===== PHYSICIAN DECLARATION & SIGNATURE =====
+  // ===== PHYSICIAN DECLARATION & SIGNATURE ===== (SECTION P - NOW 8 INSTEAD OF 9)
   if (yPos > pageHeight - 50) { doc.addPage(); yPos = margin }
-  yPos = addSectionHeading(doc, "9. PHYSICIAN DECLARATION & CERTIFICATION", yPos, margin, pageWidth)
+  yPos = addSectionHeading(doc, "8. PHYSICIAN DECLARATION & CERTIFICATION", yPos, margin, pageWidth)
   
   doc.setFontSize(8)
   doc.setFont("helvetica", "normal")

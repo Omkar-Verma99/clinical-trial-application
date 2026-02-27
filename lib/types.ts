@@ -200,14 +200,6 @@ export interface FollowUpData {
     }
   }
   
-  // SECTION N - Patient-Reported Outcomes (UPDATED)
-  patientReportedOutcomes?: {
-    overallSatisfaction: "Very satisfied" | "Satisfied" | "Neutral" | "Not satisfied"
-    giToleranceVsPriorTherapy?: "Improved" | "Same" | "Worse"
-    confidenceInManagingDiabetes?: "Improved" | "Same" | "Worse"
-    additionalComments?: string
-  }
-  
   // SECTION O - Data Privacy & Confidentiality
   dataPrivacy?: {
     noPersonalIdentifiersRecorded: boolean  // Checkbox confirmation

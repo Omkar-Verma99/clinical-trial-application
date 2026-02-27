@@ -99,9 +99,6 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     ckdPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.ckdPatients || false,
     htnT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.htnPlusT2dm || false,
     elderlyPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.elderlyPatients || false,
-    overallSatisfaction: existingData?.patientReportedOutcomes?.overallSatisfaction || "",
-    giTolerance: existingData?.patientReportedOutcomes?.giToleranceVsPriorTherapy || "",
-    confidenceInManaging: existingData?.patientReportedOutcomes?.confidenceInManagingDiabetes || "",
     noPersonalIdentifiers: existingData?.dataPrivacy?.noPersonalIdentifiersRecorded || false,
     dataAsRoutinePractice: existingData?.dataPrivacy?.dataCollectedAsRoutineClinicalPractice || false,
     patientIdentityMapping: existingData?.dataPrivacy?.patientIdentityMappingAtClinicOnly || false,
@@ -154,7 +151,6 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       if (!formData.overallEfficacy) validationErrors.push("Overall efficacy is required")
       if (!formData.overallTolerability) validationErrors.push("Overall tolerability is required")
       if (!formData.complianceJudgment) validationErrors.push("Compliance judgment is required")
-      if (!formData.overallSatisfaction) validationErrors.push("Overall satisfaction is required")
 
       if (!saveAsDraft && validationErrors.length > 0) {
         setLoading(false)
@@ -264,11 +260,6 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
             htnPlusT2dm: formData.htnT2dm,
             elderlyPatients: formData.elderlyPatients,
           },
-        },
-        patientReportedOutcomes: {
-          overallSatisfaction: formData.overallSatisfaction,
-          giToleranceVsPriorTherapy: formData.giTolerance,
-          confidenceInManagingDiabetes: formData.confidenceInManaging,
         },
         dataPrivacy: {
           noPersonalIdentifiersRecorded: formData.noPersonalIdentifiers,
@@ -988,14 +979,14 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     checked={formData.hypoglycemiaMild}
                     onCheckedChange={(checked) => setFormData({ ...formData, hypoglycemiaMild: checked as boolean })}
                   />
-                  <span className="font-normal">Hypoglycemia – mild</span>
+                  <span className="font-normal">Hypoglycemia - mild (ADA Level 1-Blood Glucose &lt;70 mg/dL and &ge;54 mg/dL)</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.hypoglycemiaModerate}
                     onCheckedChange={(checked) => setFormData({ ...formData, hypoglycemiaModerate: checked as boolean })}
                   />
-                  <span className="font-normal">Hypoglycemia – moderate</span>
+                  <span className="font-normal">Hypoglycemia - moderate (ADA Level 2 - Blood glucose &lt;54 mg/dL)</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
@@ -1165,58 +1156,6 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                   Elderly patients
                 </Label>
               </div>
-            </div>
-          </div>
-
-          {/* SECTION N - Patient-Reported Outcomes */}
-          <div className="space-y-4 pt-4 border-t">
-            <h3 className="font-semibold text-lg">Patient-Reported Outcomes</h3>
-            
-            <div className="space-y-2">
-              <Label htmlFor="satisfaction">Overall satisfaction with therapy *</Label>
-              <select
-                id="satisfaction"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={formData.overallSatisfaction}
-                onChange={(e) => setFormData({ ...formData, overallSatisfaction: e.target.value })}
-                required
-              >
-                <option value="">Select...</option>
-                <option value="Very satisfied">Very satisfied</option>
-                <option value="Satisfied">Satisfied</option>
-                <option value="Neutral">Neutral</option>
-                <option value="Not satisfied">Not satisfied</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="giTolerance">GI tolerance vs prior therapy</Label>
-              <select
-                id="giTolerance"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={formData.giTolerance}
-                onChange={(e) => setFormData({ ...formData, giTolerance: e.target.value })}
-              >
-                <option value="">Select...</option>
-                <option value="Improved">Improved</option>
-                <option value="Same">Same</option>
-                <option value="Worse">Worse</option>
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="confidence">Patient confidence in managing diabetes</Label>
-              <select
-                id="confidence"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={formData.confidenceInManaging}
-                onChange={(e) => setFormData({ ...formData, confidenceInManaging: e.target.value })}
-              >
-                <option value="">Select...</option>
-                <option value="Improved">Improved</option>
-                <option value="Same">Same</option>
-                <option value="Worse">Worse</option>
-              </select>
             </div>
           </div>
 

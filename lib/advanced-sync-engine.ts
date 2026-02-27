@@ -26,6 +26,7 @@ import {
 import { db } from '@/lib/firebase'
 import { offlineQueue, type QueuedChange } from '@/lib/offline-queue'
 import { offlineFormHandler } from '@/lib/offline-form-handler'
+import type { FollowUpData } from '@/lib/types'
 
 export interface SyncResult {
   success: boolean
@@ -282,8 +283,8 @@ class AdvancedSyncEngine {
       const patientDocData = patientSnap.data() || {}
       const followups = patientDocData.followups || []
       
-      // Check if followup already exists by formId
-      const existingIndex = followups.findIndex(f => f.formId === formData.formId)
+      // Check if followup already exists by visitNumber or date
+      const existingIndex = followups.findIndex((f: any) => f.visitNumber === formData.visitNumber)
       if (existingIndex >= 0) {
         followups[existingIndex] = { ...formData, syncedAt: serverTimestamp(), syncedFromOffline: true }
       } else {

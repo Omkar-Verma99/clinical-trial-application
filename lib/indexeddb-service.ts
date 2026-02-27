@@ -411,6 +411,7 @@ class IndexedDBService {
                 data,
                 formId: patientId,
                 formType: 'patient',
+                status: 'pending',
                 createdAt: new Date().toISOString(),
                 retryCount: 0,
                 maxRetries: 5,
@@ -682,11 +683,9 @@ class IndexedDBService {
         const migratedPatient: PatientDataRecord = {
           ...patient,
           patientId: realFirestoreId, // Use real ID as the primary key
-          firebaseId: realFirestoreId,
           metadata: {
             ...patient.metadata,
-            isSynced: true, // Mark as synced since we just saved to Firebase
-            lastSyncTime: new Date().toISOString(),
+            lastSynced: new Date().toISOString(),
           }
         }
 
