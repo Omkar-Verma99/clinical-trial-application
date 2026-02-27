@@ -22,8 +22,8 @@ service cloud.firestore {
       // Doctors can see their own patients; admins can see all
       allow read: if isDoctorOwner(resource.data) || isAdmin();
 
-      // Doctors create their own patients; doctorId must match auth and stay unchanged
-      allow create: if isDoctorOwner(request.resource.data) && request.resource.data.patientId != null;
+      // Doctors create their own patients; doctorId must match auth
+      allow create: if request.resource.data.doctorId == request.auth.uid;
 
       allow update: if isDoctorOwner(resource.data) && isDoctorOwner(request.resource.data);
 
