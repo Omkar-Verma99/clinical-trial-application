@@ -312,7 +312,8 @@ export default function AddPatientPage() {
         'patient',
         patientDataWithId,
         saveAsDraft,
-        []
+        [],
+        patientId  // Pass patientId as override for new patient creation
       )
 
       if (!idbResult.success) {

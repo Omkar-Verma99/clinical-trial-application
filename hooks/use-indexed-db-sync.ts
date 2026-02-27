@@ -437,13 +437,17 @@ export function useIndexedDBSync(patientId: string) {
       formType: 'baseline' | 'followup' | 'patient',
       data: any,
       isDraft: boolean = false,
-      validationErrors: string[] = []
+      validationErrors: string[] = [],
+      overridePatientId?: string  // For when creating new patient with UUID
     ) => {
       try {
+        // Use override patient ID if provided (for patient creation), otherwise use hook's patient ID
+        const actualPatientId = overridePatientId || patientId
+        
         const result = await indexedDBService.saveForm(
           formId,
           formType,
-          patientId,
+          actualPatientId,
           data,
           isDraft,
           validationErrors
