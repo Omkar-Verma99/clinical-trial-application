@@ -259,7 +259,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const user = userCredential.user
 
     try {
-      // Send email verification
+      // Send Firebase email verification with custom template
+      // Template is customized in Firebase Console: Authentication → Email Templates
       await sendEmailVerification(user)
       logInfo("Verification email sent", { userId: user.uid, email })
     } catch (error) {
