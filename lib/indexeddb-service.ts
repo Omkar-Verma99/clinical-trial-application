@@ -387,7 +387,7 @@ class IndexedDBService {
         // SPECIAL CASE: Creating a new patient
         if (formType === 'patient') {
           const newPatient: PatientDataRecord = {
-            id: patientId,
+            patientId: patientId,  // Use patientId (NOT id) - this is the IndexedDB keyPath
             ...data,
             baseline: null,
             followups: [],
