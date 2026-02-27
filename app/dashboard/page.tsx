@@ -1,12 +1,12 @@
 "use client"
 
-import { useEffect, useState, useMemo, useCallback, useRef } from "react"
+import { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { collection, query, where, orderBy, onSnapshot, getDocs, doc, getDoc } from "firebase/firestore"
+import { collection, query, where, orderBy, onSnapshot, limit as fbLimit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import type { Patient, BaselineData, FollowUpData } from "@/lib/types"
+import type { Patient } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -248,9 +248,8 @@ export default function DashboardPage() {
   const router = useRouter()
   const [patients, setPatients] = useState<PatientWithStatus[]>([])
   const [loadingPatients, setLoadingPatients] = useState(true)
-  const [pagination, setPagination] = useState({ offset: 0, limit: 15, hasMore: false })
+  const [pagination, setPagination] = useState({ offset: 0, limit: 12, hasMore: false })
   const [paginationLoading, setPaginationLoading] = useState(false)
-  const unsubscribeRef = useRef<(() => void) | null>(null)
 
   // Debounced pagination handler
   const debounce = (func: Function, delay: number) => {
@@ -284,113 +283,48 @@ export default function DashboardPage() {
     }
   }, [user, loading, router])
 
-  /**
-   * Set up real-time listener for patient list
-   * Handles tab visibility changes to prevent ERR_NETWORK_IO_SUSPENDED
-   */
-  const setupRealtimeListener = useCallback(() => {
+  // Realtime listener with capped payload for fast loads
+  useEffect(() => {
     if (!user || !db) return
+    setLoadingPatients(true)
 
-    // Set up real-time listener for patient list
     const q = query(
       collection(db, "patients"),
       where("doctorId", "==", user.uid),
-      orderBy("createdAt", "desc")
+      orderBy("createdAt", "desc"),
+      fbLimit(120) // cap to keep mobile fast
     )
-
-    // Set a timeout to ensure loading state is cleared even if listener fails
-    const timeoutId = setTimeout(() => {
-      if (loadingPatients) {
-        setLoadingPatients(false)
-      }
-    }, 5000)
 
     const unsubscribe = onSnapshot(
       q,
-      async (querySnapshot) => {
-        try {
-          const patientsData: PatientWithStatus[] = []
+      (snapshot) => {
+        const patientsData: PatientWithStatus[] = snapshot.docs.map((patientDoc) => {
+          const patientData = patientDoc.data() as Omit<Patient, 'id'>
+          return {
+            ...patientData,
+            id: patientDoc.id,
+            hasBaseline: !!patientData.baseline,
+            hasFollowUp: !!(patientData.followups && patientData.followups.length > 0),
+          } as PatientWithStatus
+        })
 
-          // V4 Schema: Build list from unified /patients documents
-          for (const patientDoc of querySnapshot.docs) {
-            const patientData = patientDoc.data() as Omit<Patient, 'id'>
-            
-            patientsData.push({
-              ...patientData,
-              id: patientDoc.id,
-              hasBaseline: !!patientData.baseline,
-              hasFollowUp: !!(patientData.followups && patientData.followups.length > 0),
-            } as PatientWithStatus)
-          }
-
-          // Apply pagination
-          const paginatedPatients = patientsData.slice(pagination.offset, pagination.offset + pagination.limit)
-
-          setPatients(paginatedPatients)
-          setLoadingPatients(false)
-          setPagination(prev => ({
-            ...prev,
-            hasMore: querySnapshot.docs.length > pagination.offset + pagination.limit
-          }))
-          setPaginationLoading(false)
-          clearTimeout(timeoutId)
-        } catch (error) {
-          console.error("Error fetching patient details:", error)
-          setLoadingPatients(false)
-          setPaginationLoading(false)
-          clearTimeout(timeoutId)
-        }
-      },
-      (error) => {
-        console.error("Error setting up real-time listener:", error)
+        setPatients(patientsData)
+        setPagination(prev => ({
+          ...prev,
+          hasMore: patientsData.length > prev.limit
+        }))
         setLoadingPatients(false)
         setPaginationLoading(false)
-        clearTimeout(timeoutId)
+      },
+      (error) => {
+        console.error("Error fetching patient details:", error)
+        setLoadingPatients(false)
+        setPaginationLoading(false)
       }
     )
 
-    unsubscribeRef.current = unsubscribe
-    return () => {
-      unsubscribe()
-      clearTimeout(timeoutId)
-    }
-  }, [user, pagination.offset, loadingPatients])
-
-  /**
-   * Handle tab visibility changes - restart listener when tab becomes visible
-   * Fixes: net::ERR_NETWORK_IO_SUSPENDED error
-   */
-  const handleVisibilityChange = useCallback(() => {
-    const isVisible = !document.hidden
-
-    if (isVisible) {
-      // Tab became visible - restart listener
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current()
-        unsubscribeRef.current = null
-      }
-      
-      // Restart the listener
-      setupRealtimeListener()
-    }
-  }, [setupRealtimeListener])
-
-  // Initialize listener and visibility handler
-  useEffect(() => {
-    // Setup real-time listener
-    setupRealtimeListener()
-
-    // Add visibility change handler
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      // Cleanup
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current()
-      }
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [setupRealtimeListener, handleVisibilityChange])
+    return () => unsubscribe()
+  }, [user])
 
   const getNextStatus = useCallback((patient: PatientWithStatus) => {
     if (!patient.hasBaseline) {
@@ -421,8 +355,12 @@ export default function DashboardPage() {
   }, [router])
 
   // Memoize patient list rendering
+  const currentPagePatients = useMemo(() => {
+    return patients.slice(pagination.offset, pagination.offset + pagination.limit)
+  }, [patients, pagination.offset, pagination.limit])
+
   const patientsList = useMemo(() => {
-    return patients.map((patient) => (
+    return currentPagePatients.map((patient) => (
       <PatientCard
         key={patient.id}
         patient={patient}
@@ -431,7 +369,15 @@ export default function DashboardPage() {
         handleActionClick={handleActionClick}
       />
     ))
-  }, [patients, getNextStatus, getStatusColor, handleActionClick])
+  }, [currentPagePatients, getNextStatus, getStatusColor, handleActionClick])
+
+  // Update hasMore when data or pagination changes
+  useEffect(() => {
+    setPagination(prev => ({
+      ...prev,
+      hasMore: patients.length > prev.offset + prev.limit
+    }))
+  }, [patients, pagination.offset, pagination.limit])
 
   if (loading || !user) {
     return (
@@ -446,7 +392,15 @@ export default function DashboardPage() {
       <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="/favicon-192x192.png" alt="Kollectcare" width={32} height={32} className="h-8 w-8 rounded" />
+            <Image
+              src="/favicon-192x192.png"
+              alt="Kollectcare"
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded"
+              priority
+              sizes="32px"
+            />
             <span className="text-xl font-bold">Kollectcare</span>
           </div>
           <div className="flex items-center gap-4">
@@ -527,7 +481,7 @@ export default function DashboardPage() {
                   <>Updating...</>
                 ) : (
                   <>
-                    Showing patients {pagination.offset + 1} to {Math.min(pagination.offset + pagination.limit, pagination.offset + patients.length)} 
+                    Showing patients {pagination.offset + 1} to {pagination.offset + currentPagePatients.length}
                     {pagination.hasMore && ` (more available)`}
                   </>
                 )}
@@ -544,7 +498,7 @@ export default function DashboardPage() {
                 <Button
                   variant="outline"
                   onClick={handleNextPage}
-                  disabled={!pagination.hasMore || patients.length < pagination.limit || paginationLoading}
+                  disabled={!pagination.hasMore || currentPagePatients.length < pagination.limit || paginationLoading}
                   className="bg-transparent"
                 >
                   {paginationLoading ? "..." : "Next"}

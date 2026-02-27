@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, memo } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { setDoc, doc, arrayUnion } from "firebase/firestore"
+import { doc, arrayUnion, writeBatch } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import DOMPurify from "dompurify"
 import type { FollowUpData } from "@/lib/types"
@@ -273,12 +273,15 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       }
 
       try {
-        // Save followup to Firebase by updating patient document
+        // Save followup to Firebase by updating patient document in a single batch
         const patientDocRef = doc(db, "patients", patientId)
-        await setDoc(patientDocRef, {
+        const batch = writeBatch(db)
+        batch.set(patientDocRef, {
           followups: arrayUnion(data),
           updatedAt: new Date().toISOString()
         }, { merge: true })
+
+        await batch.commit()
 
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.log('✓ Follow-up form saved to Firebase')

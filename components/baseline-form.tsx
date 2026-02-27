@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, memo } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { setDoc, doc } from "firebase/firestore"
+import { setDoc, doc, writeBatch } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { BaselineData } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -163,12 +163,15 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
       }
 
       try {
-        // Save to Firebase
+        // Save to Firebase in a single batch (merge to preserve other fields)
         const patientDocRef = doc(db, "patients", patientId)
-        await setDoc(patientDocRef, {
+        const batch = writeBatch(db)
+        batch.set(patientDocRef, {
           baseline: data,
           updatedAt: new Date().toISOString()
         }, { merge: true })
+
+        await batch.commit()
 
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.log('✓ Form saved to Firebase')

@@ -6,7 +6,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { setDoc, doc, collection } from "firebase/firestore"
+import { writeBatch, doc, collection } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -147,6 +147,17 @@ export default function AddPatientPage() {
       return
     }
 
+    // Helper: parse numbers safely and avoid NaN/Infinity writes to Firestore
+    const toIntOrNull = (val: string) => {
+      const n = Number.parseInt(val)
+      return Number.isFinite(n) ? n : null
+    }
+
+    const toFloatOrNull = (val: string) => {
+      const n = Number.parseFloat(val)
+      return Number.isFinite(n) ? n : null
+    }
+
     // Validate required fields before saving to Firestore
     const requiredFields = [
       { field: formData.patientCode, name: "Patient Code" },
@@ -211,6 +222,23 @@ export default function AddPatientPage() {
         .map(([key]) => key)
         .concat(reasonForTripleFDC.other ? [sanitizeInput(reasonForTripleFDC.other)] : [])
 
+      // Parse numerics robustly to avoid NaN writes
+      const ageValue = toIntOrNull(formData.age)
+      const durationValue = toFloatOrNull(formData.durationOfDiabetes)
+      const heightValue = toFloatOrNull(formData.height)
+      const weightValue = toFloatOrNull(formData.weight)
+      const bmiValueParsed = toFloatOrNull(formData.bmi)
+
+      if (ageValue === null || durationValue === null) {
+        toast({
+          variant: "destructive",
+          title: "Invalid numeric values",
+          description: "Age and Duration of Diabetes must be valid numbers.",
+        })
+        setLoading(false)
+        return
+      }
+
       // Sanitize text inputs
       const sanitizedFormData = sanitizeObject(formData, ['patientCode', 'studySiteCode', 'investigatorName', 'smokingStatus', 'alcoholIntake', 'physicalActivityLevel'])
 
@@ -220,12 +248,12 @@ export default function AddPatientPage() {
         studySiteCode: sanitizedFormData.studySiteCode,
         investigatorName: sanitizedFormData.investigatorName,
         baselineVisitDate: sanitizedFormData.baselineVisitDate,
-        age: sanitizedFormData.age ? Number.parseInt(sanitizedFormData.age) : NaN,
+        age: ageValue,
         gender: sanitizedFormData.gender,
-        height: sanitizedFormData.height ? Number.parseFloat(sanitizedFormData.height) : null,
-        weight: sanitizedFormData.weight ? Number.parseFloat(sanitizedFormData.weight) : null,
-        bmi: sanitizedFormData.bmi ? Number.parseFloat(sanitizedFormData.bmi) : null,
-        durationOfDiabetes: sanitizedFormData.durationOfDiabetes ? Number.parseFloat(sanitizedFormData.durationOfDiabetes) : NaN,
+        height: heightValue,
+        weight: weightValue,
+        bmi: bmiValueParsed,
+        durationOfDiabetes: durationValue,
         smokingStatus: sanitizedFormData.smokingStatus || null,
         alcoholIntake: sanitizedFormData.alcoholIntake || null,
         physicalActivityLevel: sanitizedFormData.physicalActivityLevel || null,
@@ -284,9 +312,11 @@ export default function AddPatientPage() {
         id: patientId,
       }
 
-      // Save directly to Firebase (online-only)
+      // Save directly to Firebase (online-only) using batch to minimize roundtrips
       try {
-        await setDoc(patientDocRef, patientDataWithId)
+        const batch = writeBatch(db)
+        batch.set(patientDocRef, patientDataWithId)
+        await batch.commit()
 
         if (isDevelopmentEnv()) {
           console.log(`✓ Patient saved to Firebase: ${patientId}`)
@@ -296,10 +326,11 @@ export default function AddPatientPage() {
           action: "addPatient",
           severity: "high"
         })
+        const errMsg = firebaseError instanceof Error ? firebaseError.message : "Failed to save patient to database."
         toast({
           variant: "destructive",
           title: "Error saving patient",
-          description: "Failed to save patient to database. Please try again.",
+          description: errMsg,
         })
         setLoading(false)
         return

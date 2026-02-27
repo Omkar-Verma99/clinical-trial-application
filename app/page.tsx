@@ -31,7 +31,15 @@ export default function HomePage() {
       <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image src="/favicon-192x192.png" alt="Kollectcare" width={40} height={40} className="h-10 w-10 rounded-lg" />
+            <Image
+              src="/favicon-192x192.png"
+              alt="Kollectcare"
+              width={40}
+              height={40}
+              className="h-10 w-10 rounded-lg"
+              priority
+              sizes="40px"
+            />
             <span className="text-2xl font-bold text-foreground">Kollectcare</span>
           </div>
           <div className="flex gap-3">
