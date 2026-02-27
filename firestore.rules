@@ -5,64 +5,63 @@ service cloud.firestore {
     function isAuthenticated() {
       return request.auth != null;
     }
+
+    function isAdmin() {
+      return isAuthenticated() && exists(/databases/{database}/documents/admins/$(request.auth.uid));
+    }
+
+    function isDoctorOwner(doc) {
+      return isAuthenticated() && doc.doctorId == request.auth.uid;
+    }
     
     // ===== UNIFIED PATIENTS COLLECTION =====
     // ONE document per patient with all data (patientInfo + baseline + followups)
     // OPTIMIZED: Single document read/write per patient
     // PERFORMANCE: 3-4x faster, 67% lower cost
     match /patients/{patientId} {
-      allow read: if isAuthenticated() && 
-        resource.data.doctorId == request.auth.uid;
-      
-      allow create: if isAuthenticated() && 
-        request.resource.data.doctorId == request.auth.uid &&
-        request.resource.data.patientId != null;
-      
-      allow update: if isAuthenticated() && 
-        resource.data.doctorId == request.auth.uid;
-      
-      allow delete: if isAuthenticated() && 
-        resource.data.doctorId == request.auth.uid;
+      // Doctors can see their own patients; admins can see all
+      allow read: if isDoctorOwner(resource.data) || isAdmin();
+
+      // Doctors create their own patients; doctorId must match auth and stay unchanged
+      allow create: if isDoctorOwner(request.resource.data) && request.resource.data.patientId != null;
+
+      allow update: if isDoctorOwner(resource.data) && isDoctorOwner(request.resource.data);
+
+      allow delete: if isDoctorOwner(resource.data);
     }
 
     // ===== BASELINE DATA COLLECTION =====
     // Legacy/fallback support for baseline forms
     // Read-only, used by real-time sync listeners
     match /baselineData/{docId} {
-      allow read: if isAuthenticated() &&
-        resource.data.patientId != null &&
+      allow read: if resource.data.patientId != null &&
         exists(/databases/{database}/documents/patients/$(resource.data.patientId)) &&
-        get(/databases/{database}/documents/patients/$(resource.data.patientId)).data.doctorId == request.auth.uid;
+        (isDoctorOwner(get(/databases/{database}/documents/patients/$(resource.data.patientId)).data) || isAdmin());
       
-      allow create, update: if isAuthenticated() &&
-        request.resource.data.patientId != null &&
+      allow create, update: if request.resource.data.patientId != null &&
         exists(/databases/{database}/documents/patients/$(request.resource.data.patientId)) &&
-        get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data.doctorId == request.auth.uid;
+        isDoctorOwner(get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data);
       
-      allow delete: if isAuthenticated() &&
-        resource.data.patientId != null &&
+      allow delete: if resource.data.patientId != null &&
         exists(/databases/{database}/documents/patients/$(resource.data.patientId)) &&
-        get(/databases/{database}/documents/patients/$(resource.data.patientId)).data.doctorId == request.auth.uid;
+        isDoctorOwner(get(/databases/{database}/documents/patients/$(resource.data.patientId)).data);
     }
 
     // ===== FOLLOWUP DATA COLLECTION =====
     // Legacy/fallback support for followup forms
     // Read-only, used by real-time sync listeners
     match /followUpData/{docId} {
-      allow read: if isAuthenticated() &&
-        resource.data.patientId != null &&
+      allow read: if resource.data.patientId != null &&
         exists(/databases/{database}/documents/patients/$(resource.data.patientId)) &&
-        get(/databases/{database}/documents/patients/$(resource.data.patientId)).data.doctorId == request.auth.uid;
+        (isDoctorOwner(get(/databases/{database}/documents/patients/$(resource.data.patientId)).data) || isAdmin());
       
-      allow create, update: if isAuthenticated() &&
-        request.resource.data.patientId != null &&
+      allow create, update: if request.resource.data.patientId != null &&
         exists(/databases/{database}/documents/patients/$(request.resource.data.patientId)) &&
-        get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data.doctorId == request.auth.uid;
+        isDoctorOwner(get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data);
       
-      allow delete: if isAuthenticated() &&
-        resource.data.patientId != null &&
+      allow delete: if resource.data.patientId != null &&
         exists(/databases/{database}/documents/patients/$(resource.data.patientId)) &&
-        get(/databases/{database}/documents/patients/$(resource.data.patientId)).data.doctorId == request.auth.uid;
+        isDoctorOwner(get(/databases/{database}/documents/patients/$(resource.data.patientId)).data);
     }
 
     // ===== DOCTORS COLLECTION =====
@@ -101,24 +100,17 @@ service cloud.firestore {
     // ===== FORM RESPONSES COLLECTION =====
     // All form submissions (baseline + followups)
     match /formResponses/{responseId} {
-      // Doctors can read their own patient's forms
-      allow read: if isAuthenticated() &&
-        resource.data.doctorId == request.auth.uid;
+      // Doctors can read their own patient's forms; admins can read all
+      allow read: if resource.data.doctorId == request.auth.uid || isAdmin();
       
       // Doctors can submit new forms for their patients
-      allow create: if isAuthenticated() &&
-        request.resource.data.doctorId == request.auth.uid &&
+      allow create: if request.resource.data.doctorId == request.auth.uid &&
         exists(/databases/{database}/documents/patients/$(request.resource.data.patientId)) &&
         get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data.doctorId == request.auth.uid;
       
-      // Doctors cannot modify submitted forms
+      // Doctors cannot modify submitted forms; admins read-only
       allow update: if false;
       allow delete: if false;
-
-      // Admins can read all forms (if authenticated as admin)
-      match /admin/{adminId} {
-        allow read: if isAuthenticated();
-      }
     }
 
     // ===== AUDIT LOGS COLLECTION =====
@@ -136,9 +128,9 @@ service cloud.firestore {
     // ===== EXPORTS COLLECTION =====
     // Track data exports
     match /exports/{exportId} {
-      // Admins can read their own exports
-      allow read: if isAuthenticated() &&
-        resource.data.adminId == request.auth.uid;
+      // Admins can read their own exports; super admins can read all
+      allow read: if (resource.data.adminId == request.auth.uid && isAdmin()) ||
+        (isAdmin() && get(/databases/{database}/documents/admins/$(request.auth.uid)).data.role == 'super_admin');
       
       // Only cloud functions can create/modify exports
       allow create, write, update, delete: if false;
