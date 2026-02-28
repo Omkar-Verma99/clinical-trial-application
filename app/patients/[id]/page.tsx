@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { downloadPatientPDF, downloadCSV, downloadExcel } from "@/lib/pdf-export.tsx"
+import { downloadPatientPDF, downloadCSV, downloadExcel } from "@/lib/pdf-export"
 import { toast } from "@/hooks/use-toast"
 import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"

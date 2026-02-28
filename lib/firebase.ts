@@ -21,10 +21,14 @@ if (typeof window !== "undefined") {
 
   if (missingKeys.length > 0) {
     console.error("❌ Missing Firebase configuration keys:", missingKeys)
+    if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+      // In production, still try to initialize but log the issue
+      console.warn("⚠️ Firebase config incomplete - app may not function properly")
+    }
   }
 
-  // Initialize Firebase
-  if (firebaseConfig && Object.values(firebaseConfig).every(v => v)) {
+  // Initialize Firebase only if config is complete
+  if (firebaseConfig && Object.values(firebaseConfig).every(v => v && v.length > 0)) {
     try {
       firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp()
       auth = getAuth(firebaseApp)
@@ -49,6 +53,19 @@ if (typeof window !== "undefined") {
     }
   } else {
     console.warn("⚠️  Firebase config is incomplete, cannot initialize")
+  }
+}
+
+// Validate that Firebase is properly initialized
+if (typeof window !== "undefined" && firebaseConfig) {
+  if (!firebaseApp) {
+    console.warn("⚠️  Firebase App not initialized - check configuration and browser environment")
+  }
+  if (!auth) {
+    console.warn("⚠️  Firebase Auth not initialized - check configuration")
+  }
+  if (!db) {
+    console.warn("⚠️  Firebase Firestore not initialized - check configuration")
   }
 }
 

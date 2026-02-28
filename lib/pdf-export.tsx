@@ -296,7 +296,7 @@ const DataField = ({ label, value }: { label: string; value: any }) => {
 	let displayValue = '—'
 	if (value === true) displayValue = 'Yes'
 	else if (value === false) displayValue = 'No'
-	else if (value !== null && value !== undefined && typeof value === 'number')
+	else if (value !== null && value !== undefined && typeof value === 'number' && isFinite(value))
 		displayValue = value.toFixed(2)
 	else if (value) displayValue = value.toString()
 
@@ -534,69 +534,71 @@ const PatientCRFDocument: React.FC<PatientCRFDocumentProps> = ({
 	       )}
 
 	       {/* SECTION 7: FOLLOW-UP VISITS (all visits, auto-paginated) */}
-	       {visitsToShow.length > 0 && visitsToShow.map((visit, visitIdx) => (
+	       {visitsToShow.length > 0 && visitsToShow.map((visit, visitIdx) => {
+	         if (!visit || typeof visit !== 'object') return null
+	         return (
 	         <View key={visitIdx} style={{ marginBottom: 12, paddingBottom: 8, borderBottomWidth: visitIdx < visitsToShow.length - 1 ? 1 : 0, borderBottomColor: COLORS.BORDER_GREY }}>
 	           <Text style={styles.sectionHeading}>7.{visitIdx + 1} FOLLOW-UP VISIT {visitIdx + 1}</Text>
-	           <DataField label="Visit Date" value={visit.visitDate} />
-	           <TwoColRow label1="HbA1c (%)" value1={visit.hba1c} label2="FPG (mg/dL)" value2={visit.fpg} />
-	           <TwoColRow label1="PPG (mg/dL)" value1={visit.ppg} label2="Weight (kg)" value2={visit.weight} />
-	           <TwoColRow label1="BP (mmHg)" value1={visit.bloodPressureSystolic ? `${visit.bloodPressureSystolic}/${visit.bloodPressureDiastolic}` : '—'} label2="Heart Rate (bpm)" value2={visit.heartRate} />
-	           <TwoColRow label1="Serum Creatinine" value1={visit.serumCreatinine} label2="eGFR (mL/min)" value2={visit.egfr} />
-	           <DataField label="Urinalysis" value={visit.urinalysis} />
-	           {visit.glycemicResponse && (
+	           <DataField label="Visit Date" value={visit?.visitDate} />
+	           <TwoColRow label1="HbA1c (%)" value1={visit?.hba1c} label2="FPG (mg/dL)" value2={visit?.fpg} />
+	           <TwoColRow label1="PPG (mg/dL)" value1={visit?.ppg} label2="Weight (kg)" value2={visit?.weight} />
+	           <TwoColRow label1="BP (mmHg)" value1={visit?.bloodPressureSystolic ? `${visit?.bloodPressureSystolic}/${visit?.bloodPressureDiastolic}` : '—'} label2="Heart Rate (bpm)" value2={visit?.heartRate} />
+	           <TwoColRow label1="Serum Creatinine" value1={visit?.serumCreatinine} label2="eGFR (mL/min)" value2={visit?.egfr} />
+	           <DataField label="Urinalysis" value={visit?.urinalysis} />
+	           {visit?.glycemicResponse && (
 	             <>
 	               <Text style={styles.choiceGroupLabel}>Glycemic Response</Text>
-	               <AssessmentRadioGroup label="Category" options={['Super-responder', 'Responder', 'Partial responder', 'Non-responder']} selectedValue={visit.glycemicResponse.category} />
-	               {visit.glycemicResponse.hba1cChange !== null && (
-	                 <DataField label="HbA1c Change (%)" value={visit.glycemicResponse.hba1cChange} />
+	               <AssessmentRadioGroup label="Category" options={['Super-responder', 'Responder', 'Partial responder', 'Non-responder']} selectedValue={visit?.glycemicResponse?.category} />
+	               {visit?.glycemicResponse?.hba1cChange !== null && (
+	                 <DataField label="HbA1c Change (%)" value={visit?.glycemicResponse?.hba1cChange} />
 	               )}
 	             </>
 	           )}
-	           {visit.outcomes && (
+	           {visit?.outcomes && (
 	             <>
 	               <Text style={styles.choiceGroupLabel}>Clinical Outcomes</Text>
-	               <AssessmentRadioGroup label="Weight Change" options={['Loss ≥3 kg', 'Loss 1–2.9 kg', 'Neutral', 'Gain']} selectedValue={visit.outcomes.weightChange} />
-	               <DataField label="BP Control Achieved" value={visit.outcomes.bpControlAchieved} />
-	               <AssessmentRadioGroup label="Renal Outcome" options={['Improved eGFR', 'Stable eGFR', 'Decline <10%', 'Decline ≥10%']} selectedValue={visit.outcomes.renalOutcome} />
+	               <AssessmentRadioGroup label="Weight Change" options={['Loss ≥3 kg', 'Loss 1–2.9 kg', 'Neutral', 'Gain']} selectedValue={visit?.outcomes?.weightChange} />
+	               <DataField label="BP Control Achieved" value={visit?.outcomes?.bpControlAchieved} />
+	               <AssessmentRadioGroup label="Renal Outcome" options={['Improved eGFR', 'Stable eGFR', 'Decline <10%', 'Decline ≥10%']} selectedValue={visit?.outcomes?.renalOutcome} />
 	             </>
 	           )}
-	           {visit.adherence && (
+	           {visit?.adherence && (
 	             <>
 	               <Text style={styles.choiceGroupLabel}>Adherence & Durability</Text>
-	               <DataField label="Continuing Treatment" value={visit.adherence.patientContinuingTreatment} />
-	               {!visit.adherence.patientContinuingTreatment && (
-	                 <AssessmentRadioGroup label="Discontinuation Reason" options={['Adverse event', 'Lack of efficacy', 'Cost', 'Patient preference', 'Other']} selectedValue={visit.adherence.discontinuationReason} />
+	               <DataField label="Continuing Treatment" value={visit?.adherence?.patientContinuingTreatment} />
+	               {!visit?.adherence?.patientContinuingTreatment && (
+	                 <AssessmentRadioGroup label="Discontinuation Reason" options={['Adverse event', 'Lack of efficacy', 'Cost', 'Patient preference', 'Other']} selectedValue={visit?.adherence?.discontinuationReason} />
 	               )}
-	               <DataField label="Missed Doses (7d)" value={visit.adherence.missedDosesInLast7Days} />
-	               <DataField label="Add-on Therapy" value={visit.adherence.addOnOrChangedTherapy} />
+	               <DataField label="Missed Doses (7d)" value={visit?.adherence?.missedDosesInLast7Days} />
+	               <DataField label="Add-on Therapy" value={visit?.adherence?.addOnOrChangedTherapy} />
 	             </>
 	           )}
-	           {visit.eventsOfSpecialInterest && (
+	           {visit?.eventsOfSpecialInterest && (
 	             <>
 	               <Text style={styles.choiceGroupLabel}>Events of Special Interest</Text>
 	               <View style={styles.choiceRow}>
-	                 <CheckboxItem label="Hypoglycemia - Mild" checked={!!visit.eventsOfSpecialInterest.hypoglycemiaMild} />
-	                 <CheckboxItem label="Hypoglycemia - Moderate" checked={!!visit.eventsOfSpecialInterest.hypoglycemiaModerate} />
-	                 <CheckboxItem label="Hypoglycemia - Severe" checked={!!visit.eventsOfSpecialInterest.hypoglycemiaSevere} />
-	                 <CheckboxItem label="UTI" checked={!!visit.eventsOfSpecialInterest.uti} />
-	                 <CheckboxItem label="Genital Mycotic Infection" checked={!!visit.eventsOfSpecialInterest.genitalMycoticInfection} />
-	                 <CheckboxItem label="Dizziness / Dehydration" checked={!!visit.eventsOfSpecialInterest.dizzinessDehydrationSymptoms} />
-	                 <CheckboxItem label="Hospitalization / ER Visit" checked={!!visit.eventsOfSpecialInterest.hospitalizationOrErVisit} />
+	                 <CheckboxItem label="Hypoglycemia - Mild" checked={!!visit?.eventsOfSpecialInterest?.hypoglycemiaMild} />
+	                 <CheckboxItem label="Hypoglycemia - Moderate" checked={!!visit?.eventsOfSpecialInterest?.hypoglycemiaModerate} />
+	                 <CheckboxItem label="Hypoglycemia - Severe" checked={!!visit?.eventsOfSpecialInterest?.hypoglycemiaSevere} />
+	                 <CheckboxItem label="UTI" checked={!!visit?.eventsOfSpecialInterest?.uti} />
+	                 <CheckboxItem label="Genital Mycotic Infection" checked={!!visit?.eventsOfSpecialInterest?.genitalMycoticInfection} />
+	                 <CheckboxItem label="Dizziness / Dehydration" checked={!!visit?.eventsOfSpecialInterest?.dizzinessDehydrationSymptoms} />
+	                 <CheckboxItem label="Hospitalization / ER Visit" checked={!!visit?.eventsOfSpecialInterest?.hospitalizationOrErVisit} />
 	               </View>
 	             </>
 	           )}
-	           {visit.physicianAssessment && (
+	           {visit?.physicianAssessment && (
 	             <>
 	               <Text style={styles.choiceGroupLabel}>Physician Assessment</Text>
-	               <AssessmentRadioGroup label="Overall Efficacy" options={['Excellent', 'Good', 'Moderate', 'Poor']} selectedValue={visit.physicianAssessment.overallEfficacy} />
-	               <AssessmentRadioGroup label="Overall Tolerability" options={['Excellent', 'Good', 'Fair', 'Poor']} selectedValue={visit.physicianAssessment.overallTolerability} />
-	               <AssessmentRadioGroup label="Compliance Judgment" options={['Excellent', 'Good', 'Fair', 'Poor']} selectedValue={visit.physicianAssessment.complianceJudgment} />
-	               <DataField label="Prefer Long-term" value={visit.physicianAssessment.preferKcMeSempaForLongTerm} />
+	               <AssessmentRadioGroup label="Overall Efficacy" options={['Excellent', 'Good', 'Moderate', 'Poor']} selectedValue={visit?.physicianAssessment?.overallEfficacy} />
+	               <AssessmentRadioGroup label="Overall Tolerability" options={['Excellent', 'Good', 'Fair', 'Poor']} selectedValue={visit?.physicianAssessment?.overallTolerability} />
+	               <AssessmentRadioGroup label="Compliance Judgment" options={['Excellent', 'Good', 'Fair', 'Poor']} selectedValue={visit?.physicianAssessment?.complianceJudgment} />
+	               <DataField label="Prefer Long-term" value={visit?.physicianAssessment?.preferKcMeSempaForLongTerm} />
 	             </>
 	           )}
 	         </View>
-	       ))}
-
+	       )
+	       })})
 	       {/* FOOTER (auto-paginated) */}
 	       <View style={styles.footer} fixed>
 	         <Text style={styles.footerText}>Confidential | {patient.patientCode}</Text>

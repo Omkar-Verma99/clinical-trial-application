@@ -141,13 +141,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const docData = doctorDoc.data()
         setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
         logInfo("Doctor data fetched immediately after signup", { userId: user.uid })
+      } else {
+        // Document exists but data is missing - log critical issue
+        logError("Doctor document created but no data found", {
+          action: "fetchDoctorDataAfterSignup",
+          userId: user.uid,
+          severity: "critical"
+        })
+        // Still continue - data may sync later
       }
     } catch (error) {
       logError(error as Error, {
         action: "fetchDoctorDataAfterSignup",
         userId: user.uid,
-        severity: "medium",
+        severity: "high"
       })
+      // Continue - user is signed in, doctor data will be fetched on next auth state change
     }
 
     logInfo("Doctor account created successfully", { email, userId: user.uid })

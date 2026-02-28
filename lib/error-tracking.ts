@@ -12,6 +12,12 @@ interface ErrorContext {
   [key: string]: any
 }
 
+// Helper to check if running in browser environment
+const isDevEnvironment = (): boolean => {
+  if (typeof window === 'undefined') return false
+  return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+}
+
 /**
  * Log an error with context
  * @param error - Error object or message
@@ -30,12 +36,12 @@ export const logError = (
     message,
     stack,
     context,
-    url: typeof window !== 'undefined' ? window.location.href : undefined,
+    url: typeof window !== 'undefined' ? window.location.href : 'server-side',
     severity: context?.severity || 'medium'
   }
   
   // Console logging in development
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  if (isDevEnvironment()) {
     console.error('[Error]', errorLog)
   }
   
@@ -61,7 +67,7 @@ export const logWarning = (message: string, context?: ErrorContext): void => {
     context
   }
   
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  if (isDevEnvironment()) {
     console.warn('[Warning]', warningLog)
   }
 }
@@ -80,7 +86,7 @@ export const logInfo = (message: string, context?: ErrorContext): void => {
     context
   }
   
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+  if (isDevEnvironment()) {
     console.log('[Info]', infoLog)
   }
 }
