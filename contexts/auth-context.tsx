@@ -19,6 +19,8 @@ interface AuthContextType {
   user: User | null
   doctor: Doctor | null
   loading: boolean
+  doctorDataError: string | null
+  retryDoctorDataFetch: () => Promise<void>
   login: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => Promise<void>
   logout: () => Promise<void>
@@ -28,6 +30,8 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   doctor: null,
   loading: true,
+  doctorDataError: null,
+  retryDoctorDataFetch: async () => {},
   login: async () => {},
   signup: async () => {},
   logout: async () => {},
@@ -40,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [loading, setLoading] = useState(true)
+  const [doctorDataError, setDoctorDataError] = useState<string | null>(null)
 
   useEffect(() => {
     if (typeof window === "undefined" || !auth) {
@@ -78,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } else {
         setDoctor(null)
+        setDoctorDataError(null)
       }
 
       setLoading(false)
@@ -87,6 +93,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       unsubscribe()
     }
   }, [])
+
+  const retryDoctorDataFetch = useCallback(async () => {
+    if (!user || !db) {
+      setDoctorDataError("User not authenticated. Please log in again.")
+      return
+    }
+
+    try {
+      const doctorDoc = await getDoc(doc(db, "doctors", user.uid))
+      if (doctorDoc.exists()) {
+        const docData = doctorDoc.data()
+        setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
+        setDoctorDataError(null)
+        logInfo("Doctor data fetched successfully on retry", { userId: user.uid })
+      } else {
+        setDoctorDataError("Doctor profile not found. Please contact support.")
+        logError("Doctor document not found", {
+          action: "retryDoctorDataFetch",
+          userId: user.uid,
+          severity: "critical"
+        })
+      }
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Failed to fetch doctor profile"
+      setDoctorDataError(`Error loading profile: ${errorMsg}. Please try again.`)
+      logError(error as Error, {
+        action: "retryDoctorDataFetch",
+        userId: user.uid,
+        severity: "high"
+      })
+    }
+  }, [user])
 
   const login = useCallback(async (email: string, password: string) => {
     if (typeof navigator !== "undefined" && !navigator.onLine) {
@@ -142,21 +180,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
         logInfo("Doctor data fetched immediately after signup", { userId: user.uid })
       } else {
-        // Document exists but data is missing - log critical issue
+        // Document exists but data is missing - set error for UI
+        const errorMsg = "Doctor profile could not be loaded. Please try again."
+        setDoctorDataError(errorMsg)
         logError("Doctor document created but no data found", {
           action: "fetchDoctorDataAfterSignup",
           userId: user.uid,
           severity: "critical"
         })
-        // Still continue - data may sync later
       }
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error"
+      setDoctorDataError(`Failed to create profile: ${errorMsg}. Please try again.`)
       logError(error as Error, {
         action: "fetchDoctorDataAfterSignup",
         userId: user.uid,
         severity: "high"
       })
-      // Continue - user is signed in, doctor data will be fetched on next auth state change
     }
 
     logInfo("Doctor account created successfully", { email, userId: user.uid })
@@ -179,6 +219,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     logInfo("User logged out successfully")
+    setDoctorDataError(null)
     router.push("/login")
   }, [router])
 
@@ -188,11 +229,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       doctor,
       loading,
+      doctorDataError,
+      retryDoctorDataFetch,
       login,
       signup,
       logout,
     }),
-    [user, doctor, loading, login, signup, logout]
+    [user, doctor, loading, doctorDataError, retryDoctorDataFetch, login, signup, logout]
   )
 
   return (

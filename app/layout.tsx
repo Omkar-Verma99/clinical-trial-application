@@ -33,6 +33,9 @@ export const metadata: Metadata = {
   },
 }
 
+// Import DoctorDataErrorModal at module level
+import { DoctorDataErrorModal } from "@/components/doctor-data-error-modal"
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -43,6 +46,7 @@ export default function RootLayout({
       <body className={`font-sans antialiased`}>
         <AuthProvider>
           <AdminAuthProvider>
+            <DoctorDataErrorModal />
             {children}
             <Toaster />
           </AdminAuthProvider>
