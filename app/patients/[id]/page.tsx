@@ -305,21 +305,21 @@ export default function PatientDetailPage({ params }: Props) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
       <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-4 flex-shrink-0">
             <Link href="/dashboard">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="flex-shrink-0">
                 ← Back
               </Button>
             </Link>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-shrink-0">
               <Image src="/favicon-192x192.png" alt="Kollectcare" width={28} height={28} className="h-7 w-7 rounded" />
-              <span className="text-lg font-bold">Kollectcare</span>
+              <span className="text-lg font-bold whitespace-nowrap">Kollectcare</span>
             </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 ml-auto">
             <Link href="/reports">
-              <Button variant="outline" className="bg-transparent">
+              <Button variant="outline" className="bg-transparent whitespace-nowrap">
                 <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
@@ -331,11 +331,11 @@ export default function PatientDetailPage({ params }: Props) {
                 Reports
               </Button>
             </Link>
-            <div className="text-right hidden sm:block">
+            <div className="text-right hidden sm:block flex-shrink-0">
               <p className="text-sm font-medium">{doctor?.name}</p>
               <p className="text-xs text-muted-foreground">{doctor?.registrationNumber}</p>
             </div>
-            <Button variant="outline" onClick={logout}>
+            <Button variant="outline" onClick={logout} className="flex-shrink-0">
               Logout
             </Button>
           </div>

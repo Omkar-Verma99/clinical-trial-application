@@ -133,6 +133,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       createdAt: new Date().toISOString(),
     })
 
+    // IMPORTANT: Immediately fetch and set the doctor data after signup
+    // This ensures doctor context is available immediately after registration
+    try {
+      const doctorDoc = await getDoc(doc(db, "doctors", user.uid))
+      if (doctorDoc.exists()) {
+        const docData = doctorDoc.data()
+        setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
+        logInfo("Doctor data fetched immediately after signup", { userId: user.uid })
+      }
+    } catch (error) {
+      logError(error as Error, {
+        action: "fetchDoctorDataAfterSignup",
+        userId: user.uid,
+        severity: "medium",
+      })
+    }
+
     logInfo("Doctor account created successfully", { email, userId: user.uid })
   }, [])
 
