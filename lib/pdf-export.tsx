@@ -602,7 +602,7 @@ const PatientCRFDocument: React.FC<PatientCRFDocumentProps> = ({
 	       {/* FOOTER (auto-paginated) */}
 	       <View style={styles.footer} fixed>
 	         <Text style={styles.footerText}>Confidential | {patient.patientCode}</Text>
-	         <Text style={styles.footerText}>Auto-paginated</Text>
+			 <Text style={styles.footerText}>Kollectcare</Text>
 	       </View>
 	     </Page>
 
@@ -656,7 +656,7 @@ const PatientCRFDocument: React.FC<PatientCRFDocumentProps> = ({
 	       </View>
 	       <View style={styles.footer} fixed>
 	         <Text style={styles.footerText}>Confidential | {patient.patientCode}</Text>
-	         <Text style={styles.footerText}>Declaration</Text>
+			 <Text style={styles.footerText}>Kollectcare</Text>
 	       </View>
 	     </Page>
 	   </Document>
