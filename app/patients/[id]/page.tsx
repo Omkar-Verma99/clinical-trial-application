@@ -358,8 +358,8 @@ export default function PatientDetailPage({ params }: Props) {
             <TabsTrigger value="overview" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Overview</TabsTrigger>
             <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Baseline</TabsTrigger>
             
-            {/* Dynamic FollowUp Tabs - Show at least one default tab after baseline */}
-            {followUpsWithDefault.length > 0 && followUpsWithDefault.map((_, index) => (
+            {/* Dynamic FollowUp Tabs */}
+            {followUps.length > 0 && followUps.map((_, index) => (
               <TabsTrigger key={`visit-${index}`} value={`visit-${index}`} className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
                 Follow Up {index + 1}
               </TabsTrigger>
@@ -367,7 +367,7 @@ export default function PatientDetailPage({ params }: Props) {
 
             {creatingFollowUp && (
               <TabsTrigger value="new-followup" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
-                Follow Up {followUpsWithDefault.length + 1}
+                Follow Up {followUps.length + 1}
               </TabsTrigger>
             )}
             
