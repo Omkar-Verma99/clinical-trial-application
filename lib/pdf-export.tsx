@@ -819,7 +819,7 @@ export async function downloadPatientPDF(
 	doctor?: Doctor
 ) {
 	try {
-		const document = (
+		const pdfDocument = (
 			<PatientCRFDocument
 				patient={patient}
 				baseline={baseline}
@@ -829,7 +829,7 @@ export async function downloadPatientPDF(
 			/>
 		)
 
-		const blob = await pdf(document).toBlob()
+		const blob = await pdf(pdfDocument).toBlob()
 		const url = URL.createObjectURL(blob)
 		const link = document.createElement('a')
 		link.href = url
