@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, memo } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, arrayUnion, writeBatch } from "firebase/firestore"
+import { doc, arrayUnion, writeBatch, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import DOMPurify from "dompurify"
 import type { FollowUpData } from "@/lib/types"
@@ -198,9 +198,9 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       const sanitizedFormData = sanitizeObject(formData, ["urinalysisSpecify", "addOnTherapyDetails", "hospitalizationReason", "adverseEventsText"])
 
       const data = {
+        visitNumber: formData.visitNumber,
         patientId,
         doctorId: user?.uid || "",
-        visitNumber: formData.visitNumber,
         visitDate: formData.visitDate,
         hba1c: formData.hba1c ? Number.parseFloat(formData.hba1c) : null,
         fpg: formData.fpg ? Number.parseFloat(formData.fpg) : null,
@@ -273,14 +273,38 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       }
 
       try {
-        // Save followup to Firebase by updating patient document in a single batch
+        // FIX: Check if this follow-up already exists (for editing)
+        // A follow-up is uniquely identified by: visitNumber + doctorId
+        // Doctor can change visitDate, but visitNumber stays the same (Week 12, Week 24, etc.)
         const patientDocRef = doc(db, "patients", patientId)
+        const patientSnap = await getDoc(patientDocRef)
+        
+        let updateData: any = { updatedAt: new Date().toISOString() }
+        
+        if (patientSnap.exists()) {
+          const existingFollowups = patientSnap.data().followups || []
+          
+          // Find if this follow-up already exists (by visitNumber + doctorId)
+          const existingIndex = existingFollowups.findIndex(
+            (fu: any) => fu.visitNumber === formData.visitNumber && fu.doctorId === user?.uid
+          )
+          
+          if (existingIndex >= 0) {
+            // UPDATE existing follow-up: replace the old one with new data
+            const updatedFollowups = [...existingFollowups]
+            updatedFollowups[existingIndex] = data
+            updateData.followups = updatedFollowups
+          } else {
+            // ADD new follow-up: use arrayUnion for new entries
+            updateData.followups = arrayUnion(data)
+          }
+        } else {
+          // First follow-up for this patient
+          updateData.followups = arrayUnion(data)
+        }
+        
         const batch = writeBatch(db)
-        batch.set(patientDocRef, {
-          followups: arrayUnion(data),
-          updatedAt: new Date().toISOString()
-        }, { merge: true })
-
+        batch.set(patientDocRef, updateData, { merge: true })
         await batch.commit()
 
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
