@@ -196,6 +196,19 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
+	signatureCaptionRow: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		marginTop: 4,
+		gap: 10,
+	},
+	signatureCaption: {
+		flex: 1,
+		textAlign: 'center',
+		fontSize: 7,
+		fontWeight: 'bold',
+		color: COLORS.TEXT_LIGHT,
+	},
 	// FOOTER
 	footer: {
 		position: 'absolute',
@@ -534,7 +547,7 @@ const PatientCRFDocument: React.FC<PatientCRFDocumentProps> = ({
 	       )}
 
 	       {/* SECTION 7: FOLLOW-UP VISITS (all visits, auto-paginated) */}
-	       {visitsToShow.length > 0 && visitsToShow.map((visit, visitIdx) => {
+	      {visitsToShow.length > 0 && visitsToShow.map((visit, visitIdx) => {
 	         if (!visit || typeof visit !== 'object') return null
 	         return (
 	         <View key={visitIdx} style={{ marginBottom: 12, paddingBottom: 8, borderBottomWidth: visitIdx < visitsToShow.length - 1 ? 1 : 0, borderBottomColor: COLORS.BORDER_GREY }}>
@@ -596,70 +609,61 @@ const PatientCRFDocument: React.FC<PatientCRFDocumentProps> = ({
 	               <DataField label="Prefer Long-term" value={visit?.physicianAssessment?.preferKcMeSempaForLongTerm} />
 	             </>
 	           )}
-	         </View>
-	       )
-	       })})
-	       {/* FOOTER (auto-paginated) */}
-	       <View style={styles.footer} fixed>
-	         <Text style={styles.footerText}>Confidential | {patient.patientCode}</Text>
-			 <Text style={styles.footerText}>Kollectcare</Text>
-	       </View>
-	     </Page>
+	        </View>
+	      )
+	      })}
 
-	     {/* FINAL PAGE: DATA PRIVACY & DECLARATION (always last) */}
-	     <Page size="A4" style={styles.page}>
-	       <View style={{ marginBottom: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.BORDER_GREY }}>
-	         <Text style={styles.headerTitle}>KC MeSempa - RWE Study | {patient.patientCode}</Text>
-	       </View>
-	       <Text style={styles.sectionHeading}>8. DATA PRIVACY & CONFIDENTIALITY</Text>
-	       {followUp?.dataPrivacy && (
-	         <>
-	           <View style={styles.choiceRow}>
-	             <CheckboxItem label="No Personal Identifiers Recorded" checked={!!followUp.dataPrivacy.noPersonalIdentifiersRecorded} />
-	             <CheckboxItem label="Data Collected as Routine Clinical Practice" checked={!!followUp.dataPrivacy.dataCollectedAsRoutineClinicalPractice} />
-	             <CheckboxItem label="Patient Identity Mapping at Clinic Only" checked={!!followUp.dataPrivacy.patientIdentityMappingAtClinicOnly} />
-	           </View>
-	         </>
-	       )}
-	       <Text style={styles.sectionHeading}>9. PHYSICIAN DECLARATION & CERTIFICATION</Text>
-	       <Text style={{ fontSize: 8, marginBottom: 8, lineHeight: 1.3 }}>
-	         I confirm that the information provided in this Case Record Form is accurate and complete to the best of my knowledge.
-	       </Text>
-	       <View style={styles.gridRow}>
-	         <View style={styles.gridCol2}>
-	           <DataField label="Physician Name" value={doctor?.name} />
-	         </View>
-	         <View style={styles.gridCol2}>
-	           <DataField label="Qualification" value={doctor?.qualification} />
-	         </View>
-	       </View>
-	       <View style={styles.gridRow}>
-	         <View style={styles.gridCol2}>
-	           <DataField label="Registration No" value={doctor?.registrationNumber} />
-	         </View>
-	         <View style={styles.gridCol2}>
-	           <DataField label="Date" value={dateStr} />
-	         </View>
-	       </View>
-	       <View style={styles.signatureSection}>
-	         <View style={styles.signatureGrid}>
-	           <View style={styles.signatureBox}>
-	             <Text style={styles.signatureLabel}>Authorized Physician</Text>
-	             <Text style={styles.signatureLabel}>Signature</Text>
-	             <View style={{ flex: 1 }} />
-	             <Text style={{ fontSize: 6, color: COLORS.TEXT_LIGHT }}>Date: ___________</Text>
-	           </View>
-	           <View style={styles.stampBox}>
-	             <Text style={styles.signatureLabel}>Official Hospital/Clinic Stamp</Text>
-	           </View>
-	         </View>
-	       </View>
-	       <View style={styles.footer} fixed>
-	         <Text style={styles.footerText}>Confidential | {patient.patientCode}</Text>
+	      <Text style={styles.sectionHeading}>8. DATA PRIVACY & CONFIDENTIALITY</Text>
+	      {followUp?.dataPrivacy && (
+	        <>
+	          <View style={styles.choiceRow}>
+	            <CheckboxItem label="No Personal Identifiers Recorded" checked={!!followUp.dataPrivacy.noPersonalIdentifiersRecorded} />
+	            <CheckboxItem label="Data Collected as Routine Clinical Practice" checked={!!followUp.dataPrivacy.dataCollectedAsRoutineClinicalPractice} />
+	            <CheckboxItem label="Patient Identity Mapping at Clinic Only" checked={!!followUp.dataPrivacy.patientIdentityMappingAtClinicOnly} />
+	          </View>
+	        </>
+	      )}
+	      <Text style={styles.sectionHeading}>9. PHYSICIAN DECLARATION & CERTIFICATION</Text>
+	      <Text style={{ fontSize: 8, marginBottom: 8, lineHeight: 1.3 }}>
+	        I confirm that the information provided in this Case Record Form is accurate and complete to the best of my knowledge.
+	      </Text>
+	      <View style={styles.gridRow}>
+	        <View style={styles.gridCol2}>
+	          <DataField label="Physician Name" value={doctor?.name} />
+	        </View>
+	        <View style={styles.gridCol2}>
+	          <DataField label="Qualification" value={doctor?.qualification} />
+	        </View>
+	      </View>
+	      <View style={styles.gridRow}>
+	        <View style={styles.gridCol2}>
+	          <DataField label="Registration No" value={doctor?.registrationNumber} />
+	        </View>
+	        <View style={styles.gridCol2}>
+	          <DataField label="Date" value={dateStr} />
+	        </View>
+	      </View>
+	      <View style={styles.signatureSection}>
+	        <View style={styles.signatureGrid}>
+	          <View style={styles.signatureBox}>
+	            <View style={{ flex: 1 }} />
+	            <Text style={{ fontSize: 6, color: COLORS.TEXT_LIGHT }}>Date: ___________</Text>
+	          </View>
+	          <View style={styles.stampBox} />
+	        </View>
+	        <View style={styles.signatureCaptionRow}>
+	          <Text style={styles.signatureCaption}>Authorized Physician Signature</Text>
+	          <Text style={styles.signatureCaption}>Official Hospital/Clinic Stamp</Text>
+	        </View>
+	      </View>
+
+	      {/* FOOTER (auto-paginated) */}
+	      <View style={styles.footer} fixed>
+	        <Text style={styles.footerText}>Confidential | {patient.patientCode}</Text>
 			 <Text style={styles.footerText}>Kollectcare</Text>
-	       </View>
-	     </Page>
-	   </Document>
+	      </View>
+	    </Page>
+	  </Document>
 	)
 }
 
