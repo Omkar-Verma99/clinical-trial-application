@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { collection, query, where, orderBy, onSnapshot, limit as fbLimit } from "firebase/firestore"
+import { collection, query, where, onSnapshot, limit as fbLimit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { Patient } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -250,6 +250,10 @@ export default function DashboardPage() {
   const [loadingPatients, setLoadingPatients] = useState(true)
   const [pagination, setPagination] = useState({ offset: 0, limit: 30, hasMore: false })
   const [paginationLoading, setPaginationLoading] = useState(false)
+  const patientCodeSorter = useMemo(
+    () => new Intl.Collator("en", { sensitivity: "base", numeric: true }),
+    []
+  )
 
   // Debounced pagination handler
   const debounce = (func: Function, delay: number) => {
@@ -291,7 +295,6 @@ export default function DashboardPage() {
     const q = query(
       collection(db, "patients"),
       where("doctorId", "==", user.uid),
-      orderBy("createdAt", "desc"),
       fbLimit(120) // cap to keep mobile fast
     )
 
@@ -311,10 +314,14 @@ export default function DashboardPage() {
           } as PatientWithStatus
         })
 
-        setPatients(patientsData)
+        const sortedPatients = [...patientsData].sort((a, b) =>
+          patientCodeSorter.compare(a.patientCode || "", b.patientCode || "")
+        )
+
+        setPatients(sortedPatients)
         setPagination(prev => ({
           ...prev,
-          hasMore: patientsData.length > prev.limit
+          hasMore: sortedPatients.length > prev.limit
         }))
         setLoadingPatients(false)
         setPaginationLoading(false)
@@ -327,7 +334,7 @@ export default function DashboardPage() {
     )
 
     return () => unsubscribe()
-  }, [user])
+  }, [user, patientCodeSorter])
 
   const getNextStatus = useCallback((patient: PatientWithStatus) => {
     if (!patient.hasBaseline) {
