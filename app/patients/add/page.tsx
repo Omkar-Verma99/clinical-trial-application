@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
@@ -35,6 +35,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
   const isEditMode = Boolean(editPatientId)
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const submitLockRef = useRef(false)
   const [loadingPatientData, setLoadingPatientData] = useState(false)
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
   const [showIneligibleModal, setShowIneligibleModal] = useState(false)
@@ -321,12 +322,15 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (submitLockRef.current) return
+    submitLockRef.current = true
     if (!user || !user.uid || !db) {
       toast({
         variant: "destructive",
         title: "Error",
         description: "Firebase is not initialized or user not authenticated. Please refresh the page.",
       })
+      submitLockRef.current = false
       return
     }
 
@@ -358,6 +362,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Missing Required Fields",
         description: `Please fill in: ${missingFields.join(", ")}`,
       })
+      submitLockRef.current = false
       return
     }
 
@@ -367,6 +372,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Invalid Age",
         description: ageValidationError,
       })
+      submitLockRef.current = false
       return
     }
 
@@ -376,6 +382,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Invalid Duration",
         description: durationValidationError,
       })
+      submitLockRef.current = false
       return
     }
 
@@ -386,6 +393,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Invalid Participant Code",
         description: patientCodeValidationError,
       })
+      submitLockRef.current = false
       return
     }
 
@@ -398,6 +406,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           title: "Invalid Participant Code",
           description: "Participant number must start with 3 digits, like 001.",
         })
+        submitLockRef.current = false
         return
       }
 
@@ -422,6 +431,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           title: "Duplicate Participant Code",
           description: `Participant code ${normalizedPatientCode} already exists. Please use a unique code.`,
         })
+        submitLockRef.current = false
         return
       }
 
@@ -439,6 +449,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           title: "Participant Sequence Required",
           description: `Sequence issue: ${missingCode} is missing. Please add ${missingCode}-XXX before creating ${normalizedPatientCode}.`,
         })
+        submitLockRef.current = false
         return
       }
     }
@@ -450,6 +461,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Ineligible Patient",
         description: "This patient meets exclusion criteria and is NOT eligible for this study. CKD eGFR in the 30-44 range cannot be enrolled.",
       })
+      submitLockRef.current = false
       return
     }
 
@@ -460,6 +472,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Missing Selection",
         description: "Please select at least one reason for KC MeSempa initiation",
       })
+      submitLockRef.current = false
       return
     }
 
@@ -472,6 +485,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "BMI Validation Error",
         description: "The entered BMI does not match the calculated value from height/weight. Please correct the values.",
       })
+      submitLockRef.current = false
       return
     }
 
@@ -514,6 +528,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           description: "Age and Duration of Diabetes must be valid numbers.",
         })
         setLoading(false)
+        submitLockRef.current = false
         return
       }
 
@@ -607,20 +622,10 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           await new Promise(resolve => setTimeout(resolve, 400))
           await router.push(`/patients/${editPatientId}`)
         } else {
-          // Use deterministic document ID to enforce uniqueness per doctor + participant code.
-          const patientId = `${user.uid}__${normalizedPatientCode}`
-          const patientDocRef = doc(db, "patients", patientId)
-
-          const existingPatientDoc = await getDoc(patientDocRef)
-          if (existingPatientDoc.exists()) {
-            toast({
-              variant: "destructive",
-              title: "Duplicate Participant Code",
-              description: `Participant code ${normalizedPatientCode} already exists. Please use a unique code.`,
-            })
-            setLoading(false)
-            return
-          }
+          // Generate a Firestore document with an auto ID.
+          // Duplicate patientCode is already blocked above and submit lock prevents rapid double-submits.
+          const patientDocRef = doc(collection(db, "patients"))
+          const patientId = patientDocRef.id
 
           // Add ID fields to satisfy security rules (patientId required) and for querying
           const patientDataWithId = {
@@ -662,6 +667,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           description: errMsg,
         })
         setLoading(false)
+        submitLockRef.current = false
         return
       }
     } catch (error) {
@@ -676,6 +682,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
       })
     } finally {
       setLoading(false)
+      submitLockRef.current = false
     }
   }
 
