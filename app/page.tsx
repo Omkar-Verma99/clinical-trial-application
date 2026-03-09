@@ -113,7 +113,7 @@ export default function HomePage() {
                 />
               </svg>
             </div>
-            <h3 className="text-xl font-semibold">Patient Management</h3>
+            <h3 className="text-xl font-semibold">Participant Data Management</h3>
             <p className="text-muted-foreground leading-relaxed">
               Secure patient tracking with anonymized codes and comprehensive RWE documentation.
             </p>

@@ -20,7 +20,8 @@ interface PatientWithStatus extends Patient {
 // Design S1: Split Card + Details Panel
 const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick }: any) => {
   const statusInfo = getNextStatus(patient)
-  const initials = patient.patientCode?.slice(2, 4) || "PT"
+  const initialsMatch = String(patient.patientCode || "").toUpperCase().match(/^\d{3}-([A-Z]{3})$/)
+  const initials = initialsMatch?.[1] || "PT"
   
   // Format comorbidities
   const comorbidities = patient.comorbidities && typeof patient.comorbidities === 'object'
@@ -429,7 +430,7 @@ export default function DashboardPage() {
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-balance">Patient Management</h1>
+            <h1 className="text-3xl font-bold text-balance">Participant Data Management</h1>
             <p className="text-muted-foreground mt-1">Manage your RWE study participants</p>
           </div>
           <Link href="/patients/add">

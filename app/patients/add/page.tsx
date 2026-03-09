@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { writeBatch, doc, collection, getDoc, updateDoc } from "firebase/firestore"
+import { writeBatch, doc, collection, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,7 @@ import { logError } from "@/lib/error-tracking"
 import Link from "next/link"
 
 const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
+const PATIENT_CODE_REGEX = /^\d{3}-[A-Z]{3}$/
 
 interface PatientFormPageProps {
   presetEditPatientId?: string
@@ -109,13 +110,32 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
   })
 
   const ageValidationError = useMemo(() => {
-    const ageValue = Number.parseInt(formData.age, 10)
+    const ageRaw = formData.age.trim()
+    const ageValue = Number.parseInt(ageRaw, 10)
     if (!formData.age) return "Age is required"
+    if (!/^\d+$/.test(ageRaw)) return "Age must be a whole number (no decimals)"
     if (!Number.isFinite(ageValue)) return "Age must be a valid number"
     if (ageValue < 18) return "Patient must be at least 18 years old. This patient is not eligible for the study."
     if (ageValue > 75) return "Patient must be 75 years or younger. This patient is not eligible for the study."
     return null
   }, [formData.age])
+
+  const durationValidationError = useMemo(() => {
+    if (!formData.durationOfDiabetes) return "Duration of Type 2 Diabetes is required"
+    const durationValue = Number.parseFloat(formData.durationOfDiabetes)
+    if (!Number.isFinite(durationValue)) return "Duration of Type 2 Diabetes must be a valid number"
+    if (durationValue < 0) return "Duration of Type 2 Diabetes cannot be negative"
+    return null
+  }, [formData.durationOfDiabetes])
+
+  const patientCodeValidationError = useMemo(() => {
+    const normalizedCode = formData.patientCode.trim().toUpperCase()
+    if (!normalizedCode) return "Participant code is required"
+    if (!PATIENT_CODE_REGEX.test(normalizedCode)) {
+      return "Participant code must be in format 001-ABC (3 digits, hyphen, 3 letters)."
+    }
+    return null
+  }, [formData.patientCode])
 
   const isCkdIneligible = useMemo(() => {
     return Boolean(comorbidities.chronicKidneyDisease && comorbidities.ckdEgfrCategory.startsWith("30"))
@@ -155,7 +175,19 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
     }))
 
     if (patientData.diabetesComplications) {
-      setDiabetesComplications((prev) => ({ ...prev, ...patientData.diabetesComplications }))
+      setDiabetesComplications((prev) => {
+        const merged = { ...prev, ...patientData.diabetesComplications }
+        if (merged.none) {
+          return {
+            neuropathy: false,
+            retinopathy: false,
+            nephropathy: false,
+            cadOrStroke: false,
+            none: true,
+          }
+        }
+        return { ...merged, none: false }
+      })
     }
 
     if (patientData.comorbidities) {
@@ -336,6 +368,79 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
       return
     }
 
+    if (durationValidationError) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Duration",
+        description: durationValidationError,
+      })
+      return
+    }
+
+    const normalizedPatientCode = formData.patientCode.trim().toUpperCase()
+    if (patientCodeValidationError) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Participant Code",
+        description: patientCodeValidationError,
+      })
+      return
+    }
+
+    if (!isEditMode) {
+      const newParticipantNumber = Number.parseInt(normalizedPatientCode.slice(0, 3), 10)
+
+      if (!Number.isFinite(newParticipantNumber)) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Participant Code",
+          description: "Participant number must start with 3 digits, like 001.",
+        })
+        return
+      }
+
+      const existingPatientsQuery = query(collection(db, "patients"), where("doctorId", "==", user.uid))
+      const existingPatientsSnapshot = await getDocs(existingPatientsQuery)
+      const existingNumbers = new Set<number>()
+      let duplicateCodeFound = false
+
+      existingPatientsSnapshot.docs.forEach((patientDoc) => {
+        const existingCodeRaw = String(patientDoc.data().patientCode || "").trim().toUpperCase()
+        if (existingCodeRaw === normalizedPatientCode) {
+          duplicateCodeFound = true
+        }
+        if (PATIENT_CODE_REGEX.test(existingCodeRaw)) {
+          existingNumbers.add(Number.parseInt(existingCodeRaw.slice(0, 3), 10))
+        }
+      })
+
+      if (duplicateCodeFound) {
+        toast({
+          variant: "destructive",
+          title: "Duplicate Participant Code",
+          description: `Participant code ${normalizedPatientCode} already exists. Please use a unique code.`,
+        })
+        return
+      }
+
+      const missingNumbers: number[] = []
+      for (let i = 1; i < newParticipantNumber; i += 1) {
+        if (!existingNumbers.has(i)) {
+          missingNumbers.push(i)
+        }
+      }
+
+      if (missingNumbers.length > 0) {
+        const missingCode = String(missingNumbers[0]).padStart(3, "0")
+        toast({
+          variant: "destructive",
+          title: "Participant Sequence Required",
+          description: `Sequence issue: ${missingCode} is missing. Please add ${missingCode}-XXX before creating ${normalizedPatientCode}.`,
+        })
+        return
+      }
+    }
+
     if (isCkdIneligible) {
       setShowIneligibleModal(true)
       toast({
@@ -412,7 +517,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
 
       const patientData = {
         doctorId: user.uid,
-        patientCode: sanitizedFormData.patientCode,
+        patientCode: normalizedPatientCode,
         studySiteCode: sanitizedFormData.studySiteCode,
         investigatorName: sanitizedFormData.investigatorName,
         baselineVisitDate: sanitizedFormData.baselineVisitDate,
@@ -597,14 +702,18 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                     <Label htmlFor="patientCode">Patient Code *</Label>
                     <Input
                       id="patientCode"
-                      placeholder="PT001 (Anonymized)"
+                      placeholder="001-ABC"
                       value={formData.patientCode}
-                      onChange={(e) => setFormData({ ...formData, patientCode: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, patientCode: e.target.value.toUpperCase().replace(/\s/g, "") })
+                      }
                       readOnly={isEditMode}
                       disabled={isEditMode}
+                      maxLength={7}
                       required
                     />
-                    <p className="text-xs text-muted-foreground">Clinic-specific code. DO NOT use patient name.</p>
+                    <p className="text-xs text-muted-foreground">Use format 001-ABC (3 digits, hyphen, 3 letters).</p>
+                    {patientCodeValidationError && <p className="text-xs text-red-600">{patientCodeValidationError}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="baselineVisitDate">Baseline Visit Date (Week 0) *</Label>
@@ -654,6 +763,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                     <Input
                       id="age"
                       type="number"
+                      step="1"
                       placeholder="45"
                       value={formData.age}
                       onChange={(e) => setFormData({ ...formData, age: e.target.value })}
@@ -771,11 +881,13 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                     id="durationOfDiabetes"
                     type="number"
                     step="0.1"
+                    min="0"
                     placeholder="5.5"
                     value={formData.durationOfDiabetes}
                     onChange={(e) => setFormData({ ...formData, durationOfDiabetes: e.target.value })}
                     required
                   />
+                  {durationValidationError && <p className="text-xs text-red-600">{durationValidationError}</p>}
                 </div>
 
                 <div className="space-y-3">
@@ -786,9 +898,29 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                         <Checkbox
                           id={`complication-${key}`}
                           checked={value}
-                          onCheckedChange={(checked) =>
-                            setDiabetesComplications({ ...diabetesComplications, [key]: checked as boolean })
-                          }
+                          onCheckedChange={(checked) => {
+                            const isChecked = checked === true
+                            setDiabetesComplications((prev) => {
+                              if (key === "none") {
+                                if (!isChecked) {
+                                  return { ...prev, none: false }
+                                }
+                                return {
+                                  neuropathy: false,
+                                  retinopathy: false,
+                                  nephropathy: false,
+                                  cadOrStroke: false,
+                                  none: true,
+                                }
+                              }
+
+                              return {
+                                ...prev,
+                                [key]: isChecked,
+                                none: isChecked ? false : prev.none,
+                              }
+                            })
+                          }}
                         />
                         <Label htmlFor={`complication-${key}`} className="cursor-pointer font-normal">
                           {key === "cadOrStroke" ? "CAD / Stroke" : key.charAt(0).toUpperCase() + key.slice(1)}

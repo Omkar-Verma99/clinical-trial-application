@@ -158,7 +158,7 @@ export default function PatientManagementPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white">Patient Management</h1>
+        <h1 className="text-3xl font-bold text-white">Participant Data Management</h1>
         <p className="text-slate-400 mt-2">View and manage all enrolled patients</p>
       </div>
 

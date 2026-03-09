@@ -15,6 +15,12 @@ import {
 	StyleSheet,
 } from '@react-pdf/renderer'
 import type { Patient, BaselineData, FollowUpData, Doctor } from './types'
+import {
+	FLAT_EXPORT_COLUMNS,
+	buildFlatExportRows,
+	downloadCsvFile,
+	downloadExcelFile,
+} from './flat-export'
 
 // ============================================================================
 // HELPER FUNCTION: LOAD IMAGE AS BASE64
@@ -263,6 +269,16 @@ const styles = StyleSheet.create({
 		color: COLORS.TEXT_DARK,
 		marginBottom: 1,
 	},
+	aeOptionRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginBottom: 1,
+	},
+	aeOptionLabel: {
+		fontSize: 7,
+		color: COLORS.TEXT_DARK,
+		marginLeft: 3,
+	},
 	aeColTerm: { width: '15%' },
 	aeColDate: { width: '10%' },
 	aeColDate2: { width: '10%' },
@@ -347,7 +363,10 @@ const AssessmentRadioGroup = ({ label, options, selectedValue }: { label: string
 )
 
 const AEOptionLine = ({ label, selected }: { label: string; selected: boolean }) => (
-	<Text style={styles.aeOptionLine}>{`${selected ? '[x]' : '[ ]'} ${label}`}</Text>
+	<View style={styles.aeOptionRow}>
+		<CheckIcon checked={selected} size={8} />
+		<Text style={styles.aeOptionLabel}>{label}</Text>
+	</View>
 )
 
 const formatDateCell = (value?: string) => (value && value.trim() ? value : '—')
@@ -683,9 +702,10 @@ const PatientCRFDocument: React.FC<PatientCRFDocumentProps> = ({
 	                       <AEOptionLine label="Dose adjusted" selected={ae?.actionTaken === 'Dose adjusted'} />
 	                       <AEOptionLine label="Drug stopped" selected={ae?.actionTaken === 'Drug stopped'} />
 	                       <AEOptionLine label="Referred" selected={ae?.actionTaken === 'Referred'} />
-	                       <Text style={styles.aeOptionLine}>
-	                         {`${ae?.actionTaken === 'Other' ? '[x]' : '[ ]'} Other${ae?.actionTaken === 'Other' && ae?.actionTakenOther ? `: ${ae.actionTakenOther}` : ''}`}
-	                       </Text>
+	                       <AEOptionLine
+	                         label={`Other${ae?.actionTaken === 'Other' && ae?.actionTakenOther ? `: ${ae.actionTakenOther}` : ''}`}
+	                         selected={ae?.actionTaken === 'Other'}
+	                       />
 	                     </View>
 	                     <View style={[styles.aeCell, styles.aeColOutcome]}>
 	                       <AEOptionLine label="Resolved" selected={ae?.outcome === 'Resolved'} />
@@ -820,92 +840,30 @@ export function downloadCSV(
 	patient: Patient,
 	baseline: BaselineData | null,
 	followUp: FollowUpData | null,
+	followUps?: FollowUpData[],
 	doctor?: Doctor
 ): void {
-	let csv = 'Kollectcare - CRF RWE Study Report\n'
-	csv += `Generated: ${new Date().toLocaleDateString()}\n\n`
-
-	if (doctor) {
-		csv += `Investigator,${doctor.name}\n`
-		csv += `Registration,${doctor.registrationNumber || 'N/A'}\n\n`
-	}
-
-	csv += 'PATIENT INFORMATION\n'
-	csv += `Patient Code,${patient.patientCode}\n`
-	csv += `Age,${patient.age}\n`
-	csv += `Gender,${patient.gender}\n`
-	csv += `Duration of Diabetes,${patient.durationOfDiabetes} years\n\n`
-
-	if (baseline) {
-		csv += 'BASELINE DATA\n'
-		csv += `HbA1c,%,${baseline.hba1c}\n`
-		csv += `FPG,mg/dL,${baseline.fpg}\n`
-		csv += `Weight,kg,${baseline.weight}\n`
-		csv += `Blood Pressure,mmHg,${baseline.bloodPressureSystolic}/${baseline.bloodPressureDiastolic}\n\n`
-	}
-
-	if (followUp) {
-		csv += 'FOLLOW-UP DATA\n'
-		csv += `HbA1c,%,${followUp.hba1c}\n`
-		csv += `FPG,mg/dL,${followUp.fpg}\n`
-		csv += `Weight,kg,${followUp.weight}\n`
-		csv += `Blood Pressure,mmHg,${followUp.bloodPressureSystolic}/${followUp.bloodPressureDiastolic}\n`
-	}
-
-	const blob = new Blob([csv], { type: 'text/csv' })
-	const url = window.URL.createObjectURL(blob)
-	const a = document.createElement('a')
-	a.href = url
-	a.download = `CRF_${patient.patientCode}_${new Date().toISOString().split('T')[0]}.csv`
-	a.click()
-	window.URL.revokeObjectURL(url)
+	const allFollowUps = followUps && followUps.length > 0 ? followUps : followUp ? [followUp] : []
+	const rows = buildFlatExportRows(patient, baseline, allFollowUps)
+	downloadCsvFile(
+		FLAT_EXPORT_COLUMNS,
+		rows,
+		`CRF_${patient.patientCode}_${new Date().toISOString().split('T')[0]}.csv`
+	)
 }
 
 export function downloadExcel(
 	patient: Patient,
 	baseline: BaselineData | null,
 	followUp: FollowUpData | null,
+	followUps?: FollowUpData[],
 	doctor?: Doctor
 ): void {
-	let csv = 'Kollectcare CRF Data Export\n'
-	csv += `Generated,${new Date().toLocaleDateString()}\n\n`
-
-	if (doctor) {
-		csv += `Investigator,${doctor.name}\n`
-		csv += `Registration,${doctor.registrationNumber || 'N/A'}\n\n`
-	}
-
-	csv += 'PATIENT INFORMATION\n'
-	csv += `Patient Code,${patient.patientCode}\n`
-	csv += `Age,${patient.age}\n`
-	csv += `Gender,${patient.gender}\n`
-	csv += `Duration of Diabetes,${patient.durationOfDiabetes} years\n\n`
-
-	if (baseline) {
-		csv += 'BASELINE DATA\n'
-		csv += `HbA1c (%),${baseline.hba1c}\n`
-		csv += `FPG (mg/dL),${baseline.fpg}\n`
-		csv += `Weight (kg),${baseline.weight}\n`
-		csv += `Blood Pressure (mmHg),${baseline.bloodPressureSystolic}/${baseline.bloodPressureDiastolic}\n`
-		csv += `Serum Creatinine,${baseline.serumCreatinine}\n`
-		csv += `eGFR,${baseline.egfr}\n\n`
-	}
-
-	if (followUp) {
-		csv += 'FOLLOW-UP DATA\n'
-		csv += `HbA1c (%),${followUp.hba1c}\n`
-		csv += `FPG (mg/dL),${followUp.fpg}\n`
-		csv += `Weight (kg),${followUp.weight}\n`
-		csv += `Blood Pressure (mmHg),${followUp.bloodPressureSystolic}/${followUp.bloodPressureDiastolic}\n`
-		csv += `Serum Creatinine,${followUp.serumCreatinine}\n`
-		csv += `eGFR,${followUp.egfr}\n`
-	}
-
-	const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
-	const url = window.URL.createObjectURL(blob)
-	const a = document.createElement('a')
-	a.href = url
-	a.download = `CRF_${patient.patientCode}_${new Date().toISOString().split('T')[0]}.csv`
-	a.click()
-	window.URL.revokeObjectURL(url)
+	const allFollowUps = followUps && followUps.length > 0 ? followUps : followUp ? [followUp] : []
+	const rows = buildFlatExportRows(patient, baseline, allFollowUps)
+	downloadExcelFile(
+		FLAT_EXPORT_COLUMNS,
+		rows,
+		`CRF_${patient.patientCode}_${new Date().toISOString().split('T')[0]}.xls`
+	)
 }

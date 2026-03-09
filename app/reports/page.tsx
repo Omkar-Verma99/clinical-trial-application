@@ -10,6 +10,12 @@ import type { Patient } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
+import {
+  FLAT_EXPORT_COLUMNS,
+  buildFlatExportRows,
+  downloadCsvFile,
+  downloadExcelFile,
+} from "@/lib/flat-export"
 
 export default function ReportsPage() {
   const { user, doctor, loading } = useAuth()
@@ -46,14 +52,15 @@ export default function ReportsPage() {
                 return {
                   patient,
                   baseline: patientData.baseline || null,
-                  followUp: patientData.followups && patientData.followups.length > 0 ? patientData.followups[0] : null
+                  followUp: patientData.followups && patientData.followups.length > 0 ? patientData.followups[0] : null,
+                  followUps: patientData.followups && patientData.followups.length > 0 ? patientData.followups : [],
                 }
               }
               
-              return { patient, baseline: null, followUp: null }
+              return { patient, baseline: null, followUp: null, followUps: [] }
             } catch (patientError) {
               console.error(`Error fetching data for patient ${patient.id}:`, patientError)
-              return { patient, baseline: null, followUp: null }
+              return { patient, baseline: null, followUp: null, followUps: [] }
             }
           }),
         )
@@ -72,123 +79,41 @@ export default function ReportsPage() {
   }, [user])
 
   const exportExcel = () => {
-    const completeReports = reportData.filter((r) => r.baseline && r.followUp)
+    const completeReports = reportData.filter((r) => r.baseline && r.followUps && r.followUps.length > 0)
 
     if (completeReports.length === 0) {
       alert("No complete RWE studies to export")
       return
     }
 
-    const headers = [
-      "Patient Code",
-      "Age",
-      "Gender",
-      "Duration of Diabetes",
-      "Baseline HbA1c (%)",
-      "Follow-up HbA1c (%)",
-      "HbA1c Change",
-      "Baseline FPG (mg/dL)",
-      "Follow-up FPG (mg/dL)",
-      "FPG Change",
-      "Baseline Weight (kg)",
-      "Follow-up Weight (kg)",
-      "Weight Change (kg)",
-      "Compliance",
-      "Efficacy",
-      "Tolerability",
-    ]
+    const rows = completeReports.flatMap(({ patient, baseline, followUps }) =>
+      buildFlatExportRows(patient, baseline, followUps),
+    )
 
-    const rows = completeReports.map(({ patient, baseline, followUp }) => [
-      patient.patientCode,
-      patient.age,
-      patient.gender,
-      patient.durationOfDiabetes,
-      baseline.hba1c,
-      followUp.hba1c,
-      (followUp.hba1c - baseline.hba1c).toFixed(1),
-      baseline.fpg,
-      followUp.fpg,
-      (followUp.fpg - baseline.fpg).toFixed(1),
-      baseline.weight,
-      followUp.weight,
-      (followUp.weight - baseline.weight).toFixed(1),
-      followUp.compliance,
-      followUp.efficacy,
-      followUp.tolerability,
-    ])
-
-    // Create CSV content (Excel can import CSV)
-    const csv = [headers.join(","), ...rows.map((row) => row.map(cell => `"${cell}"`).join(","))].join("\n")
-
-    // Create blob with Excel MIME type
-    const blob = new Blob([csv], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.xlsx`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    downloadExcelFile(
+      FLAT_EXPORT_COLUMNS,
+      rows,
+      `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.xls`,
+    )
   }
 
   const exportCSV = () => {
-    const completeReports = reportData.filter((r) => r.baseline && r.followUp)
+    const completeReports = reportData.filter((r) => r.baseline && r.followUps && r.followUps.length > 0)
 
     if (completeReports.length === 0) {
       alert("No complete RWE studies to export")
       return
     }
 
-    const headers = [
-      "Patient Code",
-      "Age",
-      "Gender",
-      "Duration of Diabetes",
-      "Baseline HbA1c",
-      "Follow-up HbA1c",
-      "HbA1c Change",
-      "Baseline FPG",
-      "Follow-up FPG",
-      "FPG Change",
-      "Baseline Weight",
-      "Follow-up Weight",
-      "Weight Change",
-      "Compliance",
-      "Efficacy",
-      "Tolerability",
-    ]
+    const rows = completeReports.flatMap(({ patient, baseline, followUps }) =>
+      buildFlatExportRows(patient, baseline, followUps),
+    )
 
-    const rows = completeReports.map(({ patient, baseline, followUp }) => [
-      patient.patientCode,
-      patient.age,
-      patient.gender,
-      patient.durationOfDiabetes,
-      baseline.hba1c,
-      followUp.hba1c,
-      (followUp.hba1c - baseline.hba1c).toFixed(1),
-      baseline.fpg,
-      followUp.fpg,
-      (followUp.fpg - baseline.fpg).toFixed(1),
-      baseline.weight,
-      followUp.weight,
-      (followUp.weight - baseline.weight).toFixed(1),
-      followUp.compliance,
-      followUp.efficacy,
-      followUp.tolerability,
-    ])
-
-    const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n")
-
-    const blob = new Blob([csv], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.csv`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    downloadCsvFile(
+      FLAT_EXPORT_COLUMNS,
+      rows,
+      `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.csv`,
+    )
   }
 
   if (loading || !user) {

@@ -215,7 +215,7 @@ export default function PatientDetailPage({ params }: Props) {
   const handleExportCSV = useCallback(() => {
     if (!patient) return
     try {
-      downloadCSV(patient, baseline, followUps.length > 0 ? followUps[0] : null, doctorForExports)
+      downloadCSV(patient, baseline, followUps.length > 0 ? followUps[0] : null, followUps, doctorForExports)
       toast({
         title: "Success",
         description: "Patient data exported to CSV successfully",
@@ -233,7 +233,7 @@ export default function PatientDetailPage({ params }: Props) {
   const handleExportExcel = useCallback(() => {
     if (!patient) return
     try {
-      downloadExcel(patient, baseline, followUps.length > 0 ? followUps[0] : null, doctorForExports)
+      downloadExcel(patient, baseline, followUps.length > 0 ? followUps[0] : null, followUps, doctorForExports)
       toast({
         title: "Success",
         description: "Patient data exported to Excel successfully",
