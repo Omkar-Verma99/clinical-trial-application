@@ -120,6 +120,18 @@ export interface BaselineData {
   updatedAt: string
 }
 
+export interface StructuredAdverseEvent {
+  id: string
+  aeTerm: string
+  onsetDate: string
+  stopDate?: string
+  severity: "Mild" | "Moderate" | "Severe"
+  serious: "Yes" | "No"
+  actionTaken: "None" | "Dose adjusted" | "Drug stopped" | "Referred" | "Other"
+  actionTakenOther?: string
+  outcome: "Resolved" | "Ongoing"
+}
+
 // FOLLOW-UP ASSESSMENT - Week 12 ± 2 weeks
 export interface FollowUpData {
   patientId: string
@@ -162,15 +174,10 @@ export interface FollowUpData {
     addOnOrChangedTherapyDetails?: string
   }
   
-  // SECTION L - Safety & Adverse Events (NEW - STRUCTURED)
-  adverseEventsStructured?: Array<{
-    aeTerm: string
-    onsetDate: string
-    severity: "Mild" | "Moderate" | "Severe"
-    isSerious: boolean
-    actionTaken: "None" | "Dose adjusted" | "Drug stopped" | "Referred"
-    outcome: "Resolved" | "Ongoing"
-  }>
+  // SECTION L - Safety & Adverse Events (STRUCTURED)
+  adverseEvents?: StructuredAdverseEvent[]
+  // Legacy transitional key used by some older records
+  adverseEventsStructured?: StructuredAdverseEvent[]
   
   eventsOfSpecialInterest?: {
     hypoglycemiaMild: boolean
@@ -220,7 +227,7 @@ export interface FollowUpData {
   }
   
   // Legacy fields (for backward compatibility)
-  adverseEvents?: string
+  adverseEventsText?: string
   actionTaken?: string[]
   outcome?: string[]
   compliance?: string

@@ -226,6 +226,50 @@ const styles = StyleSheet.create({
 		fontSize: 6,
 		color: COLORS.TEXT_LIGHT,
 	},
+	aeTable: {
+		borderWidth: 1,
+		borderColor: COLORS.BORDER_GREY,
+		marginTop: 4,
+		marginBottom: 6,
+	},
+	aeHeaderRow: {
+		flexDirection: 'row',
+		backgroundColor: COLORS.BG_LIGHT,
+		borderBottomWidth: 1,
+		borderBottomColor: COLORS.BORDER_GREY,
+	},
+	aeRow: {
+		flexDirection: 'row',
+		borderBottomWidth: 1,
+		borderBottomColor: COLORS.BORDER_GREY,
+	},
+	aeCell: {
+		padding: 4,
+		borderRightWidth: 1,
+		borderRightColor: COLORS.BORDER_GREY,
+		fontSize: 7,
+	},
+	aeHeaderText: {
+		fontSize: 7,
+		fontWeight: 'bold',
+		color: COLORS.TEXT_DARK,
+	},
+	aeCellText: {
+		fontSize: 7,
+		color: COLORS.TEXT_DARK,
+	},
+	aeOptionLine: {
+		fontSize: 7,
+		color: COLORS.TEXT_DARK,
+		marginBottom: 1,
+	},
+	aeColTerm: { width: '15%' },
+	aeColDate: { width: '10%' },
+	aeColDate2: { width: '10%' },
+	aeColSeverity: { width: '16%' },
+	aeColSerious: { width: '12%' },
+	aeColAction: { width: '23%' },
+	aeColOutcome: { width: '14%', borderRightWidth: 0 },
 })
 
 // ============================================================================
@@ -301,6 +345,12 @@ const AssessmentRadioGroup = ({ label, options, selectedValue }: { label: string
 		</View>
 	</View>
 )
+
+const AEOptionLine = ({ label, selected }: { label: string; selected: boolean }) => (
+	<Text style={styles.aeOptionLine}>{`${selected ? '[x]' : '[ ]'} ${label}`}</Text>
+)
+
+const formatDateCell = (value?: string) => (value && value.trim() ? value : '—')
 
 // ============================================================================
 // KEY-VALUE COMPONENT
@@ -584,6 +634,66 @@ const PatientCRFDocument: React.FC<PatientCRFDocumentProps> = ({
 	               )}
 	               <DataField label="Missed Doses (7d)" value={visit?.adherence?.missedDosesInLast7Days} />
 	               <DataField label="Add-on Therapy" value={visit?.adherence?.addOnOrChangedTherapy} />
+	             </>
+	           )}
+	           {((Array.isArray(visit?.adverseEvents) && visit?.adverseEvents.length > 0) ||
+	             (Array.isArray(visit?.adverseEventsStructured) && visit?.adverseEventsStructured.length > 0)) && (
+	             <>
+	               <Text style={styles.choiceGroupLabel}>Adverse Event Details (MedDRA preferred term)</Text>
+	               <View style={styles.aeTable}>
+	                 <View style={styles.aeHeaderRow}>
+	                   <View style={[styles.aeCell, styles.aeColTerm]}><Text style={styles.aeHeaderText}>AE Term</Text></View>
+	                   <View style={[styles.aeCell, styles.aeColDate]}><Text style={styles.aeHeaderText}>Onset Date</Text></View>
+	                   <View style={[styles.aeCell, styles.aeColDate2]}><Text style={styles.aeHeaderText}>Stop Date</Text></View>
+	                   <View style={[styles.aeCell, styles.aeColSeverity]}><Text style={styles.aeHeaderText}>Severity</Text></View>
+	                   <View style={[styles.aeCell, styles.aeColSerious]}><Text style={styles.aeHeaderText}>Serious</Text></View>
+	                   <View style={[styles.aeCell, styles.aeColAction]}><Text style={styles.aeHeaderText}>Action Taken</Text></View>
+	                   <View style={[styles.aeCell, styles.aeColOutcome]}><Text style={styles.aeHeaderText}>Outcome</Text></View>
+	                 </View>
+	                 {(Array.isArray(visit?.adverseEvents) && visit.adverseEvents.length > 0
+	                   ? visit.adverseEvents
+	                   : Array.isArray(visit?.adverseEventsStructured)
+	                     ? visit.adverseEventsStructured
+	                     : []
+	                 ).map((ae: any, aeIndex: number, aeArray: any[]) => (
+	                   <View
+	                     key={`${ae?.id || 'ae'}-${aeIndex}`}
+	                     style={aeIndex === aeArray.length - 1 ? [styles.aeRow, { borderBottomWidth: 0 }] : styles.aeRow}
+	                   >
+	                     <View style={[styles.aeCell, styles.aeColTerm]}>
+	                       <Text style={styles.aeCellText}>{ae?.aeTerm || '—'}</Text>
+	                     </View>
+	                     <View style={[styles.aeCell, styles.aeColDate]}>
+	                       <Text style={styles.aeCellText}>{formatDateCell(ae?.onsetDate)}</Text>
+	                     </View>
+	                     <View style={[styles.aeCell, styles.aeColDate2]}>
+	                       <Text style={styles.aeCellText}>{formatDateCell(ae?.stopDate)}</Text>
+	                     </View>
+	                     <View style={[styles.aeCell, styles.aeColSeverity]}>
+	                       <AEOptionLine label="Mild" selected={ae?.severity === 'Mild'} />
+	                       <AEOptionLine label="Moderate" selected={ae?.severity === 'Moderate'} />
+	                       <AEOptionLine label="Severe" selected={ae?.severity === 'Severe'} />
+	                     </View>
+	                     <View style={[styles.aeCell, styles.aeColSerious]}>
+	                       <AEOptionLine label="Yes" selected={ae?.serious === 'Yes' || ae?.isSerious === true} />
+	                       <AEOptionLine label="No" selected={ae?.serious === 'No' || ae?.isSerious === false} />
+	                     </View>
+	                     <View style={[styles.aeCell, styles.aeColAction]}>
+	                       <AEOptionLine label="None" selected={ae?.actionTaken === 'None'} />
+	                       <AEOptionLine label="Dose adjusted" selected={ae?.actionTaken === 'Dose adjusted'} />
+	                       <AEOptionLine label="Drug stopped" selected={ae?.actionTaken === 'Drug stopped'} />
+	                       <AEOptionLine label="Referred" selected={ae?.actionTaken === 'Referred'} />
+	                       <Text style={styles.aeOptionLine}>
+	                         {`${ae?.actionTaken === 'Other' ? '[x]' : '[ ]'} Other${ae?.actionTaken === 'Other' && ae?.actionTakenOther ? `: ${ae.actionTakenOther}` : ''}`}
+	                       </Text>
+	                     </View>
+	                     <View style={[styles.aeCell, styles.aeColOutcome]}>
+	                       <AEOptionLine label="Resolved" selected={ae?.outcome === 'Resolved'} />
+	                       <AEOptionLine label="Ongoing" selected={ae?.outcome === 'Ongoing'} />
+	                     </View>
+	                   </View>
+	                 ))}
+	               </View>
 	             </>
 	           )}
 	           {visit?.eventsOfSpecialInterest && (

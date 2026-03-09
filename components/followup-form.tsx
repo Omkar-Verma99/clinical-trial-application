@@ -7,7 +7,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { doc, arrayUnion, writeBatch, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import DOMPurify from "dompurify"
-import type { FollowUpData } from "@/lib/types"
+import type { FollowUpData, StructuredAdverseEvent } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -123,8 +123,10 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     missedDoses: existingData?.adherence?.missedDosesInLast7Days || "",
     addOnTherapy: existingData?.adherence?.addOnOrChangedTherapy || false,
     addOnTherapyDetails: existingData?.adherence?.addOnOrChangedTherapyDetails || "",
-    adverseEventsPresent: false,
-    adverseEventsText: existingData?.adverseEvents || "",
+    adverseEventsPresent:
+      existingData?.adverseEventsPresent ??
+      ((Array.isArray(existingData?.adverseEvents) && existingData.adverseEvents.length > 0) ||
+        Boolean(typeof (existingData as any)?.adverseEvents === "string" && (existingData as any).adverseEvents.trim())),
     hypoglycemiaMild: existingData?.eventsOfSpecialInterest?.hypoglycemiaMild || false,
     hypoglycemiaModerate: existingData?.eventsOfSpecialInterest?.hypoglycemiaModerate || false,
     hypoglycemiaSevere: existingData?.eventsOfSpecialInterest?.hypoglycemiaSevere || false,
@@ -149,19 +151,73 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     additionalComments: existingData?.comments || "",
   })
 
-  const [actionTaken, setActionTaken] = useState({
-    None: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("None") : false,
-    AdjustedDose: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("Adjusted dose") : false,
-    StoppedMedication: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("Stopped medication") : false,
-    Referred: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("Referred") : false,
-    Other: Array.isArray(existingData?.actionTaken) ? existingData.actionTaken.includes("Other") : false,
+  const buildEmptyAdverseEvent = (): StructuredAdverseEvent => ({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    aeTerm: "",
+    onsetDate: "",
+    stopDate: "",
+    severity: "Mild",
+    serious: "No",
+    actionTaken: "None",
+    actionTakenOther: "",
+    outcome: "Resolved",
   })
 
-  const [outcome, setOutcome] = useState({
-    Resolved: Array.isArray(existingData?.outcome) ? existingData.outcome.includes("Resolved") : false,
-    Ongoing: Array.isArray(existingData?.outcome) ? existingData.outcome.includes("Ongoing") : false,
-    Unknown: Array.isArray(existingData?.outcome) ? existingData.outcome.includes("Unknown") : false,
+  const [adverseEvents, setAdverseEvents] = useState<StructuredAdverseEvent[]>(() => {
+    if (Array.isArray(existingData?.adverseEvents) && existingData.adverseEvents.length > 0) {
+      return existingData.adverseEvents.map((event) => ({
+        ...buildEmptyAdverseEvent(),
+        ...event,
+        id: event.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      }))
+    }
+    if (Array.isArray(existingData?.adverseEventsStructured) && existingData.adverseEventsStructured.length > 0) {
+      return existingData.adverseEventsStructured.map((event) => ({
+        ...buildEmptyAdverseEvent(),
+        ...event,
+        id: event.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      }))
+    }
+    if (typeof (existingData as any)?.adverseEvents === "string" && (existingData as any).adverseEvents.trim()) {
+      const legacyActions = Array.isArray(existingData?.actionTaken) ? existingData.actionTaken : []
+      const legacyOutcomes = Array.isArray(existingData?.outcome) ? existingData.outcome : []
+      const preferredAction = legacyActions[0]
+      const preferredOutcome = legacyOutcomes[0]
+
+      const mappedAction: StructuredAdverseEvent["actionTaken"] =
+        preferredAction === "Dose adjusted" ||
+        preferredAction === "Drug stopped" ||
+        preferredAction === "Referred" ||
+        preferredAction === "Other"
+          ? preferredAction
+          : "None"
+
+      const mappedOutcome: StructuredAdverseEvent["outcome"] =
+        preferredOutcome === "Ongoing" ? "Ongoing" : "Resolved"
+
+      return [
+        {
+          ...buildEmptyAdverseEvent(),
+          aeTerm: (existingData as any).adverseEvents,
+          actionTaken: mappedAction,
+          outcome: mappedOutcome,
+        },
+      ]
+    }
+    return []
   })
+
+  const updateAdverseEvent = (id: string, patch: Partial<StructuredAdverseEvent>) => {
+    setAdverseEvents((prev) => prev.map((event) => (event.id === id ? { ...event, ...patch } : event)))
+  }
+
+  const addAdverseEvent = () => {
+    setAdverseEvents((prev) => [...prev, buildEmptyAdverseEvent()])
+  }
+
+  const removeAdverseEvent = (id: string) => {
+    setAdverseEvents((prev) => prev.filter((event) => event.id !== id))
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -194,6 +250,22 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       if (!formData.overallEfficacy) validationErrors.push("Overall efficacy is required")
       if (!formData.overallTolerability) validationErrors.push("Overall tolerability is required")
       if (!formData.complianceJudgment) validationErrors.push("Compliance judgment is required")
+
+      if (formData.adverseEventsPresent) {
+        if (adverseEvents.length === 0) {
+          validationErrors.push("Add at least one adverse event")
+        }
+        adverseEvents.forEach((event, index) => {
+          if (!event.aeTerm.trim()) validationErrors.push(`AE #${index + 1}: term is required`)
+          if (!event.onsetDate) validationErrors.push(`AE #${index + 1}: onset date is required`)
+          if (event.stopDate && event.onsetDate && event.stopDate < event.onsetDate) {
+            validationErrors.push(`AE #${index + 1}: stop date cannot be before onset date`)
+          }
+          if (event.actionTaken === "Other" && !event.actionTakenOther?.trim()) {
+            validationErrors.push(`AE #${index + 1}: specify action taken for Other`)
+          }
+        })
+      }
 
       if (validationErrors.length > 0) {
         toast({
@@ -238,7 +310,15 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         return sanitized
       }
 
-      const sanitizedFormData = sanitizeObject(formData, ["urinalysisSpecify", "addOnTherapyDetails", "hospitalizationReason", "adverseEventsText"])
+      const sanitizedFormData = sanitizeObject(formData, ["urinalysisSpecify", "addOnTherapyDetails", "hospitalizationReason"])
+
+      const sanitizedAdverseEvents: StructuredAdverseEvent[] = formData.adverseEventsPresent
+        ? adverseEvents.map((event) => ({
+            ...event,
+            aeTerm: DOMPurify.sanitize(event.aeTerm),
+            actionTakenOther: event.actionTaken === "Other" ? DOMPurify.sanitize(event.actionTakenOther || "") : "",
+          }))
+        : []
 
       const data = {
         visitNumber: formData.visitNumber,
@@ -270,15 +350,9 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           addOnOrChangedTherapy: formData.addOnTherapy,
           addOnOrChangedTherapyDetails: formData.addOnTherapy ? sanitizedFormData.addOnTherapyDetails : null,
         },
-        adverseEvents: formData.adverseEventsText,
-        actionTaken: Object.entries(actionTaken)
-          .filter(([_, value]) => value)
-          .map(([key]) =>
-            key === "AdjustedDose" ? "Adjusted dose" : key === "StoppedMedication" ? "Stopped medication" : key,
-          ),
-        outcome: Object.entries(outcome)
-          .filter(([_, value]) => value)
-          .map(([key]) => key),
+        adverseEventsPresent: formData.adverseEventsPresent,
+        adverseEvents: sanitizedAdverseEvents,
+        adverseEventsStructured: sanitizedAdverseEvents,
         eventsOfSpecialInterest: {
           hypoglycemiaMild: formData.hypoglycemiaMild,
           hypoglycemiaModerate: formData.hypoglycemiaModerate,
@@ -958,7 +1032,10 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     name="adverseEventPresent"
                     value="no"
                     checked={!formData.adverseEventsPresent}
-                    onChange={() => setFormData({ ...formData, adverseEventsPresent: false, adverseEventsText: "" })}
+                    onChange={() => {
+                      setFormData({ ...formData, adverseEventsPresent: false })
+                      setAdverseEvents([])
+                    }}
                   />
                   <span className="text-sm">No</span>
                 </Label>
@@ -968,7 +1045,12 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     name="adverseEventPresent"
                     value="yes"
                     checked={formData.adverseEventsPresent}
-                    onChange={() => setFormData({ ...formData, adverseEventsPresent: true })}
+                    onChange={() => {
+                      setFormData({ ...formData, adverseEventsPresent: true })
+                      if (adverseEvents.length === 0) {
+                        setAdverseEvents([buildEmptyAdverseEvent()])
+                      }
+                    }}
                   />
                   <span className="text-sm">Yes (complete below)</span>
                 </Label>
@@ -977,57 +1059,131 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
             {formData.adverseEventsPresent && (
               <div className="space-y-4 ml-6 border-l-2 border-blue-200 pl-4">
-                <div className="space-y-2">
-                  <Label htmlFor="adverseEventsText">Adverse Event Details (MedDRA preferred term) *</Label>
-                  <Textarea
-                    id="adverseEventsText"
-                    placeholder="AE Term, Onset Date, Severity, Serious (Yes/No), Action Taken, Outcome"
-                    value={formData.adverseEventsText}
-                    onChange={(e) => setFormData({ ...formData, adverseEventsText: e.target.value })}
-                    rows={4}
-                    required={formData.adverseEventsPresent}
-                  />
-                </div>
+                {adverseEvents.map((event, index) => (
+                  <div key={event.id} className="space-y-4 rounded-lg border p-4 bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold">Adverse Event #{index + 1}</h4>
+                      <Button type="button" variant="outline" size="sm" onClick={() => removeAdverseEvent(event.id)}>
+                        Remove
+                      </Button>
+                    </div>
 
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Action Taken</Label>
-                  <div className="space-y-2">
-                    {Object.entries(actionTaken).map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-2">
-                        <Checkbox
-                          id={key}
-                          checked={value}
-                          onCheckedChange={(checked) => setActionTaken({ ...actionTaken, [key]: checked as boolean })}
-                        />
-                        <Label htmlFor={key} className="cursor-pointer font-normal">
-                          {key === "AdjustedDose"
-                            ? "Adjusted dose"
-                            : key === "StoppedMedication"
-                              ? "Stopped medication"
-                              : key}
-                        </Label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`ae-term-${event.id}`}>AE Term (MedDRA preferred term) *</Label>
+                      <Input
+                        id={`ae-term-${event.id}`}
+                        type="text"
+                        placeholder="Enter adverse event term"
+                        value={event.aeTerm}
+                        onChange={(e) => updateAdverseEvent(event.id, { aeTerm: e.target.value })}
+                        required={formData.adverseEventsPresent}
+                      />
+                    </div>
 
-                <div className="space-y-3">
-                  <Label className="text-base font-medium">Outcome</Label>
-                  <div className="space-y-2">
-                    {Object.entries(outcome).map(([key, value]) => (
-                      <div key={key} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`outcome-${key}`}
-                          checked={value}
-                          onCheckedChange={(checked) => setOutcome({ ...outcome, [key]: checked as boolean })}
+                    <div className="grid md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor={`ae-onset-${event.id}`}>Onset Date *</Label>
+                        <Input
+                          id={`ae-onset-${event.id}`}
+                          type="date"
+                          value={event.onsetDate}
+                          onChange={(e) => updateAdverseEvent(event.id, { onsetDate: e.target.value })}
+                          required={formData.adverseEventsPresent}
                         />
-                        <Label htmlFor={`outcome-${key}`} className="cursor-pointer font-normal">
-                          {key}
-                        </Label>
                       </div>
-                    ))}
+                      <div className="space-y-2">
+                        <Label htmlFor={`ae-stop-${event.id}`}>Stop Date</Label>
+                        <Input
+                          id={`ae-stop-${event.id}`}
+                          type="date"
+                          value={event.stopDate || ""}
+                          onChange={(e) => updateAdverseEvent(event.id, { stopDate: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Severity *</Label>
+                      <div className="flex flex-wrap gap-4">
+                        {(["Mild", "Moderate", "Severe"] as const).map((option) => (
+                          <Label key={option} className="flex items-center gap-2 cursor-pointer font-normal">
+                            <input
+                              type="radio"
+                              name={`severity-${event.id}`}
+                              checked={event.severity === option}
+                              onChange={() => updateAdverseEvent(event.id, { severity: option })}
+                            />
+                            <span>{option}</span>
+                          </Label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Serious *</Label>
+                      <div className="flex flex-wrap gap-4">
+                        {(["Yes", "No"] as const).map((option) => (
+                          <Label key={option} className="flex items-center gap-2 cursor-pointer font-normal">
+                            <input
+                              type="radio"
+                              name={`serious-${event.id}`}
+                              checked={event.serious === option}
+                              onChange={() => updateAdverseEvent(event.id, { serious: option })}
+                            />
+                            <span>{option}</span>
+                          </Label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Action Taken *</Label>
+                      <div className="grid md:grid-cols-2 gap-2">
+                        {(["None", "Dose adjusted", "Drug stopped", "Referred", "Other"] as const).map((option) => (
+                          <Label key={option} className="flex items-center gap-2 cursor-pointer font-normal">
+                            <input
+                              type="radio"
+                              name={`action-${event.id}`}
+                              checked={event.actionTaken === option}
+                              onChange={() => updateAdverseEvent(event.id, { actionTaken: option })}
+                            />
+                            <span>{option}</span>
+                          </Label>
+                        ))}
+                      </div>
+                      {event.actionTaken === "Other" && (
+                        <Input
+                          type="text"
+                          placeholder="Specify action taken"
+                          value={event.actionTakenOther || ""}
+                          onChange={(e) => updateAdverseEvent(event.id, { actionTakenOther: e.target.value })}
+                          required
+                        />
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Outcome *</Label>
+                      <div className="flex flex-wrap gap-4">
+                        {(["Resolved", "Ongoing"] as const).map((option) => (
+                          <Label key={option} className="flex items-center gap-2 cursor-pointer font-normal">
+                            <input
+                              type="radio"
+                              name={`outcome-${event.id}`}
+                              checked={event.outcome === option}
+                              onChange={() => updateAdverseEvent(event.id, { outcome: option })}
+                            />
+                            <span>{option}</span>
+                          </Label>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ))}
+
+                <Button type="button" variant="outline" onClick={addAdverseEvent}>
+                  + Add Another Adverse Event
+                </Button>
               </div>
             )}
 

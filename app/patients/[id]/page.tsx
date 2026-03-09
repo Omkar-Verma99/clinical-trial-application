@@ -555,26 +555,24 @@ export default function PatientDetailPage({ params }: Props) {
             </TabsContent>
           )}
 
-          {activeTab === "patient-info" && (
-            <TabsContent value="patient-info">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Patient Information</CardTitle>
-                  <CardDescription>
-                    Review and update all patient profile fields directly in this tab.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <iframe
-                    title="Patient Info Form"
-                    src={`/patients/add?id=${patient.id}&embedded=1`}
-                    className="w-full border-0"
-                    style={{ minHeight: "2200px" }}
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
+          <TabsContent value="patient-info" forceMount>
+            <Card>
+              <CardHeader>
+                <CardTitle>Patient Information</CardTitle>
+                <CardDescription>
+                  Review and update all patient profile fields directly in this tab.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <iframe
+                  title="Patient Info Form"
+                  src={`/patients/add?id=${patient.id}&embedded=1`}
+                  className="w-full border-0"
+                  style={{ minHeight: "2200px" }}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           {/* Dynamic Visit Tabs */}
           {followUpsWithDefault.map((visit, visitIndex) => (
