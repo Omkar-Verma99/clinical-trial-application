@@ -61,6 +61,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
     bmi: "",
     bmiManuallyEdited: false,
     durationOfDiabetes: "",
+    baselineGlycemicSeverity: "",
     smokingStatus: "",
     alcoholIntake: "",
     physicalActivityLevel: "",
@@ -169,6 +170,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
       bmi: patientData.bmi?.toString() || "",
       bmiManuallyEdited: false,
       durationOfDiabetes: patientData.durationOfDiabetes?.toString() || "",
+      baselineGlycemicSeverity: patientData.baselineGlycemicSeverity || "",
       smokingStatus: patientData.smokingStatus || "",
       alcoholIntake: patientData.alcoholIntake || "",
       physicalActivityLevel: patientData.physicalActivityLevel || "",
@@ -480,7 +482,10 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         ...Object.entries(previousDrugClasses)
           .filter(([key, value]) => key !== "other" && value)
           .map(([key]) => key),
-        ...(previousDrugClasses.other ? [sanitizeInput(previousDrugClasses.other)] : []),
+        ...((previousDrugClasses.other || "")
+          .split(",")
+          .map((v) => sanitizeInput(v.trim()))
+          .filter(Boolean)),
       ]
 
       const selectedComorbidities = [
@@ -527,6 +532,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         weight: weightValue,
         bmi: bmiValueParsed,
         durationOfDiabetes: durationValue,
+        baselineGlycemicSeverity: sanitizedFormData.baselineGlycemicSeverity || null,
         smokingStatus: sanitizedFormData.smokingStatus || null,
         alcoholIntake: sanitizedFormData.alcoholIntake || null,
         physicalActivityLevel: sanitizedFormData.physicalActivityLevel || null,
@@ -555,7 +561,12 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           .reduce((acc, key) => {
             acc[key as keyof typeof previousDrugClasses] = previousDrugClasses[key as keyof typeof previousDrugClasses]
             return acc
-          }, {} as any),
+          }, {
+            other: ((previousDrugClasses.other || "")
+              .split(",")
+              .map((v) => sanitizeInput(v.trim()))
+              .filter(Boolean)),
+          } as any),
         
         // Reason for triple FDC
         reasonForTripleFDC: {
@@ -890,6 +901,21 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                   {durationValidationError && <p className="text-xs text-red-600">{durationValidationError}</p>}
                 </div>
 
+                <div className="space-y-2 mb-4">
+                  <Label>Baseline Glycemic Severity</Label>
+                  <select
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={formData.baselineGlycemicSeverity}
+                    onChange={(e) => setFormData({ ...formData, baselineGlycemicSeverity: e.target.value })}
+                  >
+                    <option value="">Select...</option>
+                    <option value="HbA1c <7.5%">HbA1c &lt;7.5%</option>
+                    <option value="HbA1c 7.5–8.5%">HbA1c 7.5–8.5%</option>
+                    <option value="HbA1c 8.6–10%">HbA1c 8.6–10%</option>
+                    <option value="HbA1c >10%">HbA1c &gt;10%</option>
+                  </select>
+                </div>
+
                 <div className="space-y-3">
                   <Label>Diabetes-Related Complications</Label>
                   <div className="space-y-2">
@@ -1017,6 +1043,11 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                       </div>
                     ))}
                   </div>
+                  <Input
+                    placeholder="Other drug classes (comma-separated)"
+                    value={previousDrugClasses.other}
+                    onChange={(e) => setPreviousDrugClasses({ ...previousDrugClasses, other: e.target.value })}
+                  />
                 </div>
 
                 <div className="space-y-3">

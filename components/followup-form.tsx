@@ -28,7 +28,7 @@ interface FollowUpFormProps {
 
 export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess, baselineDate, allFollowUps = [], followUpIndex = 0 }: FollowUpFormProps) {
   const { toast } = useToast()
-  const { user } = useAuth()
+  const { user, doctor } = useAuth()
   const [loading, setLoading] = useState(false)
   const [timelinePopup, setTimelinePopup] = useState<{ open: boolean; title: string; message: string }>({
     open: false,
@@ -107,6 +107,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     weight: existingData?.weight?.toString() || "",
     bloodPressureSystolic: existingData?.bloodPressureSystolic?.toString() || "",
     bloodPressureDiastolic: existingData?.bloodPressureDiastolic?.toString() || "",
+    heartRate: existingData?.heartRate?.toString() || "",
     serumCreatinine: existingData?.serumCreatinine?.toString() || "",
     egfr: existingData?.egfr?.toString() || "",
     urinalysisType: existingData?.urinalysis?.startsWith("Abnormal") ? "Abnormal" : "Normal",
@@ -119,7 +120,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     renalOutcome: existingData?.outcomes?.renalOutcome || "",
     patientContinuingTreatment: existingData?.adherence?.patientContinuingTreatment ?? true,
     discontinuationReason: existingData?.adherence?.discontinuationReason || "",
-    discontinuationReasonOther: "",
+    discontinuationReasonOther: existingData?.adherence?.discontinuationReasonOtherDetails || "",
     missedDoses: existingData?.adherence?.missedDosesInLast7Days || "",
     addOnTherapy: existingData?.adherence?.addOnOrChangedTherapy || false,
     addOnTherapyDetails: existingData?.adherence?.addOnOrChangedTherapyDetails || "",
@@ -246,6 +247,9 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
       if (!formData.hba1cResponse) validationErrors.push("HbA1c response category is required")
       if (!formData.patientContinuingTreatment && !formData.discontinuationReason) validationErrors.push("Please specify discontinuation reason")
+      if (!formData.patientContinuingTreatment && formData.discontinuationReason === "Other" && !formData.discontinuationReasonOther.trim()) {
+        validationErrors.push("Please specify discontinuation reason details")
+      }
       if (formData.missedDoses === "") validationErrors.push("Missed doses information is required")
       if (!formData.overallEfficacy) validationErrors.push("Overall efficacy is required")
       if (!formData.overallTolerability) validationErrors.push("Overall tolerability is required")
@@ -331,6 +335,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         weight: formData.weight ? Number.parseFloat(formData.weight) : null,
         bloodPressureSystolic: formData.bloodPressureSystolic ? Number.parseInt(formData.bloodPressureSystolic) : null,
         bloodPressureDiastolic: formData.bloodPressureDiastolic ? Number.parseInt(formData.bloodPressureDiastolic) : null,
+        heartRate: formData.heartRate ? Number.parseInt(formData.heartRate) : null,
         serumCreatinine: formData.serumCreatinine ? Number.parseFloat(formData.serumCreatinine) : null,
         egfr: formData.egfr ? Number.parseFloat(formData.egfr) : null,
         urinalysis: formData.urinalysisType === "Abnormal" && sanitizedFormData.urinalysisSpecify ? 
@@ -346,6 +351,10 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         adherence: {
           patientContinuingTreatment: formData.patientContinuingTreatment,
           discontinuationReason: formData.discontinuationReason || null,
+          discontinuationReasonOtherDetails:
+            !formData.patientContinuingTreatment && formData.discontinuationReason === "Other"
+              ? DOMPurify.sanitize(formData.discontinuationReasonOther)
+              : null,
           missedDosesInLast7Days: formData.missedDoses || null,
           addOnOrChangedTherapy: formData.addOnTherapy,
           addOnOrChangedTherapyDetails: formData.addOnTherapy ? sanitizedFormData.addOnTherapyDetails : null,
@@ -382,7 +391,12 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           patientIdentityMappingAtClinicOnly: formData.patientIdentityMapping,
         },
         physicianDeclaration: {
+          physicianName: doctor?.name || "",
+          qualification: doctor?.qualification || "",
+          clinicHospitalName: doctor?.studySiteCode || "",
           confirmationCheckbox: formData.physicianConfirmation,
+          signatureMethod: "Checkbox",
+          signatureDate: formData.visitDate || new Date().toISOString().split('T')[0],
         },
         comments: formData.additionalComments,
         createdAt: existingData?.createdAt || new Date().toISOString(),
@@ -573,7 +587,17 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
               </div>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="heartRate">Heart Rate (bpm)</Label>
+                <Input
+                  id="heartRate"
+                  type="number"
+                  placeholder="72"
+                  value={formData.heartRate}
+                  onChange={(e) => setFormData({ ...formData, heartRate: e.target.value })}
+                />
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="creatinine">Serum Creatinine (mg/dL)</Label>
                 <Input
@@ -779,9 +803,9 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     type="radio"
                     id="renalDeclineLess"
                     name="renalOutcome"
-                    value="Decline &lt;10%"
-                    checked={formData.renalOutcome === "Decline &lt;10%"}
-                    onChange={() => setFormData({ ...formData, renalOutcome: "Decline &lt;10%" })}
+                    value="Decline <10%"
+                    checked={formData.renalOutcome === "Decline <10%"}
+                    onChange={() => setFormData({ ...formData, renalOutcome: "Decline <10%" })}
                   />
                   <Label htmlFor="renalDeclineLess" className="cursor-pointer font-normal">Decline &lt;10%</Label>
                 </div>
