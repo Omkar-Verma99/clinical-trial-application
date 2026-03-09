@@ -15,6 +15,7 @@ import { downloadPatientPDF, downloadCSV, downloadExcel } from "@/lib/pdf-export
 import { toast } from "@/hooks/use-toast"
 import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"
+import { PatientFormPage } from "@/app/patients/add/page"
 
 // OPTIMIZED: Memoize form components to prevent unnecessary re-renders
 const MemoizedBaselineForm = memo(BaselineForm)
@@ -551,27 +552,22 @@ export default function PatientDetailPage({ params }: Props) {
 
           {activeTab === "baseline" && (
             <TabsContent value="baseline">
-              <MemoizedBaselineForm patientId={patient.id} existingData={baseline} onSuccess={() => setActiveTab("overview")} />
+              <MemoizedBaselineForm
+                patientId={patient.id}
+                existingData={baseline}
+                patientBaselineVisitDate={patient.baselineVisitDate}
+                patientWeight={typeof patient.weight === "number" ? patient.weight : null}
+                onSuccess={() => setActiveTab("overview")}
+              />
             </TabsContent>
           )}
 
           <TabsContent value="patient-info" forceMount>
-            <Card>
-              <CardHeader>
-                <CardTitle>Patient Information</CardTitle>
-                <CardDescription>
-                  Review and update all patient profile fields directly in this tab.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-0">
-                <iframe
-                  title="Patient Info Form"
-                  src={`/patients/add?id=${patient.id}&embedded=1`}
-                  className="w-full border-0"
-                  style={{ minHeight: "2200px" }}
-                />
-              </CardContent>
-            </Card>
+            <PatientFormPage
+              presetEditPatientId={patient.id}
+              forceEmbedded={true}
+              onSaved={() => setActiveTab("overview")}
+            />
           </TabsContent>
 
           {/* Dynamic Visit Tabs */}

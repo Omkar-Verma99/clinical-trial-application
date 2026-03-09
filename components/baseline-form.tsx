@@ -19,10 +19,12 @@ import { logError } from "@/lib/error-tracking"
 interface BaselineFormProps {
   patientId: string
   existingData: BaselineData | null
+  patientBaselineVisitDate?: string
+  patientWeight?: number | null
   onSuccess: () => void
 }
 
-export const BaselineForm = memo(function BaselineForm({ patientId, existingData, onSuccess }: BaselineFormProps) {
+export const BaselineForm = memo(function BaselineForm({ patientId, existingData, patientBaselineVisitDate, patientWeight, onSuccess }: BaselineFormProps) {
   const { toast } = useToast()
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -48,7 +50,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
   })
 
   useEffect(() => {
-    if (existingData || !patientId || !db) return
+    if (!patientId || !db) return
 
     const prefillFromPatient = async () => {
       try {
@@ -65,8 +67,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
 
         setFormData((prev) => ({
           ...prev,
-          baselineVisitDate: prev.baselineVisitDate || baselineVisitDate,
-          weight: prev.weight || baselineWeight,
+          baselineVisitDate: baselineVisitDate || prev.baselineVisitDate,
+          weight: baselineWeight || prev.weight,
           treatmentInitiationDate: prev.treatmentInitiationDate || baselineVisitDate || prev.treatmentInitiationDate,
         }))
       } catch {
@@ -75,7 +77,18 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
     }
 
     void prefillFromPatient()
-  }, [existingData, patientId])
+  }, [patientId])
+
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      baselineVisitDate: patientBaselineVisitDate || prev.baselineVisitDate,
+      weight:
+        typeof patientWeight === "number" && Number.isFinite(patientWeight)
+          ? patientWeight.toString()
+          : prev.weight,
+    }))
+  }, [patientBaselineVisitDate, patientWeight])
 
   const [counseling, setCounseling] = useState({
     dietAndLifestyle: (existingData as any)?.counseling?.dietAndLifestyle || existingData?.dietAdvice || false,
@@ -260,9 +273,10 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 id="baselineVisitDate"
                 type="date"
                 value={formData.baselineVisitDate}
-                onChange={(e) => setFormData({ ...formData, baselineVisitDate: e.target.value })}
+                readOnly
                 required
               />
+              <p className="text-xs text-muted-foreground">Managed from Patient Info tab.</p>
             </div>
           </div>
 
@@ -315,9 +329,10 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                   step="0.1"
                   placeholder="75.5"
                   value={formData.weight}
-                  onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
+                  readOnly
                   required
                 />
+                <p className="text-xs text-muted-foreground">Managed from Patient Info tab.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="bpSys">BP Systolic (mmHg) *</Label>

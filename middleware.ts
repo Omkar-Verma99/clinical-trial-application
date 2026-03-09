@@ -71,8 +71,9 @@ export function middleware(request: NextRequest) {
     if (doctorAuth) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
-    
-    return NextResponse.redirect(new URL('/login', request.url));
+
+    // Show landing page for unauthenticated users.
+    return NextResponse.next();
   }
 
   return NextResponse.next();

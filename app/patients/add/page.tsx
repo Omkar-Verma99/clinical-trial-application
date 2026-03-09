@@ -20,11 +20,17 @@ import Link from "next/link"
 
 const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
 
-export default function AddPatientPage() {
+interface PatientFormPageProps {
+  presetEditPatientId?: string
+  forceEmbedded?: boolean
+  onSaved?: () => void
+}
+
+export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }: PatientFormPageProps = {}) {
   const { user, doctor } = useAuth()
   const router = useRouter()
-  const [editPatientId, setEditPatientId] = useState<string | null>(null)
-  const [isEmbedded, setIsEmbedded] = useState(false)
+  const [editPatientId, setEditPatientId] = useState<string | null>(presetEditPatientId ?? null)
+  const [isEmbedded, setIsEmbedded] = useState(Boolean(forceEmbedded))
   const isEditMode = Boolean(editPatientId)
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -33,11 +39,14 @@ export default function AddPatientPage() {
   const [showIneligibleModal, setShowIneligibleModal] = useState(false)
 
   useEffect(() => {
+    if (presetEditPatientId || forceEmbedded !== undefined) {
+      return
+    }
     if (typeof window === "undefined") return
     const urlParams = new URLSearchParams(window.location.search)
     setEditPatientId(urlParams.get("id"))
     setIsEmbedded(urlParams.get("embedded") === "1")
-  }, [])
+  }, [presetEditPatientId, forceEmbedded])
 
   const [formData, setFormData] = useState({
     patientCode: "",
@@ -276,16 +285,6 @@ export default function AddPatientPage() {
     }
   }
 
-  const handleBMIChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const bmi = e.target.value
-    // Mark as manually edited if user changes BMI
-    setFormData(prev => ({ 
-      ...prev, 
-      bmi,
-      bmiManuallyEdited: bmi !== calculateBMI(parseFloat(formData.height) || 0, parseFloat(formData.weight) || 0)
-    }))
-  }
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user || !user.uid || !db) {
@@ -342,7 +341,7 @@ export default function AddPatientPage() {
       toast({
         variant: "destructive",
         title: "Ineligible Patient",
-        description: "This patient meets exclusion criteria and cannot be enrolled with CKD eGFR in the 30 range.",
+        description: "This patient meets exclusion criteria and is NOT eligible for this study. CKD eGFR in the 30-44 range cannot be enrolled.",
       })
       return
     }
@@ -484,6 +483,11 @@ export default function AddPatientPage() {
             description: `Patient ${formData.patientCode} information has been updated.`,
           })
 
+          if (onSaved) {
+            onSaved()
+            return
+          }
+
           await new Promise(resolve => setTimeout(resolve, 400))
           await router.push(`/patients/${editPatientId}`)
         } else {
@@ -510,6 +514,11 @@ export default function AddPatientPage() {
             title: "Patient added successfully",
             description: `Patient ${formData.patientCode} has been enrolled in the RWE study.`,
           })
+
+          if (onSaved) {
+            onSaved()
+            return
+          }
 
           await new Promise(resolve => setTimeout(resolve, 500))
           await router.push("/dashboard")
@@ -684,9 +693,9 @@ export default function AddPatientPage() {
                       step="0.1"
                       placeholder="Auto-calculated"
                       value={formData.bmi}
-                      onChange={handleBMIChange}
+                      readOnly
                     />
-                    <p className="text-xs text-muted-foreground">Auto-calculated, editable</p>
+                    <p className="text-xs text-muted-foreground">Auto-calculated from height and weight.</p>
                   </div>
                 </div>
 
@@ -933,7 +942,7 @@ export default function AddPatientPage() {
                   <div className="w-full max-w-lg rounded-lg bg-background border border-border p-6 space-y-4">
                     <h4 className="text-lg font-semibold text-red-600">Ineligible Patient</h4>
                     <p className="text-sm text-muted-foreground">
-                      This patient meets exclusion criteria and is NOT eligible for this study. CKD eGFR in the 30 range cannot be enrolled.
+                      This patient meets exclusion criteria and is NOT eligible for this study. CKD eGFR in the 30-44 range cannot be enrolled.
                     </p>
                     <div className="space-y-2">
                       <Label>Change CKD eGFR Category to Continue</Label>
@@ -968,4 +977,8 @@ export default function AddPatientPage() {
       </main>
     </div>
   )
+}
+
+export default function AddPatientPage() {
+  return <PatientFormPage />
 }
