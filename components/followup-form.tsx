@@ -23,9 +23,10 @@ interface FollowUpFormProps {
   onSuccess: () => void
   baselineDate?: string // Baseline visit date to calculate weeks
   allFollowUps?: FollowUpData[] // Track all existing visits
+  followUpIndex?: number
 }
 
-export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess, baselineDate, allFollowUps = [] }: FollowUpFormProps) {
+export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess, baselineDate, allFollowUps = [], followUpIndex = 0 }: FollowUpFormProps) {
   const { toast } = useToast()
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -54,6 +55,15 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
   
   const [visitDate, setVisitDate] = useState(existingData?.visitDate || "")
   const visitNumber = existingData?.visitNumber || calculateVisitNumber(visitDate)
+
+  const calculateElapsedWeeks = (visitDateValue: string): number | null => {
+    if (!baselineDate || !visitDateValue) return null
+    const baseline = new Date(baselineDate)
+    const visit = new Date(visitDateValue)
+    if (isNaN(baseline.getTime()) || isNaN(visit.getTime())) return null
+    const diffDays = Math.floor((visit.getTime() - baseline.getTime()) / (1000 * 60 * 60 * 24))
+    return Math.max(0, Math.round(diffDays / 7))
+  }
 
   const [formData, setFormData] = useState({
     visitNumber: visitNumber,
@@ -159,6 +169,18 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           description: validationErrors.slice(0, 3).join(", ") + (validationErrors.length > 3 ? ` and ${validationErrors.length - 3} more` : ""),
         })
         return
+      }
+
+      // Follow-up 1 timeline alert only (non-blocking): warn if outside Week 10-14.
+      if (followUpIndex === 0) {
+        const elapsedWeeks = calculateElapsedWeeks(formData.visitDate)
+        if (elapsedWeeks !== null) {
+          if (elapsedWeeks < 10) {
+            window.alert("This patient's follow-up is scheduled BEFORE the recommended timeline (Week 10-14). Consider rescheduling if needed.")
+          } else if (elapsedWeeks > 14) {
+            window.alert(`Follow-up delayed: Recorded as Week ${elapsedWeeks}, expected Week 10-14. Please note this delay.`)
+          }
+        }
       }
 
       // VALIDATION PHASE 2: Parse and validate numeric ranges

@@ -2,11 +2,11 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
-import { writeBatch, doc, collection } from "firebase/firestore"
+import { writeBatch, doc, collection, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -23,9 +23,19 @@ const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.
 export default function AddPatientPage() {
   const { user, doctor } = useAuth()
   const router = useRouter()
+  const [editPatientId, setEditPatientId] = useState<string | null>(null)
+  const isEditMode = Boolean(editPatientId)
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
+  const [loadingPatientData, setLoadingPatientData] = useState(false)
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
+  const [showIneligibleModal, setShowIneligibleModal] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const urlParams = new URLSearchParams(window.location.search)
+    setEditPatientId(urlParams.get("id"))
+  }, [])
 
   const [formData, setFormData] = useState({
     patientCode: "",
@@ -87,6 +97,23 @@ export default function AddPatientPage() {
     other: "",
   })
 
+  const ageValidationError = useMemo(() => {
+    const ageValue = Number.parseInt(formData.age, 10)
+    if (!formData.age) return "Age is required"
+    if (!Number.isFinite(ageValue)) return "Age must be a valid number"
+    if (ageValue < 18) return "Patient must be at least 18 years old. This patient is not eligible for the study."
+    if (ageValue > 75) return "Patient must be 75 years or younger. This patient is not eligible for the study."
+    return null
+  }, [formData.age])
+
+  const isCkdIneligible = useMemo(() => {
+    return Boolean(comorbidities.chronicKidneyDisease && comorbidities.ckdEgfrCategory.startsWith("30"))
+  }, [comorbidities.chronicKidneyDisease, comorbidities.ckdEgfrCategory])
+
+  useEffect(() => {
+    setShowIneligibleModal(isCkdIneligible)
+  }, [isCkdIneligible])
+
   // Auto-calculate BMI
   const calculateBMI = (height: number, weight: number) => {
     if (height && weight && !isNaN(height) && !isNaN(weight)) {
@@ -96,6 +123,106 @@ export default function AddPatientPage() {
     }
     return ""
   }
+
+  useEffect(() => {
+    if (!isEditMode || !editPatientId || !db || !user?.uid) {
+      return
+    }
+
+    const loadPatientForEdit = async () => {
+      setLoadingPatientData(true)
+      try {
+        const patientRef = doc(db, "patients", editPatientId)
+        const patientSnap = await getDoc(patientRef)
+
+        if (!patientSnap.exists()) {
+          toast({
+            variant: "destructive",
+            title: "Patient not found",
+            description: "The selected patient record could not be loaded.",
+          })
+          router.push("/dashboard")
+          return
+        }
+
+        const patientData = patientSnap.data() as any
+        if (patientData.doctorId && patientData.doctorId !== user.uid) {
+          toast({
+            variant: "destructive",
+            title: "Access denied",
+            description: "You can only edit patients enrolled under your account.",
+          })
+          router.push("/dashboard")
+          return
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+          patientCode: patientData.patientCode || "",
+          studySiteCode: patientData.studySiteCode || doctor?.studySiteCode || "",
+          investigatorName: patientData.investigatorName || doctor?.name || "",
+          baselineVisitDate: patientData.baselineVisitDate || prev.baselineVisitDate,
+          age: patientData.age?.toString() || "",
+          gender: patientData.gender || "",
+          height: patientData.height?.toString() || "",
+          weight: patientData.weight?.toString() || "",
+          bmi: patientData.bmi?.toString() || "",
+          bmiManuallyEdited: false,
+          durationOfDiabetes: patientData.durationOfDiabetes?.toString() || "",
+          smokingStatus: patientData.smokingStatus || "",
+          alcoholIntake: patientData.alcoholIntake || "",
+          physicalActivityLevel: patientData.physicalActivityLevel || "",
+        }))
+
+        if (patientData.diabetesComplications) {
+          setDiabetesComplications((prev) => ({ ...prev, ...patientData.diabetesComplications }))
+        }
+
+        if (patientData.comorbidities) {
+          setComorbidities((prev) => ({
+            ...prev,
+            ...patientData.comorbidities,
+            other: Array.isArray(patientData.comorbidities.other)
+              ? patientData.comorbidities.other.join(", ")
+              : patientData.comorbidities.other || "",
+            ckdEgfrCategory: patientData.comorbidities.ckdEgfrCategory || "",
+          }))
+        }
+
+        setPreviousTreatmentType(patientData.previousTreatmentType || "")
+
+        if (patientData.previousDrugClasses) {
+          setPreviousDrugClasses((prev) => ({
+            ...prev,
+            ...patientData.previousDrugClasses,
+            other: Array.isArray(patientData.previousDrugClasses.other)
+              ? patientData.previousDrugClasses.other.join(", ")
+              : patientData.previousDrugClasses.other || "",
+          }))
+        }
+
+        if (patientData.reasonForTripleFDC) {
+          setReasonForTripleFDC((prev) => ({
+            ...prev,
+            ...patientData.reasonForTripleFDC,
+            other: Array.isArray(patientData.reasonForTripleFDC.other)
+              ? patientData.reasonForTripleFDC.other.join(", ")
+              : patientData.reasonForTripleFDC.other || "",
+          }))
+        }
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Unable to load patient",
+          description: error instanceof Error ? error.message : "Please try again.",
+        })
+      } finally {
+        setLoadingPatientData(false)
+      }
+    }
+
+    void loadPatientForEdit()
+  }, [db, doctor?.name, doctor?.studySiteCode, editPatientId, isEditMode, router, toast, user?.uid])
 
   const handleHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const height = parseFloat(e.target.value)
@@ -174,6 +301,25 @@ export default function AddPatientPage() {
         variant: "destructive",
         title: "Missing Required Fields",
         description: `Please fill in: ${missingFields.join(", ")}`,
+      })
+      return
+    }
+
+    if (ageValidationError) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Age",
+        description: ageValidationError,
+      })
+      return
+    }
+
+    if (isCkdIneligible) {
+      setShowIneligibleModal(true)
+      toast({
+        variant: "destructive",
+        title: "Ineligible Patient",
+        description: "This patient meets exclusion criteria and cannot be enrolled with CKD eGFR in the 30 range.",
       })
       return
     }
@@ -302,29 +448,52 @@ export default function AddPatientPage() {
         createdAt: new Date().toISOString(),
       }
 
-      // Generate a Firestore document with an auto ID
-      const patientDocRef = doc(collection(db, "patients"))
-      const patientId = patientDocRef.id
-
-      // Add ID fields to satisfy security rules (patientId required) and for querying
-      const patientDataWithId = {
-        ...patientData,
-        id: patientId,
-        patientId: patientId,
-      }
-
-      // Save directly to Firebase (online-only) using batch to minimize roundtrips
       try {
-        const batch = writeBatch(db)
-        batch.set(patientDocRef, patientDataWithId)
-        await batch.commit()
+        if (isEditMode && editPatientId) {
+          const patientDocRef = doc(db, "patients", editPatientId)
+          await updateDoc(patientDocRef, {
+            ...patientData,
+            updatedAt: new Date().toISOString(),
+          })
 
-        if (isDevelopmentEnv()) {
-          console.log(`✓ Patient saved to Firebase: ${patientId}`)
+          toast({
+            title: "Patient updated successfully",
+            description: `Patient ${formData.patientCode} information has been updated.`,
+          })
+
+          await new Promise(resolve => setTimeout(resolve, 400))
+          await router.push(`/patients/${editPatientId}`)
+        } else {
+          // Generate a Firestore document with an auto ID
+          const patientDocRef = doc(collection(db, "patients"))
+          const patientId = patientDocRef.id
+
+          // Add ID fields to satisfy security rules (patientId required) and for querying
+          const patientDataWithId = {
+            ...patientData,
+            id: patientId,
+            patientId: patientId,
+          }
+
+          const batch = writeBatch(db)
+          batch.set(patientDocRef, patientDataWithId)
+          await batch.commit()
+
+          if (isDevelopmentEnv()) {
+            console.log(`✓ Patient saved to Firebase: ${patientId}`)
+          }
+
+          toast({
+            title: "Patient added successfully",
+            description: `Patient ${formData.patientCode} has been enrolled in the trial.`,
+          })
+
+          await new Promise(resolve => setTimeout(resolve, 500))
+          await router.push("/dashboard")
         }
       } catch (firebaseError) {
         logError(firebaseError as Error, {
-          action: "addPatient",
+          action: isEditMode ? "updatePatient" : "addPatient",
           severity: "high"
         })
         const errMsg = firebaseError instanceof Error ? firebaseError.message : "Failed to save patient to database."
@@ -336,15 +505,6 @@ export default function AddPatientPage() {
         setLoading(false)
         return
       }
-
-      toast({
-        title: "Patient added successfully",
-        description: `Patient ${formData.patientCode} has been enrolled in the trial.`,
-      })
-
-      // Redirect to dashboard after successful enrollment
-      await new Promise(resolve => setTimeout(resolve, 500))
-      await router.push("/dashboard")
     } catch (error) {
       logError(error as Error, {
         action: "addPatient",
@@ -364,7 +524,7 @@ export default function AddPatientPage() {
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
-          <Link href="/dashboard">
+          <Link href={isEditMode && editPatientId ? `/patients/${editPatientId}` : "/dashboard"}>
             <Button variant="ghost" size="sm">
               ← Back
             </Button>
@@ -379,11 +539,22 @@ export default function AddPatientPage() {
       <main className="container mx-auto px-4 py-8 max-w-4xl">
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Enroll Patient in Trial</CardTitle>
-            <CardDescription>KC MeSempa RWE Study - Case Record Form (CRF) Section A-E</CardDescription>
+            <CardTitle className="text-2xl">{isEditMode ? "Edit Patient Information" : "Enroll Patient in Trial"}</CardTitle>
+            <CardDescription>
+              {isEditMode
+                ? "Update patient demographic and clinical profile for this trial participant"
+                : "KC MeSempa RWE Study - Case Record Form (CRF) Section A-E"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-8">
+              {loadingPatientData && (
+                <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
+                  Loading patient data...
+                </div>
+              )}
+
+              <fieldset disabled={loading || loadingPatientData || isCkdIneligible} className="space-y-8">
               {/* Patient Identification */}
               <div className="border-t pt-6">
                 <h3 className="text-lg font-bold mb-4">Patient Identification</h3>
@@ -395,6 +566,8 @@ export default function AddPatientPage() {
                       placeholder="PT001 (Anonymized)"
                       value={formData.patientCode}
                       onChange={(e) => setFormData({ ...formData, patientCode: e.target.value })}
+                      readOnly={isEditMode}
+                      disabled={isEditMode}
                       required
                     />
                     <p className="text-xs text-muted-foreground">Clinic-specific code. DO NOT use patient name.</p>
@@ -449,8 +622,12 @@ export default function AddPatientPage() {
                       placeholder="45"
                       value={formData.age}
                       onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                      min={18}
+                      max={75}
+                      className={ageValidationError ? "border-red-500 focus-visible:ring-red-500" : ""}
                       required
                     />
+                    {ageValidationError && <p className="text-xs text-red-600">{ageValidationError}</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="height">Height (cm)</Label>
@@ -710,15 +887,55 @@ export default function AddPatientPage() {
               </div>
 
               <div className="flex gap-3 pt-4">
-                <Button type="submit" className="flex-1" disabled={loading}>
-                  {loading ? "Enrolling Patient..." : "Enroll Patient"}
+                <Button
+                  type="submit"
+                  className="flex-1"
+                  disabled={loading || loadingPatientData || !!ageValidationError || isCkdIneligible}
+                >
+                  {loading ? (isEditMode ? "Saving Changes..." : "Enrolling Patient...") : (isEditMode ? "Save Changes" : "Enroll Patient")}
                 </Button>
-                <Link href="/dashboard" className="flex-1">
+                <Link href={isEditMode && editPatientId ? `/patients/${editPatientId}` : "/dashboard"} className="flex-1">
                   <Button type="button" variant="outline" className="w-full bg-transparent">
                     Cancel
                   </Button>
                 </Link>
               </div>
+              </fieldset>
+
+              {showIneligibleModal && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                  <div className="w-full max-w-lg rounded-lg bg-background border border-border p-6 space-y-4">
+                    <h4 className="text-lg font-semibold text-red-600">Ineligible Patient</h4>
+                    <p className="text-sm text-muted-foreground">
+                      This patient meets exclusion criteria and is NOT eligible for this study. CKD eGFR in the 30 range cannot be enrolled.
+                    </p>
+                    <div className="space-y-2">
+                      <Label>Change CKD eGFR Category to Continue</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                        value={comorbidities.ckdEgfrCategory}
+                        onChange={(e) => setComorbidities({ ...comorbidities, ckdEgfrCategory: e.target.value })}
+                      >
+                        <option value="">Select...</option>
+                        <option value="≥90">≥90</option>
+                        <option value="60–89">60–89</option>
+                        <option value="45–59">45–59</option>
+                        <option value="30–44">30–44</option>
+                      </select>
+                    </div>
+                    <div className="flex gap-3 pt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => router.push(isEditMode && editPatientId ? `/patients/${editPatientId}` : "/dashboard")}
+                        className="flex-1"
+                      >
+                        Go Back
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>

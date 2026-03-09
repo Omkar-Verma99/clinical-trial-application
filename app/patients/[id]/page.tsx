@@ -82,7 +82,7 @@ export default function PatientDetailPage({ params }: Props) {
   }, [baseline, creatingFollowUp, activeTab])
 
   const tabColumnCount = useMemo(
-    () => 3 + followUps.length + (creatingFollowUp ? 1 : 0),
+    () => 4 + followUps.length + (creatingFollowUp ? 1 : 0),
     [followUps.length, creatingFollowUp]
   )
 
@@ -357,6 +357,7 @@ export default function PatientDetailPage({ params }: Props) {
           >
             <TabsTrigger value="overview" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Overview</TabsTrigger>
             <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Baseline</TabsTrigger>
+            <TabsTrigger value="patient-info" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Patient Info</TabsTrigger>
             
             {/* Dynamic FollowUp Tabs */}
             {followUps.length > 0 && followUps.map((_, index) => (
@@ -542,6 +543,36 @@ export default function PatientDetailPage({ params }: Props) {
             </TabsContent>
           )}
 
+          {activeTab === "patient-info" && (
+            <TabsContent value="patient-info">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Patient Information</CardTitle>
+                  <CardDescription>
+                    Use the same patient enrollment form in edit mode to update demographic and medical history details.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-md border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Patient Code</p>
+                      <p className="font-semibold">{patient.patientCode}</p>
+                    </div>
+                    <div className="rounded-md border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Study Site</p>
+                      <p className="font-semibold">{patient.studySiteCode || "-"}</p>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Link href={`/patients/add?id=${patient.id}`}>
+                      <Button>Edit Patient Info</Button>
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
           {/* Dynamic Visit Tabs */}
           {followUpsWithDefault.map((visit, visitIndex) => (
             <TabsContent key={`visit-content-${visitIndex}`} value={`visit-${visitIndex}`}>
@@ -552,6 +583,7 @@ export default function PatientDetailPage({ params }: Props) {
                     patientId={patient.id}
                     existingData={Object.keys(visit).length === 0 ? null : visit}
                     baselineDate={patient.baselineVisitDate}
+                    followUpIndex={visitIndex}
                     allFollowUps={followUps}
                     onSuccess={() => {
                       // Refresh and stay on this visit
@@ -611,6 +643,7 @@ export default function PatientDetailPage({ params }: Props) {
                     patientId={patient.id}
                     existingData={null}
                     baselineDate={patient.baselineVisitDate}
+                    followUpIndex={followUps.length}
                     allFollowUps={followUps}
                     onSuccess={() => {
                       setCreatingFollowUp(false)

@@ -248,7 +248,7 @@ export default function DashboardPage() {
   const router = useRouter()
   const [patients, setPatients] = useState<PatientWithStatus[]>([])
   const [loadingPatients, setLoadingPatients] = useState(true)
-  const [pagination, setPagination] = useState({ offset: 0, limit: 12, hasMore: false })
+  const [pagination, setPagination] = useState({ offset: 0, limit: 30, hasMore: false })
   const [paginationLoading, setPaginationLoading] = useState(false)
 
   // Debounced pagination handler
@@ -299,7 +299,10 @@ export default function DashboardPage() {
       q,
       (snapshot) => {
         const patientsData: PatientWithStatus[] = snapshot.docs.map((patientDoc) => {
-          const patientData = patientDoc.data() as Omit<Patient, 'id'>
+          const patientData = patientDoc.data() as Omit<Patient, 'id'> & {
+            baseline?: unknown
+            followups?: unknown[]
+          }
           return {
             ...patientData,
             id: patientDoc.id,
@@ -358,18 +361,6 @@ export default function DashboardPage() {
   const currentPagePatients = useMemo(() => {
     return patients.slice(pagination.offset, pagination.offset + pagination.limit)
   }, [patients, pagination.offset, pagination.limit])
-
-  const patientsList = useMemo(() => {
-    return currentPagePatients.map((patient) => (
-      <PatientCard
-        key={patient.id}
-        patient={patient}
-        getNextStatus={getNextStatus}
-        getStatusColor={getStatusColor}
-        handleActionClick={handleActionClick}
-      />
-    ))
-  }, [currentPagePatients, getNextStatus, getStatusColor, handleActionClick])
 
   // Update hasMore when data or pagination changes
   useEffect(() => {
@@ -472,7 +463,42 @@ export default function DashboardPage() {
           </Card>
         ) : (
           <div className="space-y-6">
-            <div className="grid gap-4">{patientsList}</div>
+            <div className="rounded-lg border border-border overflow-hidden">
+              <div className="max-h-[700px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="sticky top-0 z-10 bg-white dark:bg-slate-950 border-b border-border">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold">Patient Code</th>
+                      <th className="px-4 py-3 text-center font-semibold">Age</th>
+                      <th className="px-4 py-3 text-center font-semibold">Enrolled Date</th>
+                      <th className="px-4 py-3 text-left font-semibold">Study Site</th>
+                      <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {currentPagePatients.map((patient) => (
+                      <tr key={patient.id} className="border-b border-border/60 hover:bg-muted/30">
+                        <td className="px-4 py-3 font-mono text-xs sm:text-sm">{patient.patientCode}</td>
+                        <td className="px-4 py-3 text-center">{patient.age}</td>
+                        <td className="px-4 py-3 text-center">
+                          {new Date(patient.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="px-4 py-3">{patient.studySiteCode || "-"}</td>
+                        <td className="px-4 py-3 text-right">
+                          <Button size="sm" variant="outline" onClick={(e) => handleActionClick(e, patient)}>
+                            View Details
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
             
             {/* PAGINATION CONTROLS - WITH LOADING STATE */}
             <div className="flex items-center justify-between py-4 px-4 border-t border-border/40">
