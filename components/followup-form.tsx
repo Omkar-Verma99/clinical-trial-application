@@ -65,6 +65,21 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     return Math.max(0, Math.round(diffDays / 7))
   }
 
+  const showTimelineAlertIfNeeded = (visitDateValue: string) => {
+    if (followUpIndex !== 0) return
+    const elapsedWeeks = calculateElapsedWeeks(visitDateValue)
+    if (elapsedWeeks === null) return
+
+    if (elapsedWeeks < 10) {
+      window.alert("This patient's follow-up is scheduled BEFORE the recommended timeline (Week 10-14). Consider rescheduling if needed.")
+      return
+    }
+
+    if (elapsedWeeks > 14) {
+      window.alert(`Follow-up delayed: Recorded as Week ${elapsedWeeks}, expected Week 10-14. Please note this delay.`)
+    }
+  }
+
   const [formData, setFormData] = useState({
     visitNumber: visitNumber,
     visitDate: existingData?.visitDate || "",
@@ -169,18 +184,6 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           description: validationErrors.slice(0, 3).join(", ") + (validationErrors.length > 3 ? ` and ${validationErrors.length - 3} more` : ""),
         })
         return
-      }
-
-      // Follow-up 1 timeline alert only (non-blocking): warn if outside Week 10-14.
-      if (followUpIndex === 0) {
-        const elapsedWeeks = calculateElapsedWeeks(formData.visitDate)
-        if (elapsedWeeks !== null) {
-          if (elapsedWeeks < 10) {
-            window.alert("This patient's follow-up is scheduled BEFORE the recommended timeline (Week 10-14). Consider rescheduling if needed.")
-          } else if (elapsedWeeks > 14) {
-            window.alert(`Follow-up delayed: Recorded as Week ${elapsedWeeks}, expected Week 10-14. Please note this delay.`)
-          }
-        }
       }
 
       // VALIDATION PHASE 2: Parse and validate numeric ranges
@@ -390,6 +393,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                   const newVisitNumber = calculateVisitNumber(newDate)
                   setFormData({ ...formData, visitDate: newDate, visitNumber: newVisitNumber })
                   setVisitDate(newDate)
+                  showTimelineAlertIfNeeded(newDate)
                 }}
                 required
               />

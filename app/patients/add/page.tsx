@@ -591,10 +591,11 @@ export default function AddPatientPage() {
                       id="studySiteCode"
                       placeholder={doctor?.studySiteCode || "Your clinic name"}
                       value={formData.studySiteCode}
-                      onChange={(e) => setFormData({ ...formData, studySiteCode: e.target.value })}
+                      disabled
+                      readOnly
                       required
                     />
-                    <p className="text-xs text-muted-foreground">Auto-filled from your profile. Can be changed per patient.</p>
+                    <p className="text-xs text-muted-foreground">Auto-filled from your profile and locked for consistency.</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="investigatorName">Investigator Name *</Label>

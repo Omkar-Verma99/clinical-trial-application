@@ -81,6 +81,12 @@ export default function PatientDetailPage({ params }: Props) {
     }
   }, [baseline, creatingFollowUp, activeTab])
 
+  useEffect(() => {
+    if (activeTab === "patient-info" && patient?.id) {
+      router.push(`/patients/add?id=${patient.id}`)
+    }
+  }, [activeTab, patient?.id, router])
+
   const tabColumnCount = useMemo(
     () => 4 + followUps.length + (creatingFollowUp ? 1 : 0),
     [followUps.length, creatingFollowUp]
@@ -356,8 +362,8 @@ export default function PatientDetailPage({ params }: Props) {
             style={{ gridTemplateColumns: `repeat(${tabColumnCount}, minmax(0, 1fr))` }}
           >
             <TabsTrigger value="overview" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Overview</TabsTrigger>
-            <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Baseline</TabsTrigger>
             <TabsTrigger value="patient-info" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Patient Info</TabsTrigger>
+            <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Baseline</TabsTrigger>
             
             {/* Dynamic FollowUp Tabs */}
             {followUps.length > 0 && followUps.map((_, index) => (
@@ -549,24 +555,13 @@ export default function PatientDetailPage({ params }: Props) {
                 <CardHeader>
                   <CardTitle>Patient Information</CardTitle>
                   <CardDescription>
-                    Use the same patient enrollment form in edit mode to update demographic and medical history details.
+                    Opening full patient information form with all fields for review and update.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-md border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Patient Code</p>
-                      <p className="font-semibold">{patient.patientCode}</p>
-                    </div>
-                    <div className="rounded-md border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Study Site</p>
-                      <p className="font-semibold">{patient.studySiteCode || "-"}</p>
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <Link href={`/patients/add?id=${patient.id}`}>
-                      <Button>Edit Patient Info</Button>
-                    </Link>
+                <CardContent>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
+                    Redirecting to the full Patient Info form...
                   </div>
                 </CardContent>
               </Card>
