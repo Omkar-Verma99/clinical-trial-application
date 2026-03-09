@@ -75,7 +75,7 @@ export default function ReportsPage() {
     const completeReports = reportData.filter((r) => r.baseline && r.followUp)
 
     if (completeReports.length === 0) {
-      alert("No complete trials to export")
+      alert("No complete RWE studies to export")
       return
     }
 
@@ -125,7 +125,7 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `kollectcare-trial-data-${new Date().toISOString().split("T")[0]}.xlsx`
+    a.download = `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.xlsx`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -136,7 +136,7 @@ export default function ReportsPage() {
     const completeReports = reportData.filter((r) => r.baseline && r.followUp)
 
     if (completeReports.length === 0) {
-      alert("No complete trials to export")
+      alert("No complete RWE studies to export")
       return
     }
 
@@ -184,7 +184,7 @@ export default function ReportsPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
-    a.download = `kollectcare-trial-data-${new Date().toISOString().split("T")[0]}.csv`
+    a.download = `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.csv`
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
@@ -199,9 +199,9 @@ export default function ReportsPage() {
     )
   }
 
-  const completeTrials = reportData.filter((r) => r.baseline && r.followUp).length
-  const inProgressTrials = reportData.filter((r) => r.baseline && !r.followUp).length
-  const notStartedTrials = reportData.filter((r) => !r.baseline).length
+  const completeStudies = reportData.filter((r) => r.baseline && r.followUp).length
+  const inProgressStudies = reportData.filter((r) => r.baseline && !r.followUp).length
+  const notStartedStudies = reportData.filter((r) => !r.baseline).length
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
@@ -221,8 +221,8 @@ export default function ReportsPage() {
 
       <main className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-balance">Trial Reports & Analytics</h1>
-          <p className="text-muted-foreground mt-1">Overview of all clinical trial data</p>
+          <h1 className="text-3xl font-bold text-balance">RWE Reports & Analytics</h1>
+          <p className="text-muted-foreground mt-1">Overview of all RWE study data</p>
         </div>
 
         {loadingData ? (
@@ -244,8 +244,8 @@ export default function ReportsPage() {
               <Card>
                 <CardContent className="pt-6">
                   <div className="text-center">
-                    <p className="text-sm text-muted-foreground">Complete Trials</p>
-                    <p className="text-3xl font-bold mt-1 text-green-600">{completeTrials}</p>
+                    <p className="text-sm text-muted-foreground">Complete RWE Studies</p>
+                    <p className="text-3xl font-bold mt-1 text-green-600">{completeStudies}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -253,7 +253,7 @@ export default function ReportsPage() {
                 <CardContent className="pt-6">
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">In Progress</p>
-                    <p className="text-3xl font-bold mt-1 text-amber-600">{inProgressTrials}</p>
+                    <p className="text-3xl font-bold mt-1 text-amber-600">{inProgressStudies}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -261,7 +261,7 @@ export default function ReportsPage() {
                 <CardContent className="pt-6">
                   <div className="text-center">
                     <p className="text-sm text-muted-foreground">Not Started</p>
-                    <p className="text-3xl font-bold mt-1 text-muted-foreground">{notStartedTrials}</p>
+                    <p className="text-3xl font-bold mt-1 text-muted-foreground">{notStartedStudies}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -271,10 +271,10 @@ export default function ReportsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Export Data</CardTitle>
-                <CardDescription>Download complete trial data in various formats</CardDescription>
+                <CardDescription>Download complete RWE study data in various formats</CardDescription>
               </CardHeader>
               <CardContent className="flex gap-3">
-                <Button onClick={exportExcel} disabled={completeTrials === 0}>
+                <Button onClick={exportExcel} disabled={completeStudies === 0}>
                   <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path
                       strokeLinecap="round"
@@ -288,7 +288,7 @@ export default function ReportsPage() {
                 <Button
                   onClick={exportCSV}
                   variant="outline"
-                  disabled={completeTrials === 0}
+                  disabled={completeStudies === 0}
                   className="bg-transparent"
                 >
                   <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -304,12 +304,12 @@ export default function ReportsPage() {
               </CardContent>
             </Card>
 
-            {/* Trial Results Summary */}
-            {completeTrials > 0 && (
+            {/* RWE Results Summary */}
+            {completeStudies > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle>Aggregate Results</CardTitle>
-                  <CardDescription>Average outcomes across all completed trials</CardDescription>
+                  <CardDescription>Average outcomes across all completed RWE studies</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="grid md:grid-cols-3 gap-6">
@@ -319,7 +319,7 @@ export default function ReportsPage() {
                         {(
                           reportData
                             .filter((r) => r.baseline && r.followUp)
-                            .reduce((sum, r) => sum + (r.baseline.hba1c - r.followUp.hba1c), 0) / completeTrials
+                            .reduce((sum, r) => sum + (r.baseline.hba1c - r.followUp.hba1c), 0) / completeStudies
                         ).toFixed(2)}
                         %
                       </p>
@@ -330,7 +330,7 @@ export default function ReportsPage() {
                         {(
                           reportData
                             .filter((r) => r.baseline && r.followUp)
-                            .reduce((sum, r) => sum + (r.baseline.fpg - r.followUp.fpg), 0) / completeTrials
+                            .reduce((sum, r) => sum + (r.baseline.fpg - r.followUp.fpg), 0) / completeStudies
                         ).toFixed(1)}{" "}
                         mg/dL
                       </p>
@@ -341,7 +341,7 @@ export default function ReportsPage() {
                         {(
                           reportData
                             .filter((r) => r.baseline && r.followUp)
-                            .reduce((sum, r) => sum + (r.followUp.weight - r.baseline.weight), 0) / completeTrials
+                            .reduce((sum, r) => sum + (r.followUp.weight - r.baseline.weight), 0) / completeStudies
                         ).toFixed(1)}{" "}
                         kg
                       </p>
@@ -355,7 +355,7 @@ export default function ReportsPage() {
             <Card>
               <CardHeader>
                 <CardTitle>Patient Status</CardTitle>
-                <CardDescription>Overview of all enrolled patients and their trial progress</CardDescription>
+                <CardDescription>Overview of all enrolled patients and their RWE study progress</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">

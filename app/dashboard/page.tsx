@@ -423,7 +423,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-balance">Patient Management</h1>
-            <p className="text-muted-foreground mt-1">Manage your clinical trial participants</p>
+            <p className="text-muted-foreground mt-1">Manage your RWE study participants</p>
           </div>
           <Link href="/patients/add">
             <Button size="lg">
@@ -478,7 +478,7 @@ export default function DashboardPage() {
               </div>
               <div>
                 <h3 className="text-xl font-semibold mb-2">No patients yet</h3>
-                <p className="text-muted-foreground mb-4">Start by adding your first patient to the clinical trial</p>
+                <p className="text-muted-foreground mb-4">Start by adding your first patient to the RWE study</p>
                 <Link href="/patients/add">
                   <Button>Add Your First Patient</Button>
                 </Link>

@@ -57,7 +57,7 @@ export default function HomePage() {
       <main className="container mx-auto px-4 py-20">
         <div className="max-w-4xl mx-auto text-center space-y-8">
           <div className="inline-block px-4 py-1.5 bg-primary/10 border border-primary/20 rounded-full text-sm text-primary font-medium mb-4">
-            Real World Evidence Clinical Trials
+            Real World Evidence Study Platform
           </div>
 
           <h1 className="text-5xl md:text-6xl font-bold text-balance leading-tight">
@@ -65,8 +65,8 @@ export default function HomePage() {
           </h1>
 
           <p className="text-xl text-muted-foreground text-balance max-w-2xl mx-auto leading-relaxed">
-            Effortlessly manage clinical trials, track patient outcomes, and generate comprehensive reports with
-            Kollectcare's professional trial management platform.
+            Effortlessly manage RWE studies, track patient outcomes, and generate comprehensive reports with
+            Kollectcare's professional RWE management platform.
           </p>
 
           <div className="flex gap-4 justify-center pt-4">
@@ -115,7 +115,7 @@ export default function HomePage() {
             </div>
             <h3 className="text-xl font-semibold">Patient Management</h3>
             <p className="text-muted-foreground leading-relaxed">
-              Secure patient tracking with anonymized codes and comprehensive trial documentation.
+              Secure patient tracking with anonymized codes and comprehensive RWE documentation.
             </p>
           </div>
 
@@ -148,7 +148,7 @@ export default function HomePage() {
                 One integration. Structured patient data. Dedicated support. Minimal operational headaches.
               </h2>
               <p className="text-lg text-muted-foreground leading-relaxed">
-                Kollectcare provides a comprehensive platform for managing Real World Evidence trials with complete data
+                Kollectcare provides a comprehensive platform for managing Real World Evidence studies with complete data
                 privacy compliance and professional-grade security.
               </p>
             </div>

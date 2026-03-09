@@ -145,7 +145,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">Advanced Analytics</h1>
-        <p className="text-slate-400 mt-2">Comprehensive analysis of clinical trial data</p>
+          <p className="text-slate-400 mt-2">Comprehensive analysis of RWE study data</p>
       </div>
 
       {/* Key Metrics */}

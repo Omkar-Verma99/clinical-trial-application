@@ -143,7 +143,7 @@ export default function ExportsPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `clinical-trial-export-${new Date().getTime()}.csv`;
+      link.download = `rwe-study-export-${new Date().getTime()}.csv`;
       link.click();
       window.URL.revokeObjectURL(url);
 
@@ -172,7 +172,7 @@ export default function ExportsPage() {
       pdfContent += '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n';
       pdfContent += '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n';
 
-      let content = 'Clinical Trial Export Report\n\n';
+      let content = 'RWE Study Export Report\n\n';
       content += `Generated: ${new Date().toLocaleString()}\n`;
       content += `Patients Exported: ${selectedPatients.size}\n\n`;
 
@@ -209,7 +209,7 @@ export default function ExportsPage() {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `clinical-trial-export-${new Date().getTime()}.pdf`;
+      link.download = `rwe-study-export-${new Date().getTime()}.pdf`;
       link.click();
       window.URL.revokeObjectURL(url);
 
@@ -233,7 +233,7 @@ export default function ExportsPage() {
         patientCount: count,
         createdAt: new Date(),
         status: 'completed',
-        filename: `clinical-trial-export-${Date.now()}.${type}`,
+        filename: `rwe-study-export-${Date.now()}.${type}`,
       });
     } catch (error) {
       console.error('Error recording export:', error);

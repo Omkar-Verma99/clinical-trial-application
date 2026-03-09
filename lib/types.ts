@@ -12,7 +12,7 @@ export interface Doctor {
   createdAt: string
 }
 
-// PATIENT - Anonymized Trial Participant
+// PATIENT - Anonymized RWE Study Participant
 export interface Patient {
   id: string
   doctorId: string
@@ -89,6 +89,7 @@ export interface Patient {
 // BASELINE ASSESSMENT - Week 0
 export interface BaselineData {
   patientId: string
+  baselineVisitDate?: string
   
   // SECTION F - Baseline Clinical & Lab Parameters
   hba1c: number

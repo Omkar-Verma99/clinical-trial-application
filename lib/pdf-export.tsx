@@ -822,7 +822,7 @@ export function downloadCSV(
 	followUp: FollowUpData | null,
 	doctor?: Doctor
 ): void {
-	let csv = 'Kollectcare - CRF Clinical Trial Report\n'
+	let csv = 'Kollectcare - CRF RWE Study Report\n'
 	csv += `Generated: ${new Date().toLocaleDateString()}\n\n`
 
 	if (doctor) {

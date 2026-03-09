@@ -20,8 +20,8 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "Kare - Clinical Trial Management",
-  description: "Professional clinical trial management system for healthcare providers",
+  title: "Kare - RWE Study Management",
+  description: "Professional RWE study management system for healthcare providers",
   applicationName: "Kare",
   generator: "v0.app",
   icons: {

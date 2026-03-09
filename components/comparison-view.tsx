@@ -127,7 +127,7 @@ export const ComparisonView = memo(function ComparisonView({ baseline, followUp,
       <Card className="border-2 border-primary/20">
         <CardHeader className="bg-gradient-to-r from-blue-50 to-cyan-50">
           <div>
-            <CardTitle className="text-3xl font-bold">Clinical Trial Results</CardTitle>
+            <CardTitle className="text-3xl font-bold">RWE Study Results</CardTitle>
             <CardDescription className="text-base mt-2">
               Comprehensive Baseline vs Follow-up Analysis with Auto-Calculated Outcomes
               {followUps && followUps.length > 1 && ` (${followUps.length} follow-up visits tracked)`}

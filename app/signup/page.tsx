@@ -169,7 +169,7 @@ export default function SignupPage() {
           </div>
           <CardTitle className="text-2xl text-center">Doctor Registration</CardTitle>
           <CardDescription className="text-center">
-            Create your account to start managing clinical trials
+            Create your account to start managing RWE studies
           </CardDescription>
         </CardHeader>
         <CardContent>

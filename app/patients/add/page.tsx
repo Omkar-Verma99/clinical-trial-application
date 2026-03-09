@@ -508,7 +508,7 @@ export default function AddPatientPage() {
 
           toast({
             title: "Patient added successfully",
-            description: `Patient ${formData.patientCode} has been enrolled in the trial.`,
+            description: `Patient ${formData.patientCode} has been enrolled in the RWE study.`,
           })
 
           await new Promise(resolve => setTimeout(resolve, 500))
@@ -564,10 +564,10 @@ export default function AddPatientPage() {
       <main className={`${isEmbedded ? "w-full p-4" : "container mx-auto px-4 py-8 max-w-4xl"}`}>
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">{isEditMode ? "Edit Patient Information" : "Enroll Patient in Trial"}</CardTitle>
+            <CardTitle className="text-2xl">{isEditMode ? "Edit Patient Information" : "Enroll Patient in RWE Study"}</CardTitle>
             <CardDescription>
               {isEditMode
-                ? "Update patient demographic and clinical profile for this trial participant"
+                ? "Update patient demographic and clinical profile for this RWE study participant"
                 : "KC MeSempa RWE Study - Case Record Form (CRF) Section A-E"}
             </CardDescription>
           </CardHeader>

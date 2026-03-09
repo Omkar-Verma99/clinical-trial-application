@@ -67,7 +67,7 @@ export default function AdminLoginPage() {
               <Lock className="w-6 h-6 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">Clinical Trial Admin</h1>
+          <h1 className="text-3xl font-bold text-white mb-2">RWE Study Admin</h1>
           <p className="text-slate-400">Secure Admin Portal</p>
         </div>
 
@@ -166,7 +166,7 @@ export default function AdminLoginPage() {
 
         {/* Version Info */}
         <div className="text-center mt-6">
-          <p className="text-xs text-slate-500">Clinical Trial Management System v1.0</p>
+          <p className="text-xs text-slate-500">RWE Study Management System v1.0</p>
           <p className="text-xs text-slate-600 mt-1">© 2026 Kollectcare RWE Study</p>
         </div>
       </div>

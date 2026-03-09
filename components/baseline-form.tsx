@@ -2,9 +2,9 @@
 
 import type React from "react"
 
-import { useState, memo } from "react"
+import { useState, memo, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { setDoc, doc, writeBatch } from "firebase/firestore"
+import { doc, writeBatch, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import type { BaselineData } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
@@ -28,6 +28,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
+    baselineVisitDate: (existingData as any)?.baselineVisitDate || "",
     // SECTION F - Clinical & Lab Parameters
     hba1c: existingData?.hba1c?.toString() || "",
     fpg: existingData?.fpg?.toString() || "",
@@ -45,6 +46,36 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
     dosePrescribed: existingData?.dosePrescribed || "",
     treatmentInitiationDate: (existingData as any)?.treatmentInitiationDate || new Date().toISOString().split('T')[0],
   })
+
+  useEffect(() => {
+    if (existingData || !patientId || !db) return
+
+    const prefillFromPatient = async () => {
+      try {
+        const patientRef = doc(db, "patients", patientId)
+        const patientSnap = await getDoc(patientRef)
+        if (!patientSnap.exists()) return
+
+        const patientData = patientSnap.data() as any
+        const baselineVisitDate = patientData?.baselineVisitDate || ""
+        const baselineWeight =
+          typeof patientData?.weight === "number" && Number.isFinite(patientData.weight)
+            ? patientData.weight.toString()
+            : ""
+
+        setFormData((prev) => ({
+          ...prev,
+          baselineVisitDate: prev.baselineVisitDate || baselineVisitDate,
+          weight: prev.weight || baselineWeight,
+          treatmentInitiationDate: prev.treatmentInitiationDate || baselineVisitDate || prev.treatmentInitiationDate,
+        }))
+      } catch {
+        // Ignore prefill failures and continue with manual entry.
+      }
+    }
+
+    void prefillFromPatient()
+  }, [existingData, patientId])
 
   const [counseling, setCounseling] = useState({
     dietAndLifestyle: (existingData as any)?.counseling?.dietAndLifestyle || existingData?.dietAdvice || false,
@@ -77,6 +108,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
       if (!formData.hba1c) validationErrors.push("HbA1c is required")
       if (!formData.fpg) validationErrors.push("FPG is required")
       if (!formData.weight) validationErrors.push("Weight is required")
+      if (!formData.baselineVisitDate) validationErrors.push("Baseline visit date is required")
       if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
       if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
       if (!formData.dosePrescribed) validationErrors.push("Dose prescribed is required")
@@ -132,6 +164,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
       const data = {
         patientId,
         doctorId: user?.uid || "",
+        baselineVisitDate: formData.baselineVisitDate,
         
         // Clinical Parameters
         hba1c: hba1cValue,
@@ -168,6 +201,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
         const batch = writeBatch(db)
         batch.set(patientDocRef, {
           baseline: data,
+          baselineVisitDate: formData.baselineVisitDate,
           updatedAt: new Date().toISOString()
         }, { merge: true })
 
@@ -217,7 +251,21 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
         <CardDescription>Record initial clinical measurements and treatment plan per KC MeSempa CRF</CardDescription>
       </CardHeader>
       <CardContent>
-        <form onSubmit={(e) => handleSubmit(e, false)} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <h3 className="font-semibold text-lg">Baseline Visit</h3>
+            <div className="space-y-2">
+              <Label htmlFor="baselineVisitDate">Baseline Visit Date *</Label>
+              <Input
+                id="baselineVisitDate"
+                type="date"
+                value={formData.baselineVisitDate}
+                onChange={(e) => setFormData({ ...formData, baselineVisitDate: e.target.value })}
+                required
+              />
+            </div>
+          </div>
+
           {/* SECTION F - CLINICAL & LAB PARAMETERS */}
           <div className="space-y-4">
             <h3 className="font-semibold text-lg border-b pb-2">Clinical & Laboratory Parameters</h3>
