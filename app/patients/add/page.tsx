@@ -607,9 +607,20 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           await new Promise(resolve => setTimeout(resolve, 400))
           await router.push(`/patients/${editPatientId}`)
         } else {
-          // Generate a Firestore document with an auto ID
-          const patientDocRef = doc(collection(db, "patients"))
-          const patientId = patientDocRef.id
+          // Use deterministic document ID to enforce uniqueness per doctor + participant code.
+          const patientId = `${user.uid}__${normalizedPatientCode}`
+          const patientDocRef = doc(db, "patients", patientId)
+
+          const existingPatientDoc = await getDoc(patientDocRef)
+          if (existingPatientDoc.exists()) {
+            toast({
+              variant: "destructive",
+              title: "Duplicate Participant Code",
+              description: `Participant code ${normalizedPatientCode} already exists. Please use a unique code.`,
+            })
+            setLoading(false)
+            return
+          }
 
           // Add ID fields to satisfy security rules (patientId required) and for querying
           const patientDataWithId = {

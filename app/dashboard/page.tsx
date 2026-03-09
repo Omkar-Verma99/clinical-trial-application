@@ -20,8 +20,10 @@ interface PatientWithStatus extends Patient {
 // Design S1: Split Card + Details Panel
 const PatientCard = ({ patient, getNextStatus, getStatusColor, handleActionClick }: any) => {
   const statusInfo = getNextStatus(patient)
-  const initialsMatch = String(patient.patientCode || "").toUpperCase().match(/^\d{3}-([A-Z]{3})$/)
-  const initials = initialsMatch?.[1] || "PT"
+  const patientCodeText = String(patient.patientCode || "").trim().toUpperCase()
+  const initialsMatch = patientCodeText.match(/^\d{3}-([A-Z]{3})$/)
+  const fallbackInitialsFromSuffix = patientCodeText.split("-").pop()?.replace(/[^A-Z]/g, "") || ""
+  const initials = initialsMatch?.[1] || fallbackInitialsFromSuffix.slice(-3) || "PT"
   
   // Format comorbidities
   const comorbidities = patient.comorbidities && typeof patient.comorbidities === 'object'

@@ -51,6 +51,14 @@ export default function PatientDetailPage({ params }: Props) {
     return followUps
   }, [baseline, followUps])
   const [creatingFollowUp, setCreatingFollowUp] = useState(false)
+
+  const getPatientCodeInitials = (code?: string) => {
+    const patientCodeText = String(code || "").trim().toUpperCase()
+    const initialsMatch = patientCodeText.match(/^\d{3}-([A-Z]{3})$/)
+    if (initialsMatch?.[1]) return initialsMatch[1]
+    const suffixLetters = patientCodeText.split("-").pop()?.replace(/[^A-Z]/g, "") || ""
+    return suffixLetters.slice(-3) || "PT"
+  }
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
   const [exporting, setExporting] = useState(false)
@@ -399,7 +407,7 @@ export default function PatientDetailPage({ params }: Props) {
                     {/* Avatar */}
                     <div className="mb-3 flex justify-center">
                       <div className="h-20 w-20 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                        <span className="text-white text-lg font-bold">{patient.patientCode.slice(0, 2)}</span>
+                        <span className="text-white text-lg font-bold">{getPatientCodeInitials(patient.patientCode)}</span>
                       </div>
                     </div>
 
