@@ -435,6 +435,27 @@ export default function DashboardPage() {
           </Link>
         </div>
 
+        <Card className="mb-6 border-primary/20 bg-gradient-to-r from-sky-50 via-white to-indigo-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg sm:text-xl">Study Protocol Information</CardTitle>
+            <CardDescription className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
+              <span className="font-semibold">Protocol Title:</span> Effectiveness, Safety, and Tolerability of Empagliflozin-Sitagliptin-Metformin ER (FDC) in Adults with Type 2 Diabetes: A 12-Week Prospective, Real-World, Non-Interventional Study.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-md border border-border/70 bg-white/80 dark:bg-slate-950/60 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Protocol No</p>
+                <p className="text-sm sm:text-base font-semibold">KC MeSempa -2025/01</p>
+              </div>
+              <div className="rounded-md border border-border/70 bg-white/80 dark:bg-slate-950/60 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">CTRI No</p>
+                <p className="text-sm sm:text-base font-semibold">CTRI/2026/02/104842</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         {loadingPatients ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" />

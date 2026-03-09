@@ -42,7 +42,7 @@ export default function LoginPage() {
           <div className="space-y-2 text-center">
             <CardTitle className="text-3xl font-bold text-foreground">Doctor Login</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
-              Enter your credentials to access your clinical trials
+              Enter your credentials to access your Mesempa RWE Study
             </CardDescription>
           </div>
         </CardHeader>

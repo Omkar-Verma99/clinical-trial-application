@@ -263,11 +263,11 @@ export default function SignupPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="studySiteCode">Study Site Code / Clinic / Hospital Name *</Label>
+              <Label htmlFor="studySiteCode">Study Site Code/ Center ID *</Label>
               <Input
                 id="studySiteCode"
                 name="studySiteCode"
-                placeholder="Apollo Hospital, Delhi"
+                placeholder="e.g., RWE-01 (enter your assigned Center ID)"
                 value={formData.studySiteCode}
                 onChange={handleChange}
                 required

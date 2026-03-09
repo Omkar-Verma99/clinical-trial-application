@@ -24,6 +24,7 @@ export default function AddPatientPage() {
   const { user, doctor } = useAuth()
   const router = useRouter()
   const [editPatientId, setEditPatientId] = useState<string | null>(null)
+  const [isEmbedded, setIsEmbedded] = useState(false)
   const isEditMode = Boolean(editPatientId)
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -35,6 +36,7 @@ export default function AddPatientPage() {
     if (typeof window === "undefined") return
     const urlParams = new URLSearchParams(window.location.search)
     setEditPatientId(urlParams.get("id"))
+    setIsEmbedded(urlParams.get("embedded") === "1")
   }, [])
 
   const [formData, setFormData] = useState({
@@ -521,7 +523,8 @@ export default function AddPatientPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
+    <div className={`min-h-screen bg-gradient-to-br from-background via-muted/30 to-background ${isEmbedded ? "px-0" : ""}`}>
+      {!isEmbedded && (
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
           <Link href={isEditMode && editPatientId ? `/patients/${editPatientId}` : "/dashboard"}>
@@ -535,8 +538,9 @@ export default function AddPatientPage() {
           </div>
         </div>
       </header>
+      )}
 
-      <main className="container mx-auto px-4 py-8 max-w-4xl">
+      <main className={`${isEmbedded ? "w-full p-4" : "container mx-auto px-4 py-8 max-w-4xl"}`}>
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">{isEditMode ? "Edit Patient Information" : "Enroll Patient in Trial"}</CardTitle>

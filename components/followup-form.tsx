@@ -30,6 +30,12 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
   const { toast } = useToast()
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [timelinePopup, setTimelinePopup] = useState<{ open: boolean; title: string; message: string }>({
+    open: false,
+    title: "",
+    message: "",
+  })
+  const [lastTimelineAlertDate, setLastTimelineAlertDate] = useState("")
   
   // Calculate visitNumber based on date difference from baseline (in weeks)
   // For editing, use existing; for new, calculate from dates
@@ -67,16 +73,28 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
   const showTimelineAlertIfNeeded = (visitDateValue: string) => {
     if (followUpIndex !== 0) return
+    if (!visitDateValue || visitDateValue === lastTimelineAlertDate) return
+
     const elapsedWeeks = calculateElapsedWeeks(visitDateValue)
     if (elapsedWeeks === null) return
 
     if (elapsedWeeks < 10) {
-      window.alert("This patient's follow-up is scheduled BEFORE the recommended timeline (Week 10-14). Consider rescheduling if needed.")
+      setTimelinePopup({
+        open: true,
+        title: "Early Follow-up Alert",
+        message: "This patient's follow-up is scheduled BEFORE the recommended timeline (Week 10-14). Consider rescheduling if needed.",
+      })
+      setLastTimelineAlertDate(visitDateValue)
       return
     }
 
     if (elapsedWeeks > 14) {
-      window.alert(`Follow-up delayed: Recorded as Week ${elapsedWeeks}, expected Week 10-14. Please note this delay.`)
+      setTimelinePopup({
+        open: true,
+        title: "Delayed Follow-up Alert",
+        message: `Follow-up delayed: Recorded as Week ${elapsedWeeks}, expected Week 10-14. Please note this delay.`,
+      })
+      setLastTimelineAlertDate(visitDateValue)
     }
   }
 
@@ -393,8 +411,8 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                   const newVisitNumber = calculateVisitNumber(newDate)
                   setFormData({ ...formData, visitDate: newDate, visitNumber: newVisitNumber })
                   setVisitDate(newDate)
-                  showTimelineAlertIfNeeded(newDate)
                 }}
+                onBlur={() => showTimelineAlertIfNeeded(formData.visitDate)}
                 required
               />
               {formData.visitDate && (
@@ -1270,6 +1288,20 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
               {loading ? "Saving..." : "Save Follow-up Assessment"}
             </Button>
           </div>
+
+          {timelinePopup.open && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+              <div className="w-full max-w-lg rounded-lg bg-background border border-border p-6 space-y-4">
+                <h4 className="text-lg font-semibold">{timelinePopup.title}</h4>
+                <p className="text-sm text-muted-foreground">{timelinePopup.message}</p>
+                <div className="flex justify-end">
+                  <Button type="button" onClick={() => setTimelinePopup({ open: false, title: "", message: "" })}>
+                    OK
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </CardContent>
     </Card>

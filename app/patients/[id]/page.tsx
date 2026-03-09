@@ -81,12 +81,6 @@ export default function PatientDetailPage({ params }: Props) {
     }
   }, [baseline, creatingFollowUp, activeTab])
 
-  useEffect(() => {
-    if (activeTab === "patient-info" && patient?.id) {
-      router.push(`/patients/add?id=${patient.id}`)
-    }
-  }, [activeTab, patient?.id, router])
-
   const tabColumnCount = useMemo(
     () => 4 + followUps.length + (creatingFollowUp ? 1 : 0),
     [followUps.length, creatingFollowUp]
@@ -555,14 +549,16 @@ export default function PatientDetailPage({ params }: Props) {
                 <CardHeader>
                   <CardTitle>Patient Information</CardTitle>
                   <CardDescription>
-                    Opening full patient information form with all fields for review and update.
+                    Review and update all patient profile fields directly in this tab.
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <div className="animate-spin h-4 w-4 border-2 border-primary border-t-transparent rounded-full" />
-                    Redirecting to the full Patient Info form...
-                  </div>
+                <CardContent className="p-0">
+                  <iframe
+                    title="Patient Info Form"
+                    src={`/patients/add?id=${patient.id}&embedded=1`}
+                    className="w-full border-0"
+                    style={{ minHeight: "2200px" }}
+                  />
                 </CardContent>
               </Card>
             </TabsContent>
