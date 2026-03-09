@@ -126,13 +126,87 @@ export default function AddPatientPage() {
     return ""
   }
 
+  const hydrateFormFromPatientData = (patientData: any) => {
+    setFormData((prev) => ({
+      ...prev,
+      patientCode: patientData.patientCode || "",
+      studySiteCode: patientData.studySiteCode || doctor?.studySiteCode || "",
+      investigatorName: patientData.investigatorName || doctor?.name || "",
+      baselineVisitDate: patientData.baselineVisitDate || prev.baselineVisitDate,
+      age: patientData.age?.toString() || "",
+      gender: patientData.gender || "",
+      height: patientData.height?.toString() || "",
+      weight: patientData.weight?.toString() || "",
+      bmi: patientData.bmi?.toString() || "",
+      bmiManuallyEdited: false,
+      durationOfDiabetes: patientData.durationOfDiabetes?.toString() || "",
+      smokingStatus: patientData.smokingStatus || "",
+      alcoholIntake: patientData.alcoholIntake || "",
+      physicalActivityLevel: patientData.physicalActivityLevel || "",
+    }))
+
+    if (patientData.diabetesComplications) {
+      setDiabetesComplications((prev) => ({ ...prev, ...patientData.diabetesComplications }))
+    }
+
+    if (patientData.comorbidities) {
+      setComorbidities((prev) => ({
+        ...prev,
+        ...patientData.comorbidities,
+        other: Array.isArray(patientData.comorbidities.other)
+          ? patientData.comorbidities.other.join(", ")
+          : patientData.comorbidities.other || "",
+        ckdEgfrCategory: patientData.comorbidities.ckdEgfrCategory || "",
+      }))
+    }
+
+    setPreviousTreatmentType(patientData.previousTreatmentType || "")
+
+    if (patientData.previousDrugClasses) {
+      setPreviousDrugClasses((prev) => ({
+        ...prev,
+        ...patientData.previousDrugClasses,
+        other: Array.isArray(patientData.previousDrugClasses.other)
+          ? patientData.previousDrugClasses.other.join(", ")
+          : patientData.previousDrugClasses.other || "",
+      }))
+    }
+
+    if (patientData.reasonForTripleFDC) {
+      setReasonForTripleFDC((prev) => ({
+        ...prev,
+        ...patientData.reasonForTripleFDC,
+        other: Array.isArray(patientData.reasonForTripleFDC.other)
+          ? patientData.reasonForTripleFDC.other.join(", ")
+          : patientData.reasonForTripleFDC.other || "",
+      }))
+    }
+  }
+
   useEffect(() => {
     if (!isEditMode || !editPatientId || !db || !user?.uid) {
       return
     }
 
     const loadPatientForEdit = async () => {
-      setLoadingPatientData(true)
+      let hasPrefetchedData = false
+
+      if (typeof window !== "undefined") {
+        const prefetchedPatientRaw = window.sessionStorage.getItem(`prefetch_patient_${editPatientId}`)
+        if (prefetchedPatientRaw) {
+          try {
+            const prefetchedPatient = JSON.parse(prefetchedPatientRaw)
+            if (!prefetchedPatient?.doctorId || prefetchedPatient.doctorId === user.uid) {
+              hydrateFormFromPatientData(prefetchedPatient)
+              hasPrefetchedData = true
+            }
+          } catch {
+            // Ignore bad cache and fallback to Firestore fetch.
+          }
+        }
+      }
+
+      setLoadingPatientData(!hasPrefetchedData)
       try {
         const patientRef = doc(db, "patients", editPatientId)
         const patientSnap = await getDoc(patientRef)
@@ -158,60 +232,7 @@ export default function AddPatientPage() {
           return
         }
 
-        setFormData((prev) => ({
-          ...prev,
-          patientCode: patientData.patientCode || "",
-          studySiteCode: patientData.studySiteCode || doctor?.studySiteCode || "",
-          investigatorName: patientData.investigatorName || doctor?.name || "",
-          baselineVisitDate: patientData.baselineVisitDate || prev.baselineVisitDate,
-          age: patientData.age?.toString() || "",
-          gender: patientData.gender || "",
-          height: patientData.height?.toString() || "",
-          weight: patientData.weight?.toString() || "",
-          bmi: patientData.bmi?.toString() || "",
-          bmiManuallyEdited: false,
-          durationOfDiabetes: patientData.durationOfDiabetes?.toString() || "",
-          smokingStatus: patientData.smokingStatus || "",
-          alcoholIntake: patientData.alcoholIntake || "",
-          physicalActivityLevel: patientData.physicalActivityLevel || "",
-        }))
-
-        if (patientData.diabetesComplications) {
-          setDiabetesComplications((prev) => ({ ...prev, ...patientData.diabetesComplications }))
-        }
-
-        if (patientData.comorbidities) {
-          setComorbidities((prev) => ({
-            ...prev,
-            ...patientData.comorbidities,
-            other: Array.isArray(patientData.comorbidities.other)
-              ? patientData.comorbidities.other.join(", ")
-              : patientData.comorbidities.other || "",
-            ckdEgfrCategory: patientData.comorbidities.ckdEgfrCategory || "",
-          }))
-        }
-
-        setPreviousTreatmentType(patientData.previousTreatmentType || "")
-
-        if (patientData.previousDrugClasses) {
-          setPreviousDrugClasses((prev) => ({
-            ...prev,
-            ...patientData.previousDrugClasses,
-            other: Array.isArray(patientData.previousDrugClasses.other)
-              ? patientData.previousDrugClasses.other.join(", ")
-              : patientData.previousDrugClasses.other || "",
-          }))
-        }
-
-        if (patientData.reasonForTripleFDC) {
-          setReasonForTripleFDC((prev) => ({
-            ...prev,
-            ...patientData.reasonForTripleFDC,
-            other: Array.isArray(patientData.reasonForTripleFDC.other)
-              ? patientData.reasonForTripleFDC.other.join(", ")
-              : patientData.reasonForTripleFDC.other || "",
-          }))
-        }
+        hydrateFormFromPatientData(patientData)
       } catch (error) {
         toast({
           variant: "destructive",
@@ -552,7 +573,7 @@ export default function AddPatientPage() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-8">
-              {loadingPatientData && (
+              {loadingPatientData && !isEmbedded && (
                 <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
                   Loading patient data...
                 </div>

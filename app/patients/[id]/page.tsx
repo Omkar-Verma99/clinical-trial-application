@@ -81,6 +81,18 @@ export default function PatientDetailPage({ params }: Props) {
     }
   }, [baseline, creatingFollowUp, activeTab])
 
+  useEffect(() => {
+    if (!patient?.id || typeof window === "undefined") {
+      return
+    }
+
+    try {
+      window.sessionStorage.setItem(`prefetch_patient_${patient.id}`, JSON.stringify(patient))
+    } catch {
+      // Ignore cache write errors and continue normal flow.
+    }
+  }, [patient])
+
   const tabColumnCount = useMemo(
     () => 4 + followUps.length + (creatingFollowUp ? 1 : 0),
     [followUps.length, creatingFollowUp]

@@ -438,9 +438,12 @@ export default function DashboardPage() {
         <Card className="mb-6 border-primary/20 bg-gradient-to-r from-sky-50 via-white to-indigo-50 dark:from-slate-900 dark:via-slate-950 dark:to-slate-900">
           <CardHeader className="pb-3">
             <CardTitle className="text-lg sm:text-xl">Study Protocol Information</CardTitle>
-            <CardDescription className="text-xs sm:text-sm leading-relaxed text-slate-700 dark:text-slate-300">
-              <span className="font-semibold">Protocol Title:</span> Effectiveness, Safety, and Tolerability of Empagliflozin-Sitagliptin-Metformin ER (FDC) in Adults with Type 2 Diabetes: A 12-Week Prospective, Real-World, Non-Interventional Study.
-            </CardDescription>
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-wide text-slate-600 dark:text-slate-400">Protocol Title</p>
+              <p className="text-base sm:text-lg md:text-xl font-bold leading-snug text-slate-900 dark:text-white">
+                Effectiveness, Safety, and Tolerability of Empagliflozin-Sitagliptin-Metformin ER (FDC) in Adults with Type 2 Diabetes: A 12-Week Prospective, Real-World, Non-Interventional Study.
+              </p>
+            </div>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="grid gap-3 sm:grid-cols-2">

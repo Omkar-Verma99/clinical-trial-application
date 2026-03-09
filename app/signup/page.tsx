@@ -272,7 +272,7 @@ export default function SignupPage() {
                 onChange={handleChange}
                 required
               />
-              <p className="text-xs text-muted-foreground">This will be your default study site. You can change it per patient if needed.</p>
+              <p className="text-xs text-muted-foreground">This will be your assigned study site code / center ID.</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
