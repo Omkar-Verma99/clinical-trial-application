@@ -79,6 +79,22 @@ service cloud.firestore {
       allow delete: if false; // Prevent accidental deletion
     }
 
+    // ===== STUDY SITE CODE LOCKS =====
+    // Enforces one doctor account per center/study code.
+    match /studySiteCodes/{studySiteCode} {
+      // Only authenticated users can read lock docs used during their signup transaction.
+      allow read: if isAuthenticated();
+
+      // Allow one-time create only for the currently authenticated user during signup.
+      allow create: if isAuthenticated() &&
+        request.resource.data.doctorId == request.auth.uid &&
+        request.resource.data.studySiteCode == studySiteCode &&
+        !exists(/databases/{database}/documents/studySiteCodes/$(studySiteCode));
+
+      // Lock records must remain immutable after creation.
+      allow update, delete: if false;
+    }
+
     // ===== ADMINS COLLECTION =====
     // Admin accounts and credentials (separate from doctors)
     match /admins/{adminId} {

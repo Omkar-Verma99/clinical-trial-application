@@ -2,10 +2,11 @@
 
 import type React from "react"
 
-import { useState, memo, useEffect } from "react"
+import { useState, memo, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { doc, writeBatch, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { Loader2 } from "lucide-react"
 import type { BaselineData } from "@/lib/types"
 import { useToast } from "@/hooks/use-toast"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -28,6 +29,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
   const { toast } = useToast()
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+  const submitLockRef = useRef(false)
 
   const [formData, setFormData] = useState({
     baselineVisitDate: (existingData as any)?.baselineVisitDate || "",
@@ -46,7 +48,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
     
     // SECTION G - Treatment & Counseling
     dosePrescribed: existingData?.dosePrescribed || "",
-    treatmentInitiationDate: (existingData as any)?.treatmentInitiationDate || new Date().toISOString().split('T')[0],
+    treatmentInitiationDate: (existingData as any)?.treatmentInitiationDate || "",
   })
 
   useEffect(() => {
@@ -100,6 +102,12 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Prevent double-submission
+    if (submitLockRef.current || loading) {
+      return
+    }
+    submitLockRef.current = true
+
     // CRITICAL: Verify user is loaded and has uid before saving
     if (!user?.uid) {
       toast({
@@ -107,11 +115,13 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
         title: "Error",
         description: "User not authenticated. Please refresh the page.",
       })
+      submitLockRef.current = false
       return
     }
 
     // Show loading immediately
     setLoading(true)
+    const startTime = Date.now()
 
     // Define validationErrors outside conditional so it's always available
     const validationErrors: string[] = []
@@ -253,7 +263,14 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
         description: error instanceof Error ? error.message : "Please try again.",
       })
     } finally {
+      // Ensure minimum loading time of 400ms for visual feedback
+      const elapsedTime = Date.now() - startTime
+      const minimumLoadingTime = 400
+      if (elapsedTime < minimumLoadingTime) {
+        await new Promise(resolve => setTimeout(resolve, minimumLoadingTime - elapsedTime))
+      }
       setLoading(false)
+      submitLockRef.current = false
     }
   }
 
@@ -511,7 +528,14 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
 
           <div className="flex gap-3 pt-4 border-t">
             <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Saving..." : "Save Assessment"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
+                  Saving...
+                </>
+              ) : (
+                "Save Assessment"
+              )}
             </Button>
           </div>
         </form>

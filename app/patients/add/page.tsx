@@ -54,7 +54,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
     patientCode: "",
     studySiteCode: doctor?.studySiteCode || "",
     investigatorName: doctor?.name || "",
-    baselineVisitDate: new Date().toISOString().split('T')[0],
+    baselineVisitDate: "",
     age: "",
     gender: "",
     height: "",
@@ -1143,7 +1143,10 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => router.push(isEditMode && editPatientId ? `/patients/${editPatientId}` : "/dashboard")}
+                        onClick={() => {
+                          setShowIneligibleModal(false)
+                          setComorbidities({ ...comorbidities, chronicKidneyDisease: false, ckdEgfrCategory: "" })
+                        }}
                         className="flex-1"
                       >
                         Go Back

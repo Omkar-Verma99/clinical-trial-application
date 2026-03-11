@@ -25,8 +25,16 @@ export function getAuthErrorMessage(error: any): AuthErrorInfo {
   // Handle Firebase auth errors
   switch (errorCode) {
     // Login specific errors
-    case "auth/invalid-credential":
+    case "app/account-not-created":
     case "auth/user-not-found":
+      return {
+        title: "ID Not Created",
+        description: "Your ID is not created yet. Please create your account first.",
+        action: "Create Account",
+        actionLink: "/signup",
+      }
+
+    case "auth/invalid-credential":
     case "auth/wrong-password":
       return {
         title: "Login Failed",
@@ -98,6 +106,34 @@ export function getAuthErrorMessage(error: any): AuthErrorInfo {
 
     default:
       // Check for custom error messages
+      if (errorMessage.includes("Study site code already in use")) {
+        return {
+          title: "Center Code Already Registered",
+          description: "This study site code is already linked to another account. Please use your unique assigned center code.",
+        }
+      }
+
+      if (errorMessage.includes("Invalid study site code format")) {
+        return {
+          title: "Invalid Center Code Format",
+          description: "Use format: 3 uppercase letters + hyphen + 2 digits (e.g., RWE-01).",
+        }
+      }
+
+      if (errorMessage.includes("Unable to verify account status")) {
+        return {
+          title: "Verification Failed",
+          description: "Could not verify account status right now. Please try again in a moment.",
+        }
+      }
+
+      if (errorMessage.includes("Unable to verify study site code")) {
+        return {
+          title: "Center Code Check Failed",
+          description: "Could not verify center code right now. Please try again.",
+        }
+      }
+
       if (errorMessage.includes("No internet connection")) {
         return {
           title: "No Internet Connection",

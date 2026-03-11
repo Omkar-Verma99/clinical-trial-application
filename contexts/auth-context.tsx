@@ -10,7 +10,7 @@ import {
   signOut,
   sendEmailVerification,
 } from "firebase/auth"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, runTransaction } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import { logError, logInfo } from "@/lib/error-tracking"
 import type { Doctor } from "@/lib/types"
@@ -133,8 +133,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth) {
       throw new Error("Firebase authentication is not initialized. Please refresh the page.")
     }
-    await signInWithEmailAndPassword(auth, email, password)
-    logInfo("User logged in successfully", { email })
+    if (!db) {
+      throw new Error("Firestore is not initialized. Please refresh the page.")
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+
+    // Server-side check keeps Firestore rules strict while allowing clear user messaging.
+    const accountStatusResponse = await fetch("/api/auth/account-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail }),
+    })
+
+    if (!accountStatusResponse.ok) {
+      throw new Error("Unable to verify account status. Please try again.")
+    }
+
+    const accountStatusData = await accountStatusResponse.json()
+    const accountExists = Boolean(accountStatusData?.exists)
+
+    if (!accountExists) {
+      const accountError = new Error("Your ID is not created yet. Please create your account first.") as Error & { code: string }
+      accountError.code = "app/account-not-created"
+      throw accountError
+    }
+
+    await signInWithEmailAndPassword(auth, normalizedEmail, password)
+    logInfo("User logged in successfully", { email: normalizedEmail })
   }, [])
 
   const signup = useCallback(async (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => {
@@ -144,9 +170,75 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth) {
       throw new Error("Firebase authentication is not initialized. Please refresh the page.")
     }
+    if (!db) {
+      throw new Error("Firestore is not initialized. Please refresh the page.")
+    }
 
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+    const normalizedStudySiteCode = doctorData.studySiteCode.trim().toUpperCase()
+    const studySiteCodeRegex = /^[A-Z]{3}-\d{2}$/
+
+    if (!studySiteCodeRegex.test(normalizedStudySiteCode)) {
+      throw new Error("Invalid study site code format. Use 3 uppercase letters, hyphen, and 2 digits (e.g., RWE-01).")
+    }
+
+    const studySiteStatusResponse = await fetch("/api/auth/study-site-code-status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ studySiteCode: normalizedStudySiteCode }),
+    })
+
+    if (!studySiteStatusResponse.ok) {
+      throw new Error("Unable to verify study site code. Please try again.")
+    }
+
+    const studySiteStatusData = await studySiteStatusResponse.json()
+    if (!studySiteStatusData?.available) {
+      throw new Error("Study site code already in use. Please register with a unique assigned center code.")
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password)
     const user = userCredential.user
+
+    const createdAt = new Date().toISOString()
+
+    try {
+      await runTransaction(db, async (transaction) => {
+        const doctorRef = doc(db, "doctors", user.uid)
+        const studySiteRef = doc(db, "studySiteCodes", normalizedStudySiteCode)
+        const studySiteSnap = await transaction.get(studySiteRef)
+
+        if (studySiteSnap.exists()) {
+          throw new Error("Study site code already in use. Please register with a unique assigned center code.")
+        }
+
+        transaction.set(doctorRef, {
+          ...doctorData,
+          email: normalizedEmail,
+          studySiteCode: normalizedStudySiteCode,
+          createdAt,
+        })
+
+        transaction.set(studySiteRef, {
+          studySiteCode: normalizedStudySiteCode,
+          doctorId: user.uid,
+          email: normalizedEmail,
+          createdAt,
+        })
+      })
+    } catch (error) {
+      // Cleanup auth user if profile creation fails so duplicate/partial accounts are not left behind.
+      try {
+        await user.delete()
+      } catch (cleanupError) {
+        logError(cleanupError as Error, {
+          action: "signupCleanupDeleteUser",
+          userId: user.uid,
+          severity: "high",
+        })
+      }
+      throw error
+    }
 
     try {
       // Send Firebase email verification with custom template
@@ -161,15 +253,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       // Don't throw - verification is optional
     }
-
-    // Create doctor document
-    if (!db) {
-      throw new Error("Firestore is not initialized. Please refresh the page.")
-    }
-    await setDoc(doc(db, "doctors", user.uid), {
-      ...doctorData,
-      createdAt: new Date().toISOString(),
-    })
 
     // IMPORTANT: Immediately fetch and set the doctor data after signup
     // This ensures doctor context is available immediately after registration

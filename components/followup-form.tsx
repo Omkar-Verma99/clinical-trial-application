@@ -2,10 +2,11 @@
 
 import type React from "react"
 
-import { useState, memo } from "react"
+import { useState, memo, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { doc, arrayUnion, writeBatch, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { Loader2 } from "lucide-react"
 import DOMPurify from "dompurify"
 import type { FollowUpData, StructuredAdverseEvent } from "@/lib/types"
 import { Button } from "@/components/ui/button"
@@ -30,6 +31,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
   const { toast } = useToast()
   const { user, doctor } = useAuth()
   const [loading, setLoading] = useState(false)
+  const submitLockRef = useRef(false)
   const [timelinePopup, setTimelinePopup] = useState<{ open: boolean; title: string; message: string }>({
     open: false,
     title: "",
@@ -118,7 +120,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     weightChange: existingData?.outcomes?.weightChange || "",
     bpControlAchieved: existingData?.outcomes?.bpControlAchieved || false,
     renalOutcome: existingData?.outcomes?.renalOutcome || "",
-    patientContinuingTreatment: existingData?.adherence?.patientContinuingTreatment ?? true,
+    patientContinuingTreatment: existingData?.adherence?.patientContinuingTreatment ?? false,
     discontinuationReason: existingData?.adherence?.discontinuationReason || "",
     discontinuationReasonOther: existingData?.adherence?.discontinuationReasonOtherDetails || "",
     missedDoses: existingData?.adherence?.missedDosesInLast7Days || "",
@@ -223,6 +225,12 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    // Prevent double-submission
+    if (submitLockRef.current || loading) {
+      return
+    }
+    submitLockRef.current = true
+
     // CRITICAL: Verify user is loaded and has uid before saving
     if (!user?.uid) {
       toast({
@@ -230,10 +238,12 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         title: "Error",
         description: "User not authenticated. Please refresh the page.",
       })
+      submitLockRef.current = false
       return
     }
 
     setLoading(true)
+    const startTime = Date.now()
 
     try {
       // VALIDATION PHASE 1: Check required fields
@@ -473,7 +483,14 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         description: error instanceof Error ? error.message : "Please try again.",
       })
     } finally {
+      // Ensure minimum loading time of 400ms for visual feedback
+      const elapsedTime = Date.now() - startTime
+      const minimumLoadingTime = 400
+      if (elapsedTime < minimumLoadingTime) {
+        await new Promise(resolve => setTimeout(resolve, minimumLoadingTime - elapsedTime))
+      }
       setLoading(false)
+      submitLockRef.current = false
     }
   }
 
@@ -1465,7 +1482,14 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
           <div className="flex gap-3 pt-4 border-t">
             <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? "Saving..." : "Save Follow-up Assessment"}
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin inline" />
+                  Saving...
+                </>
+              ) : (
+                "Save Follow-up Assessment"
+              )}
             </Button>
           </div>
 

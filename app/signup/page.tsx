@@ -34,7 +34,13 @@ export default function SignupPage() {
   const { toast } = useToast()
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value })
+    const { name, value } = e.target
+    // Convert study site code to uppercase
+    if (name === "studySiteCode") {
+      setFormData({ ...formData, [name]: value.toUpperCase() })
+    } else {
+      setFormData({ ...formData, [name]: value })
+    }
   }
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -100,6 +106,17 @@ export default function SignupPage() {
         variant: "destructive",
         title: "Missing Information",
         description: "Please enter your study site code.",
+      })
+      return
+    }
+
+    // Validate study site code format (e.g., RWE-01: 3 letters + hyphen + 2 digits)
+    const studySiteCodeRegex = /^[A-Z]{3}-\d{2}$/
+    if (!studySiteCodeRegex.test(formData.studySiteCode.trim())) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Format",
+        description: "Study Site Code must be in format: 3 UPPERCASE letters + hyphen + 2 digits (e.g., RWE-01).",
       })
       return
     }
@@ -270,9 +287,11 @@ export default function SignupPage() {
                 placeholder="e.g., RWE-01 (enter your assigned Center ID)"
                 value={formData.studySiteCode}
                 onChange={handleChange}
+                pattern="^[A-Z]{3}-\d{2}$"
+                maxLength={7}
                 required
               />
-              <p className="text-xs text-muted-foreground">This will be your assigned study site code / center ID.</p>
+              <p className="text-xs text-muted-foreground">Format: 3 uppercase letters + hyphen + 2 digits (e.g., RWE-01)</p>
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">

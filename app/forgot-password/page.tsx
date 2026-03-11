@@ -41,7 +41,27 @@ export default function ForgotPasswordPage() {
         throw new Error("Authentication service is not initialized")
       }
 
-      await sendPasswordResetEmail(auth, email)
+      const normalizedEmail = email.trim().toLowerCase()
+      const accountStatusResponse = await fetch("/api/auth/account-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizedEmail }),
+      })
+
+      if (!accountStatusResponse.ok) {
+        throw new Error("Unable to verify account status. Please try again.")
+      }
+
+      const accountStatusData = await accountStatusResponse.json()
+      const accountExists = Boolean(accountStatusData?.exists)
+
+      if (!accountExists) {
+        const accountError = new Error("Your ID is not created yet. Please create your account first.") as Error & { code: string }
+        accountError.code = "app/account-not-created"
+        throw accountError
+      }
+
+      await sendPasswordResetEmail(auth, normalizedEmail)
       setSubmitted(true)
       toast({
         title: "Check Your Email",

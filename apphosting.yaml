@@ -40,6 +40,9 @@ envVariables:
   - name: SENTRY_DSN
     value: https://95157db84eaa8da9b088a216917afd3b@o4510782332665856.ingest.us.sentry.io/4510782335156224
     available_at: BUILD_AND_RUNTIME
+  - name: FIREBASE_SERVICE_ACCOUNT_KEY
+    secret: FIREBASE_SERVICE_ACCOUNT_KEY
+    available_at: RUNTIME
 
 scaling:
   minInstances: 1
