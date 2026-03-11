@@ -403,3 +403,350 @@ export function downloadExcelFile(columns: string[], rows: ExportRecord[], filen
   link.click()
   URL.revokeObjectURL(url)
 }
+
+// ============================================================================
+// DYNAMIC CSV EXPORT (One Row Per Patient with Dynamic Followup/Adverse Events)
+// ============================================================================
+
+interface DynamicExportRecord extends Record<string, unknown> {
+  patient_code?: string
+  doctor_code?: string
+  center_id?: string
+  patient_added_date?: string
+  baseline_date?: string
+  baseline_ckd_stage?: string
+  baseline_bp_systolic?: string | number
+  baseline_bp_diastolic?: string | number
+  baseline_weight_kg?: string | number
+  baseline_hba1c?: string | number
+  baseline_comorbidities?: string
+  comparison_delta_weight_kg?: string | number
+  comparison_delta_hba1c?: string | number
+  comparison_delta_bp_systolic?: string | number
+  comparison_delta_bp_diastolic?: string | number
+  comparison_summary?: string
+  [key: string]: unknown
+}
+
+/**
+ * Analyze all patients to determine max followups and adverse events per followup
+ */
+function analyzePatientData(
+  patients: Patient[],
+  baselines: Map<string, BaselineData | null>,
+  followUpData: Map<string, FollowUpData[]>
+): { maxFollowups: number; maxAdverseEventsPerFollowup: number } {
+  let maxFollowups = 0
+  let maxAdverseEventsPerFollowup = 0
+
+  for (const patient of patients) {
+    const followups = followUpData.get(patient.id) || []
+    maxFollowups = Math.max(maxFollowups, followups.length)
+
+    for (const followup of followups) {
+      const adverseEvents = followup.adverseEvents || followup.adverseEventsStructured || []
+      maxAdverseEventsPerFollowup = Math.max(maxAdverseEventsPerFollowup, adverseEvents.length)
+    }
+  }
+
+  return { maxFollowups: Math.max(maxFollowups, 1), maxAdverseEventsPerFollowup }
+}
+
+/**
+ * Generate dynamic column headers based on data
+ */
+function generateDynamicColumns(maxFollowups: number, maxAdverseEventsPerFollowup: number): string[] {
+  const baseColumns = [
+    "patient_code",
+    "doctor_code",
+    "center_id",
+    "patient_added_date",
+    "baseline_date",
+    "baseline_ckd_stage",
+    "baseline_bp_systolic",
+    "baseline_bp_diastolic",
+    "baseline_weight_kg",
+    "baseline_hba1c",
+    "baseline_comorbidities",
+  ]
+
+  const followupColumns: string[] = []
+
+  for (let i = 1; i <= maxFollowups; i++) {
+    followupColumns.push(`followup_${i}_date`)
+    followupColumns.push(`followup_${i}_bp_systolic`)
+    followupColumns.push(`followup_${i}_bp_diastolic`)
+    followupColumns.push(`followup_${i}_weight_kg`)
+    followupColumns.push(`followup_${i}_hba1c`)
+    followupColumns.push(`followup_${i}_comorbidities`)
+
+    // Add adverse event columns for this followup
+    for (let j = 1; j <= maxAdverseEventsPerFollowup; j++) {
+      followupColumns.push(`followup_${i}_adverse_event_${j}_type`)
+      followupColumns.push(`followup_${i}_adverse_event_${j}_severity`)
+    }
+  }
+
+  const comparisonColumns = [
+    "comparison_delta_weight_kg",
+    "comparison_delta_hba1c",
+    "comparison_delta_bp_systolic",
+    "comparison_delta_bp_diastolic",
+    "comparison_summary",
+  ]
+
+  return [...baseColumns, ...followupColumns, ...comparisonColumns]
+}
+
+/**
+ * Collapse checkbox/array values to pipe-separated string
+ */
+function collapseArrayValue(value: unknown): string {
+  if (Array.isArray(value)) {
+    return value.filter((v) => v && v !== false).join(", ")
+  }
+  if (typeof value === "object" && value !== null) {
+    // Handle checkbox objects like { hypertension: true, diabetes: false }
+    const selected = Object.entries(value)
+      .filter(([_, v]) => v === true)
+      .map(([k]) => k)
+    return selected.join(", ")
+  }
+  if (value === true) {
+    return "Yes"
+  }
+  if (value === false) {
+    return "No"
+  }
+  return value ? String(value) : ""
+}
+
+/**
+ * Build a single row for a patient in dynamic CSV format
+ */
+function buildDynamicPatientRow(
+  patient: Patient,
+  baseline: BaselineData | null,
+  followups: FollowUpData[],
+  maxFollowups: number,
+  maxAdverseEventsPerFollowup: number
+): DynamicExportRecord {
+  const row: DynamicExportRecord = {
+    patient_code: patient.patientCode,
+    doctor_code: patient.doctorId,
+    center_id: patient.studySiteCode,
+    patient_added_date: patient.createdAt ? new Date(patient.createdAt as any).toISOString().split("T")[0] : "",
+    baseline_date: baseline?.baselineVisitDate
+      ? new Date(baseline.baselineVisitDate as any).toISOString().split("T")[0]
+      : "",
+    baseline_ckd_stage: (patient.comorbidities?.ckdEgfrCategory as string) || "",
+    baseline_bp_systolic: baseline?.bloodPressureSystolic ?? "",
+    baseline_bp_diastolic: baseline?.bloodPressureDiastolic ?? "",
+    baseline_weight_kg: baseline?.weight ?? "",
+    baseline_hba1c: baseline?.hba1c ?? "",
+    baseline_comorbidities: collapseArrayValue(patient.comorbidities),
+  }
+
+  // Process each followup
+  for (let i = 0; i < maxFollowups; i++) {
+    const followup = followups?.[i]
+    const followupNum = i + 1
+
+    if (followup) {
+      row[`followup_${followupNum}_date`] = followup.visitDate
+        ? new Date(followup.visitDate as any).toISOString().split("T")[0]
+        : ""
+      row[`followup_${followupNum}_bp_systolic`] = followup.bloodPressureSystolic || ""
+      row[`followup_${followupNum}_bp_diastolic`] = followup.bloodPressureDiastolic || ""
+      row[`followup_${followupNum}_weight_kg`] = followup.weight || ""
+      row[`followup_${followupNum}_hba1c`] = followup.hba1c || ""
+      row[`followup_${followupNum}_comorbidities`] = collapseArrayValue((followup as any).comorbidities)
+
+      // Process adverse events for this followup
+      const adverseEvents = followup.adverseEvents || followup.adverseEventsStructured || []
+      for (let j = 0; j < maxAdverseEventsPerFollowup; j++) {
+        const aeEvent = adverseEvents[j]
+        const aeNum = j + 1
+
+        if (aeEvent) {
+          row[`followup_${followupNum}_adverse_event_${aeNum}_type`] = aeEvent.aeTerm || ""
+          row[`followup_${followupNum}_adverse_event_${aeNum}_severity`] = aeEvent.severity || ""
+        } else {
+          row[`followup_${followupNum}_adverse_event_${aeNum}_type`] = ""
+          row[`followup_${followupNum}_adverse_event_${aeNum}_severity`] = ""
+        }
+      }
+    } else {
+      // Empty followup - fill with empty strings
+      row[`followup_${followupNum}_date`] = ""
+      row[`followup_${followupNum}_bp_systolic`] = ""
+      row[`followup_${followupNum}_bp_diastolic`] = ""
+      row[`followup_${followupNum}_weight_kg`] = ""
+      row[`followup_${followupNum}_hba1c`] = ""
+      row[`followup_${followupNum}_comorbidities`] = ""
+
+      for (let j = 0; j < maxAdverseEventsPerFollowup; j++) {
+        const aeNum = j + 1
+        row[`followup_${followupNum}_adverse_event_${aeNum}_type`] = ""
+        row[`followup_${followupNum}_adverse_event_${aeNum}_severity`] = ""
+      }
+    }
+  }
+
+  // Add comparison metrics
+  if (baseline && followups && followups.length > 0) {
+    const lastFollowup = followups[followups.length - 1]
+    const weightDelta =
+      lastFollowup.weight && baseline.weight ? lastFollowup.weight - baseline.weight : null
+    const hba1cDelta =
+      lastFollowup.hba1c && baseline.hba1c ? lastFollowup.hba1c - baseline.hba1c : null
+    const bpSystolicDelta =
+      lastFollowup.bloodPressureSystolic && baseline.bloodPressureSystolic
+        ? lastFollowup.bloodPressureSystolic - baseline.bloodPressureSystolic
+        : null
+    const bpDiastolicDelta =
+      lastFollowup.bloodPressureDiastolic && baseline.bloodPressureDiastolic
+        ? lastFollowup.bloodPressureDiastolic - baseline.bloodPressureDiastolic
+        : null
+
+    row.comparison_delta_weight_kg = weightDelta !== null ? weightDelta : ""
+    row.comparison_delta_hba1c = hba1cDelta !== null ? hba1cDelta : ""
+    row.comparison_delta_bp_systolic = bpSystolicDelta !== null ? bpSystolicDelta : ""
+    row.comparison_delta_bp_diastolic = bpDiastolicDelta !== null ? bpDiastolicDelta : ""
+
+    // Simple summary
+    let summary = "No Change"
+    if (
+      hba1cDelta &&
+      hba1cDelta < 0
+    ) {
+      summary = "Improved"
+    } else if (hba1cDelta && hba1cDelta > 0) {
+      summary = "Declined"
+    }
+    row.comparison_summary = summary
+  } else {
+    row.comparison_delta_weight_kg = ""
+    row.comparison_delta_hba1c = ""
+    row.comparison_delta_bp_systolic = ""
+    row.comparison_delta_bp_diastolic = ""
+    row.comparison_summary = ""
+  }
+
+  return row
+}
+
+/**
+ * Build all rows in dynamic CSV format (one per patient)
+ */
+export function buildDynamicExportRows(
+  patients: Patient[],
+  baselines: Map<string, BaselineData | null>,
+  followUpData: Map<string, FollowUpData[]>
+): DynamicExportRecord[] {
+  if (patients.length === 0) {
+    return []
+  }
+
+  // Analyze data to determine column counts
+  const { maxFollowups, maxAdverseEventsPerFollowup } = analyzePatientData(
+    patients,
+    baselines,
+    followUpData
+  )
+
+  // Build one row per patient
+  const rows: DynamicExportRecord[] = []
+  for (const patient of patients) {
+    const baseline = baselines.get(patient.id) || null
+    const followups = followUpData.get(patient.id) || []
+    const row = buildDynamicPatientRow(patient, baseline, followups, maxFollowups, maxAdverseEventsPerFollowup)
+    rows.push(row)
+  }
+
+  return rows
+}
+
+/**
+ * Generate CSV content in dynamic format
+ */
+export function buildDynamicCsv(
+  patients: Patient[],
+  baselines: Map<string, BaselineData | null>,
+  followUpData: Map<string, FollowUpData[]>
+): string {
+  const rows = buildDynamicExportRows(patients, baselines, followUpData)
+  if (rows.length === 0) {
+    return ""
+  }
+
+  // Generate columns
+  const { maxFollowups, maxAdverseEventsPerFollowup } = analyzePatientData(
+    patients,
+    baselines,
+    followUpData
+  )
+  const columns = generateDynamicColumns(maxFollowups, maxAdverseEventsPerFollowup)
+
+  // Build CSV
+  const header = columns.map((col) => `"${col}"`).join(",")
+  const body = rows
+    .map((row) => columns.map((column) => escapeCsv(row[column])).join(","))
+    .join("\n")
+  return `${header}\n${body}`
+}
+
+/**
+ * Download CSV in dynamic format
+ */
+export function downloadDynamicCsv(
+  patients: Patient[],
+  baselines: Map<string, BaselineData | null>,
+  followUpData: Map<string, FollowUpData[]>,
+  filename: string
+): void {
+  const csv = buildDynamicCsv(patients, baselines, followUpData)
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Download Excel in dynamic format
+ */
+export function downloadDynamicExcel(
+  patients: Patient[],
+  baselines: Map<string, BaselineData | null>,
+  followUpData: Map<string, FollowUpData[]>,
+  filename: string
+): void {
+  const rows = buildDynamicExportRows(patients, baselines, followUpData)
+  if (rows.length === 0) {
+    return
+  }
+
+  const { maxFollowups, maxAdverseEventsPerFollowup } = analyzePatientData(
+    patients,
+    baselines,
+    followUpData
+  )
+  const columns = generateDynamicColumns(maxFollowups, maxAdverseEventsPerFollowup)
+
+  const headerHtml = columns.map((column) => `<th>${column}</th>`).join("")
+  const rowsHtml = rows
+    .map((row) => `<tr>${columns.map((column) => `<td>${toPipeValue(row[column])}</td>`).join("")}</tr>`)
+    .join("")
+
+  const html = `\ufeff<html><head><meta charset="UTF-8"></head><body><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table></body></html>`
+  const blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}

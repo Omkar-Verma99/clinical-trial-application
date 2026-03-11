@@ -15,6 +15,8 @@ import {
   buildFlatExportRows,
   downloadCsvFile,
   downloadExcelFile,
+  downloadDynamicCsv,
+  downloadDynamicExcel,
 } from "@/lib/flat-export"
 
 export default function ReportsPage() {
@@ -22,6 +24,8 @@ export default function ReportsPage() {
   const router = useRouter()
   const [reportData, setReportData] = useState<any[]>([])
   const [loadingData, setLoadingData] = useState(true)
+  const [baselines, setBaselines] = useState<Map<string, any>>(new Map())
+  const [followUpData, setFollowUpData] = useState<Map<string, any>>(new Map())
 
   useEffect(() => {
     if (!loading && !user) {
@@ -39,6 +43,10 @@ export default function ReportsPage() {
         const patientsSnapshot = await getDocs(patientsQuery)
         const patients = patientsSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Patient[]
 
+        // Create maps to store baselines and followups
+        const baselinesMap = new Map<string, any>()
+        const followUpDataMap = new Map<string, any>()
+
         // Fetch baseline and follow-up data for each patient from V4 unified schema
         const reports = await Promise.all(
           patients.map(async (patient) => {
@@ -49,6 +57,9 @@ export default function ReportsPage() {
               
               if (patientSnapshot.exists()) {
                 const patientData = patientSnapshot.data()
+                baselinesMap.set(patient.id, patientData.baseline || null)
+                followUpDataMap.set(patient.id, patientData.followups || [])
+                
                 return {
                   patient,
                   baseline: patientData.baseline || null,
@@ -57,15 +68,21 @@ export default function ReportsPage() {
                 }
               }
               
+              baselinesMap.set(patient.id, null)
+              followUpDataMap.set(patient.id, [])
               return { patient, baseline: null, followUp: null, followUps: [] }
             } catch (patientError) {
               console.error(`Error fetching data for patient ${patient.id}:`, patientError)
+              baselinesMap.set(patient.id, null)
+              followUpDataMap.set(patient.id, [])
               return { patient, baseline: null, followUp: null, followUps: [] }
             }
           }),
         )
 
         setReportData(reports)
+        setBaselines(baselinesMap)
+        setFollowUpData(followUpDataMap)
       } catch (error) {
         console.error("Error fetching report data:", error)
       } finally {
@@ -86,13 +103,14 @@ export default function ReportsPage() {
       return
     }
 
-    const rows = completeReports.flatMap(({ patient, baseline, followUps }) =>
-      buildFlatExportRows(patient, baseline, followUps),
-    )
+    // Extract patients with complete data
+    const patientsToExport = completeReports.map((r) => r.patient)
 
-    downloadExcelFile(
-      FLAT_EXPORT_COLUMNS,
-      rows,
+    // Use dynamic export
+    downloadDynamicExcel(
+      patientsToExport,
+      baselines,
+      followUpData,
       `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.xls`,
     )
   }
@@ -105,13 +123,14 @@ export default function ReportsPage() {
       return
     }
 
-    const rows = completeReports.flatMap(({ patient, baseline, followUps }) =>
-      buildFlatExportRows(patient, baseline, followUps),
-    )
+    // Extract patients with complete data
+    const patientsToExport = completeReports.map((r) => r.patient)
 
-    downloadCsvFile(
-      FLAT_EXPORT_COLUMNS,
-      rows,
+    // Use dynamic export
+    downloadDynamicCsv(
+      patientsToExport,
+      baselines,
+      followUpData,
       `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.csv`,
     )
   }
