@@ -24,9 +24,17 @@ export function getAuthErrorMessage(error: any): AuthErrorInfo {
 
   // Handle Firebase auth errors
   switch (errorCode) {
+    // User not found - ID not created yet
+    case "auth/user-not-found":
+      return {
+        title: "Account Not Created",
+        description: "Your ID has not been created yet. Please sign up first to create your account.",
+        action: "Create Account",
+        actionLink: "/signup",
+      }
+
     // Login specific errors
     case "auth/invalid-credential":
-    case "auth/user-not-found":
     case "auth/wrong-password":
       return {
         title: "Login Failed",
@@ -94,6 +102,15 @@ export function getAuthErrorMessage(error: any): AuthErrorInfo {
       return {
         title: "Permission Denied",
         description: "You don't have permission to access this resource. Please contact support.",
+      }
+
+    // Custom app errors
+    case "app/account-not-created":
+      return {
+        title: "Account Not Created",
+        description: "Your ID has not been created yet. Please sign up first to create your account.",
+        action: "Create Account",
+        actionLink: "/signup",
       }
 
     default:

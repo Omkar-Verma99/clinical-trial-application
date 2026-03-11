@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { getAuthErrorMessage } from "@/lib/auth-errors"
-import { sendPasswordResetEmail } from "firebase/auth"
+import { sendPasswordResetEmail, fetchSignInMethodsForEmail } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 
 export default function ForgotPasswordPage() {
@@ -42,25 +42,18 @@ export default function ForgotPasswordPage() {
       }
 
       const normalizedEmail = email.trim().toLowerCase()
-      const accountStatusResponse = await fetch("/api/auth/account-status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: normalizedEmail }),
-      })
 
-      if (!accountStatusResponse.ok) {
-        throw new Error("Unable to verify account status. Please try again.")
-      }
-
-      const accountStatusData = await accountStatusResponse.json()
-      const accountExists = Boolean(accountStatusData?.exists)
-
-      if (!accountExists) {
+      // Check if email exists in Firebase Auth
+      const signInMethods = await fetchSignInMethodsForEmail(auth, normalizedEmail)
+      
+      // If no sign-in methods found, email doesn't exist
+      if (!signInMethods || signInMethods.length === 0) {
         const accountError = new Error("Your ID is not created yet. Please create your account first.") as Error & { code: string }
         accountError.code = "app/account-not-created"
         throw accountError
       }
 
+      // Email exists, send password reset link
       await sendPasswordResetEmail(auth, normalizedEmail)
       setSubmitted(true)
       toast({
