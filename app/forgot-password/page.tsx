@@ -5,6 +5,7 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import Script from "next/script"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -12,15 +13,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { getAuthErrorMessage } from "@/lib/auth-errors"
-import { sendPasswordResetEmail } from "firebase/auth"
-import { auth } from "@/lib/firebase"
+
+declare global {
+  interface Window {
+    onRecaptchaSuccess?: (token: string) => void
+  }
+}
+
+const recaptchaSiteKey = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("")
+  const [captchaToken, setCaptchaToken] = useState("")
   const [loading, setLoading] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+
+  if (typeof window !== "undefined") {
+    window.onRecaptchaSuccess = (token: string) => {
+      setCaptchaToken(token)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,18 +51,33 @@ export default function ForgotPasswordPage() {
     setLoading(true)
 
     try {
-      if (!auth) {
-        throw new Error("Authentication service is not initialized")
+      if (recaptchaSiteKey && !captchaToken) {
+        const captchaError = new Error("Please complete CAPTCHA verification.") as Error & { code: string }
+        captchaError.code = "app/captcha-required"
+        throw captchaError
       }
 
       const normalizedEmail = email.trim().toLowerCase()
+      const response = await fetch("/api/auth/reset-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: normalizedEmail,
+          captchaToken,
+        }),
+      })
 
-      // Send reset email directly. Pre-checking sign-in methods can return false negatives.
-      await sendPasswordResetEmail(auth, normalizedEmail)
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        const apiError = new Error(data?.message || "Failed to process reset request") as Error & { code?: string }
+        apiError.code = data?.code || "app/reset-failed"
+        throw apiError
+      }
+
       setSubmitted(true)
       toast({
-        title: "Check Your Email",
-        description: "Password reset link has been sent to your email address.",
+        title: "Request Submitted",
+        description: "If this email is registered, password reset instructions will be sent.",
       })
 
       // Redirect to login after 5 seconds
@@ -109,6 +138,9 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background via-muted/30 to-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-3">
+          {recaptchaSiteKey ? (
+            <Script src="https://www.google.com/recaptcha/api.js" async defer />
+          ) : null}
           <div className="flex items-center gap-3 justify-center">
             <Image src="/favicon-192x192.png" alt="Kollectcare" width={40} height={40} className="h-10 w-10 rounded-lg" />
             <span className="text-2xl font-bold">Kollectcare</span>
@@ -132,6 +164,17 @@ export default function ForgotPasswordPage() {
                 disabled={loading}
               />
             </div>
+
+            {recaptchaSiteKey ? (
+              <div className="space-y-2">
+                <Label>Verification</Label>
+                <div
+                  className="g-recaptcha"
+                  data-sitekey={recaptchaSiteKey}
+                  data-callback="onRecaptchaSuccess"
+                />
+              </div>
+            ) : null}
 
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Sending..." : "Send Reset Link"}

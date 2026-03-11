@@ -113,6 +113,30 @@ export function getAuthErrorMessage(error: any): AuthErrorInfo {
         actionLink: "/signup",
       }
 
+    case "app/captcha-required":
+      return {
+        title: "Verification Required",
+        description: "Please complete CAPTCHA verification before continuing.",
+      }
+
+    case "app/captcha-invalid":
+      return {
+        title: "Verification Failed",
+        description: "CAPTCHA validation failed. Please try again.",
+      }
+
+    case "app/rate-limit":
+      return {
+        title: "Too Many Attempts",
+        description: "Too many reset attempts. Please wait a few minutes and try again.",
+      }
+
+    case "app/reset-failed":
+      return {
+        title: "Reset Failed",
+        description: "Unable to process your password reset request right now. Please try again.",
+      }
+
     default:
       // Check for custom error messages
       if (errorMessage.includes("No internet connection")) {
