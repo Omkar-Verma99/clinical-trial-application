@@ -37,33 +37,6 @@ function isRateLimited(key: string): boolean {
   return false
 }
 
-async function verifyRecaptcha(token: string, ip: string): Promise<boolean> {
-  const secret = process.env.RECAPTCHA_SECRET_KEY
-  if (!secret) {
-    return false
-  }
-
-  const params = new URLSearchParams()
-  params.set("secret", secret)
-  params.set("response", token)
-  if (ip && ip !== "unknown") {
-    params.set("remoteip", ip)
-  }
-
-  const response = await fetch("https://www.google.com/recaptcha/api/siteverify", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString(),
-  })
-
-  if (!response.ok) {
-    return false
-  }
-
-  const data = await response.json()
-  return !!data.success
-}
-
 async function sendFirebaseResetEmail(email: string): Promise<void> {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey
   if (!apiKey) {
@@ -98,12 +71,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!captchaToken) {
-      return Response.json(
-        { code: "app/captcha-required", message: "Please complete CAPTCHA verification." },
-        { status: 400 }
-      )
-    }
+    void captchaToken
 
     const ip = getClientIp(req)
     const rateKey = `${ip}:${email}`
@@ -111,14 +79,6 @@ export async function POST(req: NextRequest) {
       return Response.json(
         { code: "app/rate-limit", message: "Too many reset attempts. Please try again later." },
         { status: 429 }
-      )
-    }
-
-    const captchaValid = await verifyRecaptcha(captchaToken, ip)
-    if (!captchaValid) {
-      return Response.json(
-        { code: "app/captcha-invalid", message: "CAPTCHA validation failed. Please try again." },
-        { status: 400 }
       )
     }
 

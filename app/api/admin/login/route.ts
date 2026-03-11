@@ -1,13 +1,33 @@
 /// <reference path="../../../../types/bcryptjs.d.ts" />
 import { cookies } from 'next/headers';
 import { getFirestore, collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
-import bcrypt from 'bcryptjs';
 import { initializeApp } from 'firebase/app';
 import { firebaseConfig } from '@/lib/firebase-config';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+
+async function verifyFirebaseCredentials(email: string, password: string) {
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey
+  const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      password,
+      returnSecureToken: true,
+    }),
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    const code = data?.error?.message || 'INVALID_LOGIN_CREDENTIALS'
+    throw new Error(code)
+  }
+
+  return data
+}
 
 export async function POST(request: Request) {
   try {
@@ -20,9 +40,35 @@ export async function POST(request: Request) {
       );
     }
 
-    // Query for admin
+    // First authenticate credentials against Firebase Authentication
+    const normalizedEmail = email.toLowerCase()
+    try {
+      await verifyFirebaseCredentials(normalizedEmail, password)
+    } catch (error: any) {
+      const code = error?.message || ''
+      if (code === 'EMAIL_NOT_FOUND') {
+        return Response.json(
+          { success: false, error: 'Admin account not found' },
+          { status: 401 }
+        )
+      }
+
+      if (code === 'INVALID_PASSWORD' || code === 'INVALID_LOGIN_CREDENTIALS') {
+        return Response.json(
+          { success: false, error: 'Invalid credentials' },
+          { status: 401 }
+        )
+      }
+
+      return Response.json(
+        { success: false, error: 'Authentication failed. Please try again.' },
+        { status: 401 }
+      )
+    }
+
+    // Then query admin role/status in Firestore
     const adminsRef = collection(db, 'admins');
-    const q = query(adminsRef, where('email', '==', email.toLowerCase()));
+    const q = query(adminsRef, where('email', '==', normalizedEmail));
     const querySnapshot = await getDocs(q);
 
     if (querySnapshot.empty) {
@@ -34,15 +80,6 @@ export async function POST(request: Request) {
 
     const adminDoc = querySnapshot.docs[0];
     const adminData = adminDoc.data();
-
-    // Verify password
-    const passwordMatch = await bcrypt.compare(password, adminData.passwordHash);
-    if (!passwordMatch) {
-      return Response.json(
-        { success: false, error: 'Invalid credentials' },
-        { status: 401 }
-      );
-    }
 
     // Check if admin is active
     if (adminData.status !== 'active') {
