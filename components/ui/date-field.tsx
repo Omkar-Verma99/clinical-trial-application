@@ -49,15 +49,35 @@ function parseIsoDate(value: string): Date | undefined {
   return d
 }
 
-function formatTypingInput(raw: string): string {
+function formatTypingInput(raw: string, isDeleting: boolean): string {
   const digits = raw.replace(/\D/g, '').slice(0, 8)
   const dd = digits.slice(0, 2)
   const mm = digits.slice(2, 4)
   const yyyy = digits.slice(4, 8)
 
-  if (digits.length <= 2) return dd
-  if (digits.length <= 4) return `${dd}/${mm}`
+  if (isDeleting) {
+    if (digits.length <= 2) return dd
+    if (digits.length <= 4) return `${dd}/${mm}`
+    return `${dd}/${mm}/${yyyy}`
+  }
+
+  if (digits.length < 2) return dd
+  if (digits.length === 2) return `${dd}/`
+  if (digits.length < 4) return `${dd}/${mm}`
+  if (digits.length === 4) return `${dd}/${mm}/`
   return `${dd}/${mm}/${yyyy}`
+}
+
+function parseDisplayDate(display: string): Date | undefined {
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(display)) return undefined
+  const [dayStr, monthStr, yearStr] = display.split('/')
+  const day = Number.parseInt(dayStr, 10)
+  const month = Number.parseInt(monthStr, 10)
+  const year = Number.parseInt(yearStr, 10)
+
+  const d = new Date(year, month - 1, day)
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return undefined
+  return d
 }
 
 function toIsoIfValid(display: string, min: string, max: string): string {
@@ -96,25 +116,38 @@ export function DateField({
 }: DateFieldProps) {
   const [displayValue, setDisplayValue] = React.useState<string>(formatIsoToDisplay(value))
   const [open, setOpen] = React.useState(false)
+  const [calendarMonth, setCalendarMonth] = React.useState<Date | undefined>(parseIsoDate(value))
 
   React.useEffect(() => {
     setDisplayValue(formatIsoToDisplay(value))
   }, [value])
 
-  const selectedDate = React.useMemo(() => parseIsoDate(value), [value])
+  const selectedDate = React.useMemo(() => parseDisplayDate(displayValue) ?? parseIsoDate(value), [displayValue, value])
+
+  React.useEffect(() => {
+    if (open) {
+      setCalendarMonth(selectedDate ?? new Date())
+    }
+  }, [open, selectedDate])
 
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const next = formatTypingInput(event.target.value)
+    const raw = event.target.value
+    const isDeleting = raw.length < displayValue.length
+    const next = formatTypingInput(raw, isDeleting)
     setDisplayValue(next)
 
     const iso = toIsoIfValid(next, min, max)
     if (iso) {
       onChangeAction(iso)
+      setCalendarMonth(parseIsoDate(iso))
       return
     }
 
-    // Keep parent state clean while user is still typing.
-    onChangeAction('')
+    // Do not clear parent value during partial edits; this prevents full input reset on backspace.
+    if (!next) {
+      onChangeAction('')
+      setCalendarMonth(undefined)
+    }
   }
 
   const handleBlur = () => {
@@ -151,6 +184,7 @@ export function DateField({
 
     onChangeAction(iso)
     setDisplayValue(formatIsoToDisplay(iso))
+    setCalendarMonth(date)
     setOpen(false)
   }
 
@@ -191,6 +225,8 @@ export function DateField({
             <Calendar
               mode="single"
               selected={selectedDate}
+              month={calendarMonth}
+              onMonthChange={setCalendarMonth}
               onSelect={handleCalendarSelect}
               captionLayout="dropdown"
             />

@@ -126,11 +126,11 @@ export interface StructuredAdverseEvent {
   aeTerm: string
   onsetDate: string
   stopDate?: string
-  severity: "Mild" | "Moderate" | "Severe"
-  serious: "Yes" | "No"
-  actionTaken: "None" | "Dose adjusted" | "Drug stopped" | "Referred" | "Other"
+  severity: "" | "Mild" | "Moderate" | "Severe"
+  serious: "" | "Yes" | "No"
+  actionTaken: "" | "None" | "Dose adjusted" | "Drug stopped" | "Referred" | "Other"
   actionTakenOther?: string
-  outcome: "Resolved" | "Ongoing"
+  outcome: "" | "Resolved" | "Ongoing"
 }
 
 // FOLLOW-UP ASSESSMENT - Week 12 ± 2 weeks

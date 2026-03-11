@@ -172,11 +172,11 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     aeTerm: "",
     onsetDate: "",
     stopDate: "",
-    severity: "Mild",
-    serious: "No",
-    actionTaken: "None",
+    severity: "",
+    serious: "",
+    actionTaken: "",
     actionTakenOther: "",
-    outcome: "Resolved",
+    outcome: "",
   })
 
   const [adverseEvents, setAdverseEvents] = useState<StructuredAdverseEvent[]>(() => {
@@ -294,6 +294,10 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         adverseEvents.forEach((event, index) => {
           if (!event.aeTerm.trim()) validationErrors.push(`AE #${index + 1}: term is required`)
           if (!event.onsetDate) validationErrors.push(`AE #${index + 1}: onset date is required`)
+          if (!event.severity) validationErrors.push(`AE #${index + 1}: severity is required`)
+          if (!event.serious) validationErrors.push(`AE #${index + 1}: serious selection is required`)
+          if (!event.actionTaken) validationErrors.push(`AE #${index + 1}: action taken is required`)
+          if (!event.outcome) validationErrors.push(`AE #${index + 1}: outcome is required`)
           if (event.stopDate && event.onsetDate && event.stopDate < event.onsetDate) {
             validationErrors.push(`AE #${index + 1}: stop date cannot be before onset date`)
           }
@@ -312,7 +316,11 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         return
       }
 
-      if (!formData.noPersonalIdentifiers || !formData.dataAsRoutinePractice || !formData.patientIdentityMapping) {
+      if (
+        formData.noPersonalIdentifiers !== true ||
+        formData.dataAsRoutinePractice !== true ||
+        formData.patientIdentityMapping !== true
+      ) {
         setMandatoryPopup({
           open: true,
           title: "Data Privacy Mandatory",
@@ -321,7 +329,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         return
       }
 
-      if (!formData.physicianConfirmation) {
+      if (formData.physicianConfirmation !== true) {
         setMandatoryPopup({
           open: true,
           title: "Physician Declaration Mandatory",
@@ -537,7 +545,9 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Follow-up Assessment (Week 12 ± 2 weeks)</CardTitle>
+        <CardTitle>
+          Follow-up Assessment{followUpIndex === 0 ? " (Week 12 ± 2 weeks)" : ""}
+        </CardTitle>
         <CardDescription>Record end-of-study clinical measurements and outcomes</CardDescription>
       </CardHeader>
       <CardContent>
@@ -1471,13 +1481,13 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
           {/* SECTION O - Data Privacy & Confidentiality */}
           <div className="space-y-4 pt-4 border-t bg-gray-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-lg">Data Privacy & Confidentiality</h3>
-            <p className="text-sm text-gray-600">Please confirm the following statements:</p>
+            <h3 className="font-semibold text-lg">Data Privacy & Confidentiality *</h3>
+            <p className="text-sm text-gray-600">Please confirm the following statements (all are mandatory):</p>
             
             <Label className="flex items-start gap-2 cursor-pointer">
               <Checkbox
                 checked={formData.noPersonalIdentifiers}
-                onCheckedChange={(checked) => setFormData({ ...formData, noPersonalIdentifiers: checked as boolean })}
+                onCheckedChange={(checked) => setFormData({ ...formData, noPersonalIdentifiers: checked === true })}
                 className="mt-1"
               />
               <span className="text-sm">No personal identifiers recorded in this CRF</span>
@@ -1486,7 +1496,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
             <Label className="flex items-start gap-2 cursor-pointer">
               <Checkbox
                 checked={formData.dataAsRoutinePractice}
-                onCheckedChange={(checked) => setFormData({ ...formData, dataAsRoutinePractice: checked as boolean })}
+                onCheckedChange={(checked) => setFormData({ ...formData, dataAsRoutinePractice: checked === true })}
                 className="mt-1"
               />
               <span className="text-sm">Data collected as part of routine clinical practice</span>
@@ -1495,7 +1505,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
             <Label className="flex items-start gap-2 cursor-pointer">
               <Checkbox
                 checked={formData.patientIdentityMapping}
-                onCheckedChange={(checked) => setFormData({ ...formData, patientIdentityMapping: checked as boolean })}
+                onCheckedChange={(checked) => setFormData({ ...formData, patientIdentityMapping: checked === true })}
                 className="mt-1"
               />
               <span className="text-sm">Patient identity mapping retained only at clinic level</span>
@@ -1504,12 +1514,12 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
           {/* SECTION P - Physician Declaration */}
           <div className="space-y-4 pt-4 border-t bg-blue-50 p-4 rounded-lg">
-            <h3 className="font-semibold text-lg">Physician Declaration</h3>
+            <h3 className="font-semibold text-lg">Physician Declaration *</h3>
             
             <Label className="flex items-start gap-2 cursor-pointer">
               <Checkbox
                 checked={formData.physicianConfirmation}
-                onCheckedChange={(checked) => setFormData({ ...formData, physicianConfirmation: checked as boolean })}
+                onCheckedChange={(checked) => setFormData({ ...formData, physicianConfirmation: checked === true })}
                 className="mt-1"
               />
               <span className="text-sm">
