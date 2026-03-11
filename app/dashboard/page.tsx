@@ -10,6 +10,7 @@ import type { Patient } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 
 interface PatientWithStatus extends Patient {
@@ -388,6 +389,14 @@ export default function DashboardPage() {
     )
   }
 
+  const doctorInitials =
+    doctor?.name
+      ?.split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join("") || "DR"
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
       <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
@@ -405,6 +414,19 @@ export default function DashboardPage() {
             <span className="text-xl font-bold whitespace-nowrap">Kollectcare</span>
           </div>
           <div className="flex items-center gap-4 ml-auto">
+            <Link href="/profile" aria-label="Open profile page">
+              <Button
+                variant="ghost"
+                className="h-10 w-10 rounded-full p-0 border border-border/70"
+                aria-label="Open profile details"
+              >
+                <Avatar className="h-9 w-9">
+                  <AvatarFallback className="bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-100 font-semibold">
+                    {doctorInitials}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </Link>
             <Link href="/reports">
               <Button variant="outline" className="bg-transparent whitespace-nowrap">
                 <svg className="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
