@@ -11,6 +11,7 @@ import DOMPurify from "dompurify"
 import type { FollowUpData, StructuredAdverseEvent } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DateField } from "@/components/ui/date-field"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -18,48 +19,6 @@ import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { logError } from "@/lib/error-tracking"
-
-// Validate date input: ensure year is 4 digits (1900-2100), month 1-12, day valid for month
-const validateDateInput = (value: string): string => {
-  if (!value) return ""
-  
-  // Only validate dates in YYYY-MM-DD format
-  const dateRegex = /^\d{0,4}(-\d{0,2})?(-\d{0,2})?$/
-  if (!dateRegex.test(value)) return "" // Invalid format, clear it
-  
-  const parts = value.split("-")
-  
-  // Validate year (if provided)
-  if (parts[0] && parts[0].length > 4) {
-    return value.substring(0, 4) // Limit to 4 digits
-  }
-  if (parts[0] && parts[0].length === 4) {
-    const year = parseInt(parts[0])
-    if (year < 1900 || year > 2100) return "" // Invalid year range
-  }
-  
-  // Validate month (if provided)
-  if (parts[1]) {
-    if (parts[1].length > 2) {
-      return parts[0] + "-" + parts[1].substring(0, 2) // Limit to 2 digits
-    }
-    const month = parseInt(parts[1])
-    if (month > 12) return parts[0] + "-12" // Max month is 12
-    if (month < 1 && parts[1].length === 2) return parts[0] + "-01" // Min month is 01
-  }
-  
-  // Validate day (if provided)
-  if (parts[2]) {
-    if (parts[2].length > 2) {
-      return parts[0] + "-" + parts[1] + "-" + parts[2].substring(0, 2) // Limit to 2 digits
-    }
-    const day = parseInt(parts[2])
-    if (day > 31) return parts[0] + "-" + parts[1] + "-31" // Max day is 31
-    if (day < 1 && parts[2].length === 2) return parts[0] + "-" + parts[1] + "-01" // Min day is 01
-  }
-  
-  return value
-}
 
 interface FollowUpFormProps {
   patientId: string
@@ -82,6 +41,11 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
   })
   const [lastTimelineAlertDate, setLastTimelineAlertDate] = useState("")
   const [deletingAdverseEventId, setDeletingAdverseEventId] = useState<string | null>(null)
+  const [mandatoryPopup, setMandatoryPopup] = useState<{ open: boolean; title: string; message: string }>({
+    open: false,
+    title: "",
+    message: "",
+  })
   
   // Calculate visitNumber based on date difference from baseline (in weeks)
   // For editing, use existing; for new, calculate from dates
@@ -162,18 +126,23 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       : "",
     hba1cResponse: existingData?.glycemicResponse?.category || "",
     weightChange: existingData?.outcomes?.weightChange || "",
-    bpControlAchieved: existingData?.outcomes?.bpControlAchieved ?? false,
+    bpControlAchieved: existingData?.outcomes?.bpControlAchieved ?? null,
     renalOutcome: existingData?.outcomes?.renalOutcome || "",
-    patientContinuingTreatment: existingData?.adherence?.patientContinuingTreatment ?? false,
+    patientContinuingTreatment: existingData?.adherence?.patientContinuingTreatment ?? null,
     discontinuationReason: existingData?.adherence?.discontinuationReason || "",
     discontinuationReasonOther: existingData?.adherence?.discontinuationReasonOtherDetails || "",
     missedDoses: existingData?.adherence?.missedDosesInLast7Days || "",
-    addOnTherapy: existingData?.adherence?.addOnOrChangedTherapy ?? false,
+    addOnTherapy: existingData?.adherence?.addOnOrChangedTherapy ?? null,
     addOnTherapyDetails: existingData?.adherence?.addOnOrChangedTherapyDetails || "",
     adverseEventsPresent:
-      existingData?.adverseEventsPresent ??
-      ((Array.isArray(existingData?.adverseEvents) && existingData.adverseEvents.length > 0) ||
-        Boolean(typeof (existingData as any)?.adverseEvents === "string" && (existingData as any).adverseEvents.trim())),
+      existingData?.adverseEventsPresent === true
+        ? true
+        : existingData?.adverseEventsPresent === false
+          ? false
+          : (Array.isArray(existingData?.adverseEvents) && existingData.adverseEvents.length > 0) ||
+              (typeof (existingData as any)?.adverseEvents === "string" && (existingData as any).adverseEvents.trim())
+            ? true
+            : null,
     hypoglycemiaMild: existingData?.eventsOfSpecialInterest?.hypoglycemiaMild ?? false,
     hypoglycemiaModerate: existingData?.eventsOfSpecialInterest?.hypoglycemiaModerate ?? false,
     hypoglycemiaSevere: existingData?.eventsOfSpecialInterest?.hypoglycemiaSevere ?? false,
@@ -185,7 +154,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     overallEfficacy: existingData?.physicianAssessment?.overallEfficacy || "",
     overallTolerability: existingData?.physicianAssessment?.overallTolerability || "",
     complianceJudgment: existingData?.physicianAssessment?.complianceJudgment || "",
-    preferLongTerm: existingData?.physicianAssessment?.preferKcMeSempaForLongTerm ?? false,
+    preferLongTerm: existingData?.physicianAssessment?.preferKcMeSempaForLongTerm ?? null,
     uncontrolledT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.uncontrolledT2dm ?? false,
     obeseT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.obeseT2dm ?? false,
     ckdPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.ckdPatients ?? false,
@@ -305,8 +274,12 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
       if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
       if (!formData.hba1cResponse) validationErrors.push("HbA1c response category is required")
-      if (!formData.patientContinuingTreatment && !formData.discontinuationReason) validationErrors.push("Please specify discontinuation reason")
-      if (!formData.patientContinuingTreatment && formData.discontinuationReason === "Other" && !formData.discontinuationReasonOther.trim()) {
+      if (formData.patientContinuingTreatment === null) validationErrors.push("Please select patient continuing treatment status")
+      if (formData.bpControlAchieved === null) validationErrors.push("Please select blood pressure control status")
+      if (formData.addOnTherapy === null) validationErrors.push("Please select add-on/change therapy status")
+      if (formData.adverseEventsPresent === null) validationErrors.push("Please select adverse event status")
+      if (formData.patientContinuingTreatment === false && !formData.discontinuationReason) validationErrors.push("Please specify discontinuation reason")
+      if (formData.patientContinuingTreatment === false && formData.discontinuationReason === "Other" && !formData.discontinuationReasonOther.trim()) {
         validationErrors.push("Please specify discontinuation reason details")
       }
       if (formData.missedDoses === "") validationErrors.push("Missed doses information is required")
@@ -314,7 +287,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       if (!formData.overallTolerability) validationErrors.push("Overall tolerability is required")
       if (!formData.complianceJudgment) validationErrors.push("Compliance judgment is required")
 
-      if (formData.adverseEventsPresent) {
+      if (formData.adverseEventsPresent === true) {
         if (adverseEvents.length === 0) {
           validationErrors.push("Add at least one adverse event")
         }
@@ -335,6 +308,24 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           variant: "destructive",
           title: "Missing required fields",
           description: validationErrors.slice(0, 3).join(", ") + (validationErrors.length > 3 ? ` and ${validationErrors.length - 3} more` : ""),
+        })
+        return
+      }
+
+      if (!formData.noPersonalIdentifiers || !formData.dataAsRoutinePractice || !formData.patientIdentityMapping) {
+        setMandatoryPopup({
+          open: true,
+          title: "Data Privacy Mandatory",
+          message: "Please check all Data Privacy & Confidentiality options to continue.",
+        })
+        return
+      }
+
+      if (!formData.physicianConfirmation) {
+        setMandatoryPopup({
+          open: true,
+          title: "Physician Declaration Mandatory",
+          message: "Please confirm the Physician Declaration checkbox before saving.",
         })
         return
       }
@@ -404,21 +395,21 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         },
         outcomes: {
           weightChange: formData.weightChange,
-          bpControlAchieved: formData.bpControlAchieved,
+          bpControlAchieved: formData.bpControlAchieved === true,
           renalOutcome: formData.renalOutcome,
         },
         adherence: {
-          patientContinuingTreatment: formData.patientContinuingTreatment,
+          patientContinuingTreatment: formData.patientContinuingTreatment === true,
           discontinuationReason: formData.discontinuationReason || null,
           discontinuationReasonOtherDetails:
-            !formData.patientContinuingTreatment && formData.discontinuationReason === "Other"
+            formData.patientContinuingTreatment === false && formData.discontinuationReason === "Other"
               ? DOMPurify.sanitize(formData.discontinuationReasonOther)
               : null,
           missedDosesInLast7Days: formData.missedDoses || null,
-          addOnOrChangedTherapy: formData.addOnTherapy,
-          addOnOrChangedTherapyDetails: formData.addOnTherapy ? sanitizedFormData.addOnTherapyDetails : null,
+          addOnOrChangedTherapy: formData.addOnTherapy === true,
+          addOnOrChangedTherapyDetails: formData.addOnTherapy === true ? sanitizedFormData.addOnTherapyDetails : null,
         },
-        adverseEventsPresent: formData.adverseEventsPresent,
+        adverseEventsPresent: formData.adverseEventsPresent === true,
         adverseEvents: sanitizedAdverseEvents,
         adverseEventsStructured: sanitizedAdverseEvents,
         eventsOfSpecialInterest: {
@@ -435,7 +426,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           overallEfficacy: formData.overallEfficacy,
           overallTolerability: formData.overallTolerability,
           complianceJudgment: formData.complianceJudgment,
-          preferKcMeSempaForLongTerm: formData.preferLongTerm,
+          preferKcMeSempaForLongTerm: formData.preferLongTerm === true,
           preferredPatientProfiles: {
             uncontrolledT2dm: formData.uncontrolledT2dm,
             obeseT2dm: formData.obeseT2dm,
@@ -445,15 +436,15 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           },
         },
         dataPrivacy: {
-          noPersonalIdentifiersRecorded: formData.noPersonalIdentifiers,
-          dataCollectedAsRoutineClinicalPractice: formData.dataAsRoutinePractice,
-          patientIdentityMappingAtClinicOnly: formData.patientIdentityMapping,
+          noPersonalIdentifiersRecorded: formData.noPersonalIdentifiers === true,
+          dataCollectedAsRoutineClinicalPractice: formData.dataAsRoutinePractice === true,
+          patientIdentityMappingAtClinicOnly: formData.patientIdentityMapping === true,
         },
         physicianDeclaration: {
           physicianName: doctor?.name || "",
           qualification: doctor?.qualification || "",
           clinicHospitalName: doctor?.studySiteCode || "",
-          confirmationCheckbox: formData.physicianConfirmation,
+          confirmationCheckbox: formData.physicianConfirmation === true,
           signatureMethod: "Checkbox",
           signatureDate: formData.visitDate || new Date().toISOString().split('T')[0],
         },
@@ -556,19 +547,20 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
             <h3 className="font-semibold text-lg">Follow-up Visit</h3>
             <div className="space-y-2">
               <Label htmlFor="visitDate">Date of Visit *</Label>
-              <Input
+              <DateField
                 id="visitDate"
-                type="date"
                 value={formData.visitDate}
-                onChange={(e) => {
-                  const newDate = validateDateInput(e.target.value)
+                onChangeAction={(newDate) => {
                   const newVisitNumber = calculateVisitNumber(newDate)
                   setFormData({ ...formData, visitDate: newDate, visitNumber: newVisitNumber })
                   setVisitDate(newDate)
+                  if (newDate) {
+                    showTimelineAlertIfNeeded(newDate)
+                  }
                 }}
-                onBlur={() => showTimelineAlertIfNeeded(formData.visitDate)}
-                aria-label="Date of follow-up visit required"
-                aria-required="true"
+                min="1900-01-01"
+                max="2100-12-31"
+                ariaLabel="Date of follow-up visit required"
                 required
               />
               {formData.visitDate && (
@@ -934,7 +926,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     type="radio"
                     name="continuing"
                     value="yes"
-                    checked={formData.patientContinuingTreatment}
+                    checked={formData.patientContinuingTreatment === true}
                     onChange={() => setFormData({ ...formData, patientContinuingTreatment: true, discontinuationReason: "" })}
                   />
                   <span className="text-sm">Yes</span>
@@ -944,7 +936,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     type="radio"
                     name="continuing"
                     value="no"
-                    checked={!formData.patientContinuingTreatment}
+                    checked={formData.patientContinuingTreatment === false}
                     onChange={() => setFormData({ ...formData, patientContinuingTreatment: false })}
                   />
                   <span className="text-sm">No</span>
@@ -952,7 +944,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
               </div>
             </div>
 
-            {!formData.patientContinuingTreatment && (
+            {formData.patientContinuingTreatment === false && (
               <div className="space-y-3 ml-6">
                 <Label className="text-base font-medium">If discontinued, reason: *</Label>
                 <div className="space-y-2">
@@ -1083,7 +1075,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     type="radio"
                     name="addOnTherapy"
                     value="no"
-                    checked={!formData.addOnTherapy}
+                    checked={formData.addOnTherapy === false}
                     onChange={() => setFormData({ ...formData, addOnTherapy: false, addOnTherapyDetails: "" })}
                   />
                   <span className="text-sm">No</span>
@@ -1093,7 +1085,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     type="radio"
                     name="addOnTherapy"
                     value="yes"
-                    checked={formData.addOnTherapy}
+                    checked={formData.addOnTherapy === true}
                     onChange={() => setFormData({ ...formData, addOnTherapy: true })}
                   />
                   <span className="text-sm">Yes (specify drug + dose)</span>
@@ -1101,7 +1093,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
               </div>
             </div>
 
-            {formData.addOnTherapy && (
+            {formData.addOnTherapy === true && (
               <div className="space-y-2 ml-6">
                 <Input
                   id="addOnDetails"
@@ -1109,7 +1101,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                   placeholder="E.g. Linagliptin 5mg daily"
                   value={formData.addOnTherapyDetails}
                   onChange={(e) => setFormData({ ...formData, addOnTherapyDetails: e.target.value })}
-                  required={formData.addOnTherapy}
+                  required={formData.addOnTherapy === true}
                 />
               </div>
             )}
@@ -1127,7 +1119,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     type="radio"
                     name="adverseEventPresent"
                     value="no"
-                    checked={!formData.adverseEventsPresent}
+                    checked={formData.adverseEventsPresent === false}
                     onChange={() => {
                       setFormData({ ...formData, adverseEventsPresent: false })
                       setAdverseEvents([])
@@ -1140,7 +1132,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                     type="radio"
                     name="adverseEventPresent"
                     value="yes"
-                    checked={formData.adverseEventsPresent}
+                    checked={formData.adverseEventsPresent === true}
                     onChange={() => {
                       setFormData({ ...formData, adverseEventsPresent: true })
                       if (adverseEvents.length === 0) {
@@ -1153,7 +1145,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
               </div>
             </div>
 
-            {formData.adverseEventsPresent && (
+            {formData.adverseEventsPresent === true && (
               <div className="space-y-4 ml-6 border-l-2 border-blue-200 pl-4">
                 {adverseEvents.map((event, index) => (
                   <div key={event.id} className="space-y-4 rounded-lg border p-4 bg-muted/30">
@@ -1173,32 +1165,33 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                         value={event.aeTerm}
                         onChange={(e) => updateAdverseEvent(event.id, { aeTerm: e.target.value })}
                         aria-label={`Adverse event term for event number ${adverseEvents.indexOf(event) + 1} using MedDRA preferred terminology required`}
-                        aria-required={formData.adverseEventsPresent}
-                        required={formData.adverseEventsPresent}
+                        aria-required={formData.adverseEventsPresent === true}
+                        required={formData.adverseEventsPresent === true}
                       />
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor={`ae-onset-${event.id}`}>Onset Date *</Label>
-                        <Input
+                        <DateField
                           id={`ae-onset-${event.id}`}
-                          type="date"
                           value={event.onsetDate}
-                          onChange={(e) => updateAdverseEvent(event.id, { onsetDate: validateDateInput(e.target.value) })}
-                          aria-label={`Onset date for adverse event number ${adverseEvents.indexOf(event) + 1} required`}
-                          aria-required="true"
-                          required={formData.adverseEventsPresent}
+                          onChangeAction={(value) => updateAdverseEvent(event.id, { onsetDate: value })}
+                          min="1900-01-01"
+                          max="2100-12-31"
+                          ariaLabel={`Onset date for adverse event number ${adverseEvents.indexOf(event) + 1} required`}
+                          required={formData.adverseEventsPresent === true}
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`ae-stop-${event.id}`}>Stop Date</Label>
-                        <Input
+                        <DateField
                           id={`ae-stop-${event.id}`}
-                          type="date"
                           value={event.stopDate || ""}
-                          onChange={(e) => updateAdverseEvent(event.id, { stopDate: validateDateInput(e.target.value) })}
-                          aria-label={`Stop date for adverse event number ${adverseEvents.indexOf(event) + 1}`}
+                          onChangeAction={(value) => updateAdverseEvent(event.id, { stopDate: value })}
+                          min="1900-01-01"
+                          max="2100-12-31"
+                          ariaLabel={`Stop date for adverse event number ${adverseEvents.indexOf(event) + 1}`}
                         />
                       </div>
                     </div>
@@ -1560,6 +1553,20 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                 <p className="text-sm text-muted-foreground">{timelinePopup.message}</p>
                 <div className="flex justify-end">
                   <Button type="button" onClick={() => setTimelinePopup({ open: false, title: "", message: "" })}>
+                    OK
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {mandatoryPopup.open && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+              <div className="w-full max-w-lg rounded-lg bg-background border border-border p-6 space-y-4">
+                <h4 className="text-lg font-semibold text-red-600">{mandatoryPopup.title}</h4>
+                <p className="text-sm text-muted-foreground">{mandatoryPopup.message}</p>
+                <div className="flex justify-end">
+                  <Button type="button" onClick={() => setMandatoryPopup({ open: false, title: "", message: "" })}>
                     OK
                   </Button>
                 </div>

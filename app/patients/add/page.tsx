@@ -10,6 +10,7 @@ import { writeBatch, doc, collection, getDoc, getDocs, query, updateDoc, where }
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DateField } from "@/components/ui/date-field"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -20,48 +21,6 @@ import Link from "next/link"
 
 const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
 const PATIENT_CODE_REGEX = /^\d{3}-[A-Z]{3}$/
-
-// Validate date input: ensure year is 4 digits (1900-2100), month 1-12, day valid for month
-const validateDateInput = (value: string): string => {
-  if (!value) return ""
-  
-  // Only validate dates in YYYY-MM-DD format
-  const dateRegex = /^\d{0,4}(-\d{0,2})?(-\d{0,2})?$/
-  if (!dateRegex.test(value)) return "" // Invalid format, clear it
-  
-  const parts = value.split("-")
-  
-  // Validate year (if provided)
-  if (parts[0] && parts[0].length > 4) {
-    return value.substring(0, 4) // Limit to 4 digits
-  }
-  if (parts[0] && parts[0].length === 4) {
-    const year = parseInt(parts[0])
-    if (year < 1900 || year > 2100) return "" // Invalid year range
-  }
-  
-  // Validate month (if provided)
-  if (parts[1]) {
-    if (parts[1].length > 2) {
-      return parts[0] + "-" + parts[1].substring(0, 2) // Limit to 2 digits
-    }
-    const month = parseInt(parts[1])
-    if (month > 12) return parts[0] + "-12" // Max month is 12
-    if (month < 1 && parts[1].length === 2) return parts[0] + "-01" // Min month is 01
-  }
-  
-  // Validate day (if provided)
-  if (parts[2]) {
-    if (parts[2].length > 2) {
-      return parts[0] + "-" + parts[1] + "-" + parts[2].substring(0, 2) // Limit to 2 digits
-    }
-    const day = parseInt(parts[2])
-    if (day > 31) return parts[0] + "-" + parts[1] + "-31" // Max day is 31
-    if (day < 1 && parts[2].length === 2) return parts[0] + "-" + parts[1] + "-01" // Min day is 01
-  }
-  
-  return value
-}
 
 interface PatientFormPageProps {
   presetEditPatientId?: string
@@ -366,12 +325,14 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
     e.preventDefault()
     if (submitLockRef.current) return
     submitLockRef.current = true
+    setLoading(true)
     if (!user || !user.uid || !db) {
       toast({
         variant: "destructive",
         title: "Error",
         description: "Firebase is not initialized or user not authenticated. Please refresh the page.",
       })
+      setLoading(false)
       submitLockRef.current = false
       return
     }
@@ -404,6 +365,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Missing Required Fields",
         description: `Please fill in: ${missingFields.join(", ")}`,
       })
+      setLoading(false)
       submitLockRef.current = false
       return
     }
@@ -414,6 +376,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Invalid Age",
         description: ageValidationError,
       })
+      setLoading(false)
       submitLockRef.current = false
       return
     }
@@ -424,6 +387,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Invalid Duration",
         description: durationValidationError,
       })
+      setLoading(false)
       submitLockRef.current = false
       return
     }
@@ -435,6 +399,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Invalid Participant Code",
         description: patientCodeValidationError,
       })
+      setLoading(false)
       submitLockRef.current = false
       return
     }
@@ -448,6 +413,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           title: "Invalid Participant Code",
           description: "Participant number must start with 3 digits, like 001.",
         })
+        setLoading(false)
         submitLockRef.current = false
         return
       }
@@ -473,6 +439,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           title: "Duplicate Participant Code",
           description: `Participant code ${normalizedPatientCode} already exists. Please use a unique code.`,
         })
+        setLoading(false)
         submitLockRef.current = false
         return
       }
@@ -491,6 +458,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           title: "Participant Sequence Required",
           description: `Sequence issue: ${missingCode} is missing. Please add ${missingCode}-XXX before creating ${normalizedPatientCode}.`,
         })
+        setLoading(false)
         submitLockRef.current = false
         return
       }
@@ -503,6 +471,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Ineligible Patient",
         description: "This patient meets exclusion criteria and is NOT eligible for this study. CKD eGFR in the 30-44 range cannot be enrolled.",
       })
+      setLoading(false)
       submitLockRef.current = false
       return
     }
@@ -514,6 +483,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "Missing Selection",
         description: "Please select at least one reason for KC MeSempa initiation",
       })
+      setLoading(false)
       submitLockRef.current = false
       return
     }
@@ -527,11 +497,10 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         title: "BMI Validation Error",
         description: "The entered BMI does not match the calculated value from height/weight. Please correct the values.",
       })
+      setLoading(false)
       submitLockRef.current = false
       return
     }
-
-    setLoading(true)
 
     try {
       const selectedDrugClasses = [
@@ -788,11 +757,12 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="baselineVisitDate">Baseline Visit Date (Week 0) *</Label>
-                    <Input
+                    <DateField
                       id="baselineVisitDate"
-                      type="date"
                       value={formData.baselineVisitDate}
-                      onChange={(e) => setFormData({ ...formData, baselineVisitDate: validateDateInput(e.target.value) })}
+                      onChangeAction={(value) => setFormData((prev) => ({ ...prev, baselineVisitDate: value }))}
+                      min="1900-01-01"
+                      max="2100-12-31"
                       required
                     />
                   </div>
@@ -1188,6 +1158,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                         onClick={() => {
                           setShowIneligibleModal(false)
                           setComorbidities({ ...comorbidities, chronicKidneyDisease: false, ckdEgfrCategory: "" })
+                          router.push("/dashboard")
                         }}
                         className="flex-1"
                       >
