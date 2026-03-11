@@ -17,6 +17,48 @@ import { Button } from "@/components/ui/button"
 import { sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
 
+// Validate date input: ensure year is 4 digits (1900-2100), month 1-12, day valid for month
+const validateDateInput = (value: string): string => {
+  if (!value) return ""
+  
+  // Only validate dates in YYYY-MM-DD format
+  const dateRegex = /^\d{0,4}(-\d{0,2})?(-\d{0,2})?$/
+  if (!dateRegex.test(value)) return "" // Invalid format, clear it
+  
+  const parts = value.split("-")
+  
+  // Validate year (if provided)
+  if (parts[0] && parts[0].length > 4) {
+    return value.substring(0, 4) // Limit to 4 digits
+  }
+  if (parts[0] && parts[0].length === 4) {
+    const year = parseInt(parts[0])
+    if (year < 1900 || year > 2100) return "" // Invalid year range
+  }
+  
+  // Validate month (if provided)
+  if (parts[1]) {
+    if (parts[1].length > 2) {
+      return parts[0] + "-" + parts[1].substring(0, 2) // Limit to 2 digits
+    }
+    const month = parseInt(parts[1])
+    if (month > 12) return parts[0] + "-12" // Max month is 12
+    if (month < 1 && parts[1].length === 2) return parts[0] + "-01" // Min month is 01
+  }
+  
+  // Validate day (if provided)
+  if (parts[2]) {
+    if (parts[2].length > 2) {
+      return parts[0] + "-" + parts[1] + "-" + parts[2].substring(0, 2) // Limit to 2 digits
+    }
+    const day = parseInt(parts[2])
+    if (day > 31) return parts[0] + "-" + parts[1] + "-31" // Max day is 31
+    if (day < 1 && parts[2].length === 2) return parts[0] + "-" + parts[1] + "-01" // Min day is 01
+  }
+  
+  return value
+}
+
 interface BaselineFormProps {
   patientId: string
   existingData: BaselineData | null
@@ -43,7 +85,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
     heartRate: (existingData as any)?.heartRate?.toString() || "",
     serumCreatinine: existingData?.serumCreatinine?.toString() || "",
     egfr: existingData?.egfr?.toString() || "",
-    urinalysisType: existingData?.urinalysis?.includes("Abnormal") ? "Abnormal" : (existingData?.urinalysis || "Normal"),
+    urinalysisType: existingData?.urinalysis?.includes("Abnormal") ? "Abnormal" : (existingData?.urinalysis || ""),
     urinalysisSpecify: (existingData as any)?.urinalysisSpecify || "",
     
     // SECTION G - Treatment & Counseling
@@ -93,10 +135,10 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
   }, [patientBaselineVisitDate, patientWeight])
 
   const [counseling, setCounseling] = useState({
-    dietAndLifestyle: (existingData as any)?.counseling?.dietAndLifestyle || existingData?.dietAdvice || false,
-    hypoglycemiaAwareness: (existingData as any)?.counseling?.hypoglycemiaAwareness || false,
-    utiGenitialInfectionAwareness: (existingData as any)?.counseling?.utiGenitialInfectionAwareness || false,
-    hydrationAdvice: (existingData as any)?.counseling?.hydrationAdvice || false,
+    dietAndLifestyle: (existingData as any)?.counseling?.dietAndLifestyle ?? existingData?.dietAdvice ?? false,
+    hypoglycemiaAwareness: (existingData as any)?.counseling?.hypoglycemiaAwareness ?? false,
+    utiGenitialInfectionAwareness: (existingData as any)?.counseling?.utiGenitialInfectionAwareness ?? false,
+    hydrationAdvice: (existingData as any)?.counseling?.hydrationAdvice ?? false,
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -290,6 +332,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 id="baselineVisitDate"
                 type="date"
                 value={formData.baselineVisitDate}
+                aria-label="Baseline visit date at week zero required"
+                aria-required="true"
                 readOnly
                 required
               />
@@ -311,6 +355,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                   placeholder="7.5"
                   value={formData.hba1c}
                   onChange={(e) => setFormData({ ...formData, hba1c: e.target.value })}
+                  aria-label="HbA1c percentage required"
+                  aria-required="true"
                   required
                 />
               </div>
@@ -321,8 +367,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                   type="number"
                   placeholder="140"
                   value={formData.fpg}
-                  onChange={(e) => setFormData({ ...formData, fpg: e.target.value })}
-                  required
+                  onChange={(e) => setFormData({ ...formData, fpg: e.target.value })}                  aria-label="Fasting plasma glucose in milligrams per deciliter required"
+                  aria-required="true"                  required
                 />
               </div>
               <div className="space-y-2">
@@ -474,7 +520,9 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 id="initDate"
                 type="date"
                 value={formData.treatmentInitiationDate}
-                onChange={(e) => setFormData({ ...formData, treatmentInitiationDate: e.target.value })}
+                onChange={(e) => setFormData({ ...formData, treatmentInitiationDate: validateDateInput(e.target.value) })}
+                aria-label="Date when treatment was initiated required"
+                aria-required="true"
                 required
               />
             </div>

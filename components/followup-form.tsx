@@ -16,7 +16,50 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Textarea } from "@/components/ui/textarea"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { logError } from "@/lib/error-tracking"
+
+// Validate date input: ensure year is 4 digits (1900-2100), month 1-12, day valid for month
+const validateDateInput = (value: string): string => {
+  if (!value) return ""
+  
+  // Only validate dates in YYYY-MM-DD format
+  const dateRegex = /^\d{0,4}(-\d{0,2})?(-\d{0,2})?$/
+  if (!dateRegex.test(value)) return "" // Invalid format, clear it
+  
+  const parts = value.split("-")
+  
+  // Validate year (if provided)
+  if (parts[0] && parts[0].length > 4) {
+    return value.substring(0, 4) // Limit to 4 digits
+  }
+  if (parts[0] && parts[0].length === 4) {
+    const year = parseInt(parts[0])
+    if (year < 1900 || year > 2100) return "" // Invalid year range
+  }
+  
+  // Validate month (if provided)
+  if (parts[1]) {
+    if (parts[1].length > 2) {
+      return parts[0] + "-" + parts[1].substring(0, 2) // Limit to 2 digits
+    }
+    const month = parseInt(parts[1])
+    if (month > 12) return parts[0] + "-12" // Max month is 12
+    if (month < 1 && parts[1].length === 2) return parts[0] + "-01" // Min month is 01
+  }
+  
+  // Validate day (if provided)
+  if (parts[2]) {
+    if (parts[2].length > 2) {
+      return parts[0] + "-" + parts[1] + "-" + parts[2].substring(0, 2) // Limit to 2 digits
+    }
+    const day = parseInt(parts[2])
+    if (day > 31) return parts[0] + "-" + parts[1] + "-31" // Max day is 31
+    if (day < 1 && parts[2].length === 2) return parts[0] + "-" + parts[1] + "-01" // Min day is 01
+  }
+  
+  return value
+}
 
 interface FollowUpFormProps {
   patientId: string
@@ -38,6 +81,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     message: "",
   })
   const [lastTimelineAlertDate, setLastTimelineAlertDate] = useState("")
+  const [deletingAdverseEventId, setDeletingAdverseEventId] = useState<string | null>(null)
   
   // Calculate visitNumber based on date difference from baseline (in weeks)
   // For editing, use existing; for new, calculate from dates
@@ -112,45 +156,45 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     heartRate: existingData?.heartRate?.toString() || "",
     serumCreatinine: existingData?.serumCreatinine?.toString() || "",
     egfr: existingData?.egfr?.toString() || "",
-    urinalysisType: existingData?.urinalysis?.startsWith("Abnormal") ? "Abnormal" : "Normal",
+    urinalysisType: existingData?.urinalysis?.startsWith("Abnormal") ? "Abnormal" : (existingData?.urinalysis || ""),
     urinalysisSpecify: existingData?.urinalysis?.startsWith("Abnormal") 
       ? existingData.urinalysis.replace("Abnormal: ", "") 
       : "",
     hba1cResponse: existingData?.glycemicResponse?.category || "",
     weightChange: existingData?.outcomes?.weightChange || "",
-    bpControlAchieved: existingData?.outcomes?.bpControlAchieved || false,
+    bpControlAchieved: existingData?.outcomes?.bpControlAchieved ?? false,
     renalOutcome: existingData?.outcomes?.renalOutcome || "",
     patientContinuingTreatment: existingData?.adherence?.patientContinuingTreatment ?? false,
     discontinuationReason: existingData?.adherence?.discontinuationReason || "",
     discontinuationReasonOther: existingData?.adherence?.discontinuationReasonOtherDetails || "",
     missedDoses: existingData?.adherence?.missedDosesInLast7Days || "",
-    addOnTherapy: existingData?.adherence?.addOnOrChangedTherapy || false,
+    addOnTherapy: existingData?.adherence?.addOnOrChangedTherapy ?? false,
     addOnTherapyDetails: existingData?.adherence?.addOnOrChangedTherapyDetails || "",
     adverseEventsPresent:
       existingData?.adverseEventsPresent ??
       ((Array.isArray(existingData?.adverseEvents) && existingData.adverseEvents.length > 0) ||
         Boolean(typeof (existingData as any)?.adverseEvents === "string" && (existingData as any).adverseEvents.trim())),
-    hypoglycemiaMild: existingData?.eventsOfSpecialInterest?.hypoglycemiaMild || false,
-    hypoglycemiaModerate: existingData?.eventsOfSpecialInterest?.hypoglycemiaModerate || false,
-    hypoglycemiaSevere: existingData?.eventsOfSpecialInterest?.hypoglycemiaSevere || false,
-    uti: existingData?.eventsOfSpecialInterest?.uti || false,
-    genitalInfection: existingData?.eventsOfSpecialInterest?.genitalMycoticInfection || false,
-    dizzinessDehydration: existingData?.eventsOfSpecialInterest?.dizzinessDehydrationSymptoms || false,
-    hospitalizationErVisit: existingData?.eventsOfSpecialInterest?.hospitalizationOrErVisit || false,
+    hypoglycemiaMild: existingData?.eventsOfSpecialInterest?.hypoglycemiaMild ?? false,
+    hypoglycemiaModerate: existingData?.eventsOfSpecialInterest?.hypoglycemiaModerate ?? false,
+    hypoglycemiaSevere: existingData?.eventsOfSpecialInterest?.hypoglycemiaSevere ?? false,
+    uti: existingData?.eventsOfSpecialInterest?.uti ?? false,
+    genitalInfection: existingData?.eventsOfSpecialInterest?.genitalMycoticInfection ?? false,
+    dizzinessDehydration: existingData?.eventsOfSpecialInterest?.dizzinessDehydrationSymptoms ?? false,
+    hospitalizationErVisit: existingData?.eventsOfSpecialInterest?.hospitalizationOrErVisit ?? false,
     hospitalizationReason: existingData?.eventsOfSpecialInterest?.hospitalizationReason || "",
     overallEfficacy: existingData?.physicianAssessment?.overallEfficacy || "",
     overallTolerability: existingData?.physicianAssessment?.overallTolerability || "",
     complianceJudgment: existingData?.physicianAssessment?.complianceJudgment || "",
-    preferLongTerm: existingData?.physicianAssessment?.preferKcMeSempaForLongTerm || false,
-    uncontrolledT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.uncontrolledT2dm || false,
-    obeseT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.obeseT2dm || false,
-    ckdPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.ckdPatients || false,
-    htnT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.htnPlusT2dm || false,
-    elderlyPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.elderlyPatients || false,
-    noPersonalIdentifiers: existingData?.dataPrivacy?.noPersonalIdentifiersRecorded || false,
-    dataAsRoutinePractice: existingData?.dataPrivacy?.dataCollectedAsRoutineClinicalPractice || false,
-    patientIdentityMapping: existingData?.dataPrivacy?.patientIdentityMappingAtClinicOnly || false,
-    physicianConfirmation: existingData?.physicianDeclaration?.confirmationCheckbox || false,
+    preferLongTerm: existingData?.physicianAssessment?.preferKcMeSempaForLongTerm ?? false,
+    uncontrolledT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.uncontrolledT2dm ?? false,
+    obeseT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.obeseT2dm ?? false,
+    ckdPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.ckdPatients ?? false,
+    htnT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.htnPlusT2dm ?? false,
+    elderlyPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.elderlyPatients ?? false,
+    noPersonalIdentifiers: existingData?.dataPrivacy?.noPersonalIdentifiersRecorded ?? false,
+    dataAsRoutinePractice: existingData?.dataPrivacy?.dataCollectedAsRoutineClinicalPractice ?? false,
+    patientIdentityMapping: existingData?.dataPrivacy?.patientIdentityMappingAtClinicOnly ?? false,
+    physicianConfirmation: existingData?.physicianDeclaration?.confirmationCheckbox ?? false,
     additionalComments: existingData?.comments || "",
   })
 
@@ -220,6 +264,11 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
   const removeAdverseEvent = (id: string) => {
     setAdverseEvents((prev) => prev.filter((event) => event.id !== id))
+    setDeletingAdverseEventId(null)
+  }
+
+  const confirmRemoveAdverseEvent = (id: string) => {
+    setDeletingAdverseEventId(id)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -512,12 +561,14 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                 type="date"
                 value={formData.visitDate}
                 onChange={(e) => {
-                  const newDate = e.target.value
+                  const newDate = validateDateInput(e.target.value)
                   const newVisitNumber = calculateVisitNumber(newDate)
                   setFormData({ ...formData, visitDate: newDate, visitNumber: newVisitNumber })
                   setVisitDate(newDate)
                 }}
                 onBlur={() => showTimelineAlertIfNeeded(formData.visitDate)}
+                aria-label="Date of follow-up visit required"
+                aria-required="true"
                 required
               />
               {formData.visitDate && (
@@ -541,6 +592,8 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                   placeholder="6.8"
                   value={formData.hba1c}
                   onChange={(e) => setFormData({ ...formData, hba1c: e.target.value })}
+                  aria-label="HbA1c percentage required"
+                  aria-required="true"
                   required
                 />
               </div>
@@ -552,6 +605,8 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                   placeholder="120"
                   value={formData.fpg}
                   onChange={(e) => setFormData({ ...formData, fpg: e.target.value })}
+                  aria-label="Fasting plasma glucose in milligrams per deciliter required"
+                  aria-required="true"
                   required
                 />
               </div>
@@ -1104,7 +1159,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                   <div key={event.id} className="space-y-4 rounded-lg border p-4 bg-muted/30">
                     <div className="flex items-center justify-between">
                       <h4 className="font-semibold">Adverse Event #{index + 1}</h4>
-                      <Button type="button" variant="outline" size="sm" onClick={() => removeAdverseEvent(event.id)}>
+                      <Button type="button" variant="outline" size="sm" onClick={() => confirmRemoveAdverseEvent(event.id)} aria-label={`Delete adverse event number ${index + 1}`}>
                         Remove
                       </Button>
                     </div>
@@ -1117,6 +1172,8 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                         placeholder="Enter adverse event term"
                         value={event.aeTerm}
                         onChange={(e) => updateAdverseEvent(event.id, { aeTerm: e.target.value })}
+                        aria-label={`Adverse event term for event number ${adverseEvents.indexOf(event) + 1} using MedDRA preferred terminology required`}
+                        aria-required={formData.adverseEventsPresent}
                         required={formData.adverseEventsPresent}
                       />
                     </div>
@@ -1128,7 +1185,9 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                           id={`ae-onset-${event.id}`}
                           type="date"
                           value={event.onsetDate}
-                          onChange={(e) => updateAdverseEvent(event.id, { onsetDate: e.target.value })}
+                          onChange={(e) => updateAdverseEvent(event.id, { onsetDate: validateDateInput(e.target.value) })}
+                          aria-label={`Onset date for adverse event number ${adverseEvents.indexOf(event) + 1} required`}
+                          aria-required="true"
                           required={formData.adverseEventsPresent}
                         />
                       </div>
@@ -1138,7 +1197,8 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
                           id={`ae-stop-${event.id}`}
                           type="date"
                           value={event.stopDate || ""}
-                          onChange={(e) => updateAdverseEvent(event.id, { stopDate: e.target.value })}
+                          onChange={(e) => updateAdverseEvent(event.id, { stopDate: validateDateInput(e.target.value) })}
+                          aria-label={`Stop date for adverse event number ${adverseEvents.indexOf(event) + 1}`}
                         />
                       </div>
                     </div>
@@ -1507,6 +1567,27 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
             </div>
           )}
         </form>
+
+        {/* Confirmation dialog for deleting adverse events */}
+        <AlertDialog open={!!deletingAdverseEventId} onOpenChange={(open) => { if (!open) setDeletingAdverseEventId(null) }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Adverse Event?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to remove this adverse event? This action cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="flex gap-3 justify-end">
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deletingAdverseEventId && removeAdverseEvent(deletingAdverseEventId)}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                Delete
+              </AlertDialogAction>
+            </div>
+          </AlertDialogContent>
+        </AlertDialog>
       </CardContent>
     </Card>
   )

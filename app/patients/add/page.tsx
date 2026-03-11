@@ -21,6 +21,48 @@ import Link from "next/link"
 const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
 const PATIENT_CODE_REGEX = /^\d{3}-[A-Z]{3}$/
 
+// Validate date input: ensure year is 4 digits (1900-2100), month 1-12, day valid for month
+const validateDateInput = (value: string): string => {
+  if (!value) return ""
+  
+  // Only validate dates in YYYY-MM-DD format
+  const dateRegex = /^\d{0,4}(-\d{0,2})?(-\d{0,2})?$/
+  if (!dateRegex.test(value)) return "" // Invalid format, clear it
+  
+  const parts = value.split("-")
+  
+  // Validate year (if provided)
+  if (parts[0] && parts[0].length > 4) {
+    return value.substring(0, 4) // Limit to 4 digits
+  }
+  if (parts[0] && parts[0].length === 4) {
+    const year = parseInt(parts[0])
+    if (year < 1900 || year > 2100) return "" // Invalid year range
+  }
+  
+  // Validate month (if provided)
+  if (parts[1]) {
+    if (parts[1].length > 2) {
+      return parts[0] + "-" + parts[1].substring(0, 2) // Limit to 2 digits
+    }
+    const month = parseInt(parts[1])
+    if (month > 12) return parts[0] + "-12" // Max month is 12
+    if (month < 1 && parts[1].length === 2) return parts[0] + "-01" // Min month is 01
+  }
+  
+  // Validate day (if provided)
+  if (parts[2]) {
+    if (parts[2].length > 2) {
+      return parts[0] + "-" + parts[1] + "-" + parts[2].substring(0, 2) // Limit to 2 digits
+    }
+    const day = parseInt(parts[2])
+    if (day > 31) return parts[0] + "-" + parts[1] + "-31" // Max day is 31
+    if (day < 1 && parts[2].length === 2) return parts[0] + "-" + parts[1] + "-01" // Min day is 01
+  }
+  
+  return value
+}
+
 interface PatientFormPageProps {
   presetEditPatientId?: string
   forceEmbedded?: boolean
@@ -750,7 +792,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
                       id="baselineVisitDate"
                       type="date"
                       value={formData.baselineVisitDate}
-                      onChange={(e) => setFormData({ ...formData, baselineVisitDate: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, baselineVisitDate: validateDateInput(e.target.value) })}
                       required
                     />
                   </div>

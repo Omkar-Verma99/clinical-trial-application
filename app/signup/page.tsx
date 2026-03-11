@@ -15,6 +15,48 @@ import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { getAuthErrorMessage } from "@/lib/auth-errors"
 
+// Validate date input: ensure year is 4 digits (1900-2100), month 1-12, day valid for month
+const validateDateInput = (value: string): string => {
+  if (!value) return ""
+  
+  // Only validate dates in YYYY-MM-DD format
+  const dateRegex = /^\d{0,4}(-\d{0,2})?(-\d{0,2})?$/
+  if (!dateRegex.test(value)) return "" // Invalid format, clear it
+  
+  const parts = value.split("-")
+  
+  // Validate year (if provided)
+  if (parts[0] && parts[0].length > 4) {
+    return value.substring(0, 4) // Limit to 4 digits
+  }
+  if (parts[0] && parts[0].length === 4) {
+    const year = parseInt(parts[0])
+    if (year < 1900 || year > 2100) return "" // Invalid year range
+  }
+  
+  // Validate month (if provided)
+  if (parts[1]) {
+    if (parts[1].length > 2) {
+      return parts[0] + "-" + parts[1].substring(0, 2) // Limit to 2 digits
+    }
+    const month = parseInt(parts[1])
+    if (month > 12) return parts[0] + "-12" // Max month is 12
+    if (month < 1 && parts[1].length === 2) return parts[0] + "-01" // Min month is 01
+  }
+  
+  // Validate day (if provided)
+  if (parts[2]) {
+    if (parts[2].length > 2) {
+      return parts[0] + "-" + parts[1] + "-" + parts[2].substring(0, 2) // Limit to 2 digits
+    }
+    const day = parseInt(parts[2])
+    if (day > 31) return parts[0] + "-" + parts[1] + "-31" // Max day is 31
+    if (day < 1 && parts[2].length === 2) return parts[0] + "-" + parts[1] + "-01" // Min day is 01
+  }
+  
+  return value
+}
+
 export default function SignupPage() {
   const [formData, setFormData] = useState({
     name: "",
@@ -38,6 +80,8 @@ export default function SignupPage() {
     // Convert study site code to uppercase
     if (name === "studySiteCode") {
       setFormData({ ...formData, [name]: value.toUpperCase() })
+    } else if (name === "dateOfBirth") {
+      setFormData({ ...formData, [name]: validateDateInput(value) })
     } else {
       setFormData({ ...formData, [name]: value })
     }
