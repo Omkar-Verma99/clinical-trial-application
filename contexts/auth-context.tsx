@@ -139,11 +139,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const normalizedEmail = email.trim().toLowerCase()
 
+    // Try to get UID from Firebase Auth (if user is already signed in)
+    let uid = ""
+    if (auth.currentUser) {
+      uid = auth.currentUser.uid
+    }
+
     // Server-side check keeps Firestore rules strict while allowing clear user messaging.
     const accountStatusResponse = await fetch("/api/auth/account-status", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: normalizedEmail }),
+      body: JSON.stringify({ email: normalizedEmail, uid }),
     })
 
     if (!accountStatusResponse.ok) {
