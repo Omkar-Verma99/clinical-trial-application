@@ -7,10 +7,11 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  fetchSignInMethodsForEmail,
   signOut,
   sendEmailVerification,
 } from "firebase/auth"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, writeBatch } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import { logError, logInfo } from "@/lib/error-tracking"
 import type { Doctor } from "@/lib/types"
@@ -133,8 +134,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!auth) {
       throw new Error("Firebase authentication is not initialized. Please refresh the page.")
     }
-    await signInWithEmailAndPassword(auth, email, password)
-    logInfo("User logged in successfully", { email })
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const signInMethods = await fetchSignInMethodsForEmail(auth, normalizedEmail)
+    if (!signInMethods || signInMethods.length === 0) {
+      const accountError = new Error("Your ID has not been created yet. Please sign up first to create your account.") as Error & { code: string }
+      accountError.code = "app/account-not-created"
+      throw accountError
+    }
+
+    await signInWithEmailAndPassword(auth, normalizedEmail, password)
+    logInfo("User logged in successfully", { email: normalizedEmail })
   }, [])
 
   const signup = useCallback(async (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => {
@@ -162,14 +172,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Don't throw - verification is optional
     }
 
-    // Create doctor document
+    // Atomically create site-code lock and doctor profile to prevent duplicate center registration.
     if (!db) {
       throw new Error("Firestore is not initialized. Please refresh the page.")
     }
-    await setDoc(doc(db, "doctors", user.uid), {
-      ...doctorData,
-      createdAt: new Date().toISOString(),
+
+    const studySiteCode = doctorData.studySiteCode
+    const createdAt = new Date().toISOString()
+    const doctorRef = doc(db, "doctors", user.uid)
+    const studySiteCodeRef = doc(db, "studySiteCodes", studySiteCode)
+    const batch = writeBatch(db)
+
+    batch.set(studySiteCodeRef, {
+      doctorId: user.uid,
+      studySiteCode,
+      createdAt,
     })
+
+    batch.set(doctorRef, {
+      ...doctorData,
+      createdAt,
+    })
+
+    try {
+      await batch.commit()
+    } catch (error: any) {
+      // Roll back Firebase Auth user when profile/lock creation fails.
+      try {
+        await user.delete()
+      } catch {
+        // Best-effort cleanup only.
+      }
+
+      if (error?.code === "permission-denied") {
+        throw new Error(`Study Site Code "${studySiteCode}" is already in use. Only one doctor per center is allowed.`)
+      }
+
+      throw error
+    }
 
     // IMPORTANT: Immediately fetch and set the doctor data after signup
     // This ensures doctor context is available immediately after registration
