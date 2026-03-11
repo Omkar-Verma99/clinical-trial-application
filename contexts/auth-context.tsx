@@ -7,7 +7,6 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail,
   signOut,
   sendEmailVerification,
 } from "firebase/auth"
@@ -136,13 +135,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const normalizedEmail = email.trim().toLowerCase()
-    const signInMethods = await fetchSignInMethodsForEmail(auth, normalizedEmail)
-    if (!signInMethods || signInMethods.length === 0) {
-      const accountError = new Error("Your ID has not been created yet. Please sign up first to create your account.") as Error & { code: string }
-      accountError.code = "app/account-not-created"
-      throw accountError
-    }
-
     await signInWithEmailAndPassword(auth, normalizedEmail, password)
     logInfo("User logged in successfully", { email: normalizedEmail })
   }, [])
