@@ -68,6 +68,28 @@ function formatTypingInput(raw: string, isDeleting: boolean): string {
   return `${dd}/${mm}/${yyyy}`
 }
 
+function sanitizeFreeformInput(raw: string): string {
+  const cleaned = raw.replace(/[^\d/]/g, '')
+  const parts = cleaned.split('/')
+
+  const day = (parts[0] || '').replace(/\D/g, '').slice(0, 2)
+  const month = (parts[1] || '').replace(/\D/g, '').slice(0, 2)
+  const year = (parts[2] || '').replace(/\D/g, '').slice(0, 4)
+  const slashCount = (cleaned.match(/\//g) || []).length
+
+  let out = day
+
+  if (slashCount >= 1 || parts.length > 1) {
+    out += `/${month}`
+  }
+
+  if (slashCount >= 2 || parts.length > 2) {
+    out += `/${year}`
+  }
+
+  return out.slice(0, 10)
+}
+
 function parseDisplayDate(display: string): Date | undefined {
   if (!/^\d{2}\/\d{2}\/\d{4}$/.test(display)) return undefined
   const [dayStr, monthStr, yearStr] = display.split('/')
@@ -133,7 +155,10 @@ export function DateField({
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const raw = event.target.value
     const isDeleting = raw.length < displayValue.length
-    const next = formatTypingInput(raw, isDeleting)
+    const caretAtEnd = (event.target.selectionStart ?? raw.length) === raw.length
+    const next = caretAtEnd
+      ? formatTypingInput(raw, isDeleting)
+      : sanitizeFreeformInput(raw)
     setDisplayValue(next)
 
     const iso = toIsoIfValid(next, min, max)
