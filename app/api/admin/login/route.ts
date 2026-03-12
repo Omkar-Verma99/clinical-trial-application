@@ -1,17 +1,16 @@
 /// <reference path="../../../../types/bcryptjs.d.ts" />
 import { cookies } from 'next/headers';
-import { getFirestore, collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
-import { initializeApp } from 'firebase/app';
-import { firebaseConfig } from '@/lib/firebase-config';
-import { getFirebaseAdminAuth } from '@/lib/firebase-admin';
+import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import { getDefaultPermissionsForRole, sanitizePermissions } from '@/lib/admin-permissions';
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+const adminDb = getFirebaseAdminDb();
 
 async function verifyFirebaseCredentials(email: string, password: string) {
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+  if (!apiKey) {
+    throw new Error('MISSING_FIREBASE_API_KEY')
+  }
   const response = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -70,9 +69,11 @@ export async function POST(request: Request) {
     }
 
     // Then query admin role/status in Firestore
-    const adminsRef = collection(db, 'admins');
-    const q = query(adminsRef, where('email', '==', normalizedEmail));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await adminDb
+      .collection('admins')
+      .where('email', '==', normalizedEmail)
+      .limit(1)
+      .get()
 
     if (querySnapshot.empty) {
       return Response.json(
@@ -94,14 +95,14 @@ export async function POST(request: Request) {
 
     // Update last login
     const lastLoginTimestamp = new Date();
-    await setDoc(
-      doc(db, 'admins', adminDoc.id),
+    await adminDb.collection('admins').doc(adminDoc.id).set(
       {
         lastLogin: lastLoginTimestamp,
-        loginCount: (adminData.loginCount || 0) + 1,
+        loginCount: Number(adminData.loginCount || 0) + 1,
+        updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
-    );
+    )
 
     // Set secure cookies
     const cookieStore = await cookies();
@@ -129,7 +130,11 @@ export async function POST(request: Request) {
 
     try {
       const adminAuth = getFirebaseAdminAuth()
-      const sessionCookie = await adminAuth.createSessionCookie(String(firebaseAuthData.idToken || ''), {
+      const idToken = String(firebaseAuthData.idToken || '')
+      if (!idToken) {
+        throw new Error('MISSING_ID_TOKEN')
+      }
+      const sessionCookie = await adminAuth.createSessionCookie(idToken, {
         expiresIn: 7 * 24 * 60 * 60 * 1000,
       })
       cookieStore.set('adminSession', sessionCookie, {
