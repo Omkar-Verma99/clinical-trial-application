@@ -1,19 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from '@/contexts/admin-auth-context';
 import {
   LayoutDashboard,
   Users,
   UserCheck,
-  FileText,
   BarChart3,
+  ClipboardCheck,
+  ShieldAlert,
+  Layers3,
+  SlidersHorizontal,
   Download,
   FileJson,
   Settings,
   LogOut,
-  ChevronDown,
   Menu,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -23,7 +25,7 @@ const navigationItems = [
     label: 'Dashboard',
     href: '/admin',
     icon: LayoutDashboard,
-    permission: 'view_analytics',
+    permission: 'view_dashboard',
   },
   {
     label: 'Doctors',
@@ -38,16 +40,34 @@ const navigationItems = [
     permission: 'view_patients',
   },
   {
-    label: 'Form Responses',
-    href: '/admin/forms',
-    icon: FileText,
-    permission: 'view_forms',
-  },
-  {
     label: 'Analytics',
     href: '/admin/analytics',
     icon: BarChart3,
     permission: 'view_analytics',
+  },
+  {
+    label: 'Operations',
+    href: '/admin/operations',
+    icon: ClipboardCheck,
+    permission: 'view_operations',
+  },
+  {
+    label: 'Safety',
+    href: '/admin/safety',
+    icon: ShieldAlert,
+    permission: 'view_safety',
+  },
+  {
+    label: 'Cohorts',
+    href: '/admin/cohorts',
+    icon: Layers3,
+    permission: 'view_cohorts',
+  },
+  {
+    label: 'Clinical Ranges',
+    href: '/admin/clinical-ranges',
+    icon: SlidersHorizontal,
+    permission: 'manage_system_config',
   },
   {
     label: 'Exports',
@@ -74,11 +94,13 @@ const adminItems = [
 
 export default function AdminSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const { adminUser, logout, hasPermission } = useAdminAuth();
   const [isOpen, setIsOpen] = useState(true);
 
   const handleLogout = async () => {
     await logout();
+    router.push('/admin/login');
   };
 
   const isActive = (href: string) => pathname === href;

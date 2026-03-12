@@ -1,43 +1,33 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getDocs, collection, query, where, getDoc, doc } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import { getDocs, collection } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
-import { useAdminAuth } from '@/contexts/admin-auth-context';
-import { Eye, Search, Filter, AlertCircle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Eye, Search, AlertCircle } from 'lucide-react';
 
 interface Patient {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
-  phone: string;
-  status: 'active' | 'inactive' | 'completed';
+  patientCode: string;
   enrollmentDate: Date;
-  lastActivityDate: Date;
+  studySiteCode: string;
+  investigatorName: string;
   doctorId: string;
   doctorName: string;
-  formsCount: number;
-  completedFormsCount: number;
   age?: number;
   gender?: string;
 }
 
-interface DetailModalData {
-  patient: Patient;
-  forms: any[];
-}
-
 export default function PatientManagementPage() {
-  const { adminUser } = useAdminAuth();
+  const router = useRouter();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedPatient, setSelectedPatient] = useState<DetailModalData | null>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [doctorFilter, setDoctorFilter] = useState('all');
+  const [siteFilter, setSiteFilter] = useState('all');
+  const [doctorOptions, setDoctorOptions] = useState<string[]>([]);
+  const [siteOptions, setSiteOptions] = useState<string[]>([]);
 
   const db = getFirestore();
 
@@ -47,64 +37,59 @@ export default function PatientManagementPage() {
 
   useEffect(() => {
     filterPatients();
-  }, [patients, searchTerm, statusFilter]);
+  }, [patients, searchTerm, doctorFilter, siteFilter]);
 
   const fetchPatients = async () => {
     try {
       setLoading(true);
-      const patientsRef = collection(db, 'patients');
-      const snapshot = await getDocs(patientsRef);
+      const [patientsSnapshot, doctorsSnapshot] = await Promise.all([
+        getDocs(collection(db, 'patients')),
+        getDocs(collection(db, 'doctors')),
+      ]);
 
-      const patientsData = await Promise.all(
-        snapshot.docs.map(async (patientDoc) => {
-          const data = patientDoc.data();
-          
-          // Get doctor name
-          let doctorName = 'Unknown';
-          if (data.doctorId) {
-            try {
-              const doctorSnap = await getDoc(doc(db, 'doctors', data.doctorId));
-              if (doctorSnap.exists()) {
-                doctorName = `${doctorSnap.data().firstName} ${doctorSnap.data().lastName}`;
-              }
-            } catch (error) {
-              console.error('Error fetching doctor:', error);
-            }
-          }
+      const doctorNameById = new Map<string, string>();
+      const doctorSiteById = new Map<string, string>();
+      doctorsSnapshot.docs.forEach((doctorDoc) => {
+        const doctorData = doctorDoc.data() as Record<string, any>;
+        const fullName = `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim();
+        doctorNameById.set(doctorDoc.id, fullName || 'Unknown');
+        doctorSiteById.set(doctorDoc.id, String(doctorData.studySiteCode || '').trim());
+      });
 
-          // Count forms
-          let formsCount = 0;
-          let completedFormsCount = 0;
-          try {
-            const formsSnapshot = await getDocs(
-              query(collection(db, 'formResponses'), where('patientId', '==', patientDoc.id))
-            );
-            formsCount = formsSnapshot.size;
-            completedFormsCount = formsSnapshot.docs.filter(f => f.data().isCompleted).length;
-          } catch (error) {
-            console.error('Error counting forms:', error);
-          }
+      const patientsData = patientsSnapshot.docs
+        .map((patientDoc) => {
+          const data = patientDoc.data() as Record<string, any>;
+          const doctorName = data.doctorId
+            ? doctorNameById.get(String(data.doctorId)) || 'Unknown'
+            : 'Unknown';
 
           return {
             id: patientDoc.id,
-            firstName: data.firstName || '',
-            lastName: data.lastName || '',
-            email: data.email || '',
-            phone: data.phone || '',
-            status: data.status || 'active',
-            enrollmentDate: data.enrollmentDate?.toDate() || new Date(),
-            lastActivityDate: data.lastActivityDate?.toDate() || new Date(),
-            doctorId: data.doctorId || '',
+            patientCode: String(data.patientCode || patientDoc.id),
+            enrollmentDate: data.createdAt ? new Date(data.createdAt) : new Date(),
+            studySiteCode: String(
+              data.studySiteCode || doctorSiteById.get(String(data.doctorId || '')) || 'N/A'
+            ),
+            investigatorName: String(data.investigatorName || doctorName || 'Unknown'),
+            doctorId: String(data.doctorId || ''),
             doctorName,
-            formsCount,
-            completedFormsCount,
-            age: data.age,
-            gender: data.gender,
+            age: typeof data.age === 'number' ? data.age : undefined,
+            gender: data.gender ? String(data.gender) : undefined,
           };
         })
-      );
+        .sort((a, b) => b.enrollmentDate.getTime() - a.enrollmentDate.getTime());
 
       setPatients(patientsData);
+      setDoctorOptions(
+        [...new Set(patientsData.map((p) => p.doctorName).filter(Boolean))].sort((a, b) =>
+          a.localeCompare(b)
+        )
+      );
+      setSiteOptions(
+        [...new Set(patientsData.map((p) => p.studySiteCode).filter(Boolean))].sort((a, b) =>
+          a.localeCompare(b)
+        )
+      );
     } catch (error) {
       console.error('Error fetching patients:', error);
     } finally {
@@ -118,40 +103,21 @@ export default function PatientManagementPage() {
     if (searchTerm) {
       filtered = filtered.filter(
         (patient) =>
-          patient.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          patient.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          patient.email.toLowerCase().includes(searchTerm.toLowerCase())
+          patient.patientCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          patient.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          patient.studySiteCode.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((patient) => patient.status === statusFilter);
+    if (doctorFilter !== 'all') {
+      filtered = filtered.filter((patient) => patient.doctorName === doctorFilter);
+    }
+
+    if (siteFilter !== 'all') {
+      filtered = filtered.filter((patient) => patient.studySiteCode === siteFilter);
     }
 
     setFilteredPatients(filtered);
-  };
-
-  const openPatientDetail = async (patient: Patient) => {
-    try {
-      const formsSnapshot = await getDocs(
-        query(collection(db, 'formResponses'), where('patientId', '==', patient.id))
-      );
-      const forms = formsSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-        timestamp: doc.data().timestamp?.toDate(),
-      }));
-
-      setSelectedPatient({ patient, forms });
-      setShowModal(true);
-    } catch (error) {
-      console.error('Error loading patient detail:', error);
-    }
-  };
-
-  const completionPercentage = (patient: Patient) => {
-    if (patient.formsCount === 0) return 0;
-    return Math.round((patient.completedFormsCount / patient.formsCount) * 100);
   };
 
   return (
@@ -159,50 +125,34 @@ export default function PatientManagementPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">Participant Data Management</h1>
-        <p className="text-slate-400 mt-2">View and manage all enrolled patients</p>
+        <p className="text-slate-400 mt-2">View all doctors and all enrolled patients</p>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
           <p className="text-slate-400 text-sm">Total Patients</p>
           <p className="text-2xl font-bold text-white mt-2">{patients.length}</p>
         </div>
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Active Patients</p>
-          <p className="text-2xl font-bold text-green-400 mt-2">
-            {patients.filter((p) => p.status === 'active').length}
-          </p>
+          <p className="text-slate-400 text-sm">Doctors Covered</p>
+          <p className="text-2xl font-bold text-green-400 mt-2">{doctorOptions.length}</p>
         </div>
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Completed</p>
-          <p className="text-2xl font-bold text-blue-400 mt-2">
-            {patients.filter((p) => p.status === 'completed').length}
-          </p>
-        </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Avg Completion Rate</p>
-          <p className="text-2xl font-bold text-purple-400 mt-2">
-            {patients.length > 0
-              ? Math.round(
-                  patients.reduce((sum, p) => sum + completionPercentage(p), 0) /
-                    patients.length
-                )
-              : 0}
-            %
-          </p>
+          <p className="text-slate-400 text-sm">Study Sites</p>
+          <p className="text-2xl font-bold text-blue-400 mt-2">{siteOptions.length}</p>
         </div>
       </div>
 
       {/* Search & Filter */}
-      <div className="flex gap-4 items-end">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
         <div className="flex-1">
           <label className="block text-sm font-medium text-slate-300 mb-2">Search</label>
           <div className="relative">
             <Search className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
             <input
               type="text"
-              placeholder="Search by name or email..."
+              placeholder="Search by patient code, doctor, or site code..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -210,16 +160,33 @@ export default function PatientManagementPage() {
           </div>
         </div>
         <div>
-          <label className="block text-sm font-medium text-slate-300 mb-2">Status</label>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Doctor</label>
           <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+            value={doctorFilter}
+            onChange={(e) => setDoctorFilter(e.target.value)}
+            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
           >
-            <option value="all">All Statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-            <option value="completed">Completed</option>
+            <option value="all">All Doctors</option>
+            {doctorOptions.map((doctorName) => (
+              <option key={doctorName} value={doctorName}>
+                {doctorName}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-2">Study Site Code</label>
+          <select
+            value={siteFilter}
+            onChange={(e) => setSiteFilter(e.target.value)}
+            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:border-blue-500"
+          >
+            <option value="all">All Sites</option>
+            {siteOptions.map((siteCode) => (
+              <option key={siteCode} value={siteCode}>
+                {siteCode}
+              </option>
+            ))}
           </select>
         </div>
       </div>
@@ -239,12 +206,11 @@ export default function PatientManagementPage() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700/50 bg-slate-900/50">
-                <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Name</th>
-                <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Email</th>
+                <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Patient Code</th>
+                <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Age</th>
+                <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Enrolled</th>
                 <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Doctor</th>
-                <th className="text-center px-6 py-3 text-sm font-semibold text-slate-300">Forms</th>
-                <th className="text-center px-6 py-3 text-sm font-semibold text-slate-300">Completion</th>
-                <th className="text-center px-6 py-3 text-sm font-semibold text-slate-300">Status</th>
+                <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Site Code</th>
                 <th className="text-center px-6 py-3 text-sm font-semibold text-slate-300">Actions</th>
               </tr>
             </thead>
@@ -255,51 +221,22 @@ export default function PatientManagementPage() {
                   className="border-b border-slate-700/30 hover:bg-slate-700/20 transition"
                 >
                   <td className="px-6 py-4">
-                    <div className="font-medium text-white">
-                      {patient.firstName} {patient.lastName}
-                    </div>
-                    <div className="text-xs text-slate-400">{patient.phone}</div>
+                    <div className="font-medium text-white">{patient.patientCode}</div>
+                    <div className="text-xs text-slate-400">{patient.gender || 'N/A'}</div>
                   </td>
-                  <td className="px-6 py-4 text-sm text-slate-300">{patient.email}</td>
+                  <td className="px-6 py-4 text-sm text-slate-300">{patient.age ?? 'N/A'}</td>
+                  <td className="px-6 py-4 text-sm text-slate-300">
+                    {patient.enrollmentDate.toLocaleDateString()}
+                  </td>
                   <td className="px-6 py-4 text-sm text-slate-300">{patient.doctorName}</td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="text-sm font-medium text-white">
-                      {patient.completedFormsCount}/{patient.formsCount}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-24 bg-slate-700 rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-green-500 to-blue-500 h-2 rounded-full"
-                          style={{ width: `${completionPercentage(patient)}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-xs font-medium text-slate-300 w-8">
-                        {completionPercentage(patient)}%
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        patient.status === 'active'
-                          ? 'bg-green-900/30 text-green-300'
-                          : patient.status === 'completed'
-                          ? 'bg-blue-900/30 text-blue-300'
-                          : 'bg-red-900/30 text-red-300'
-                      }`}
-                    >
-                      {patient.status.charAt(0).toUpperCase() + patient.status.slice(1)}
-                    </span>
-                  </td>
+                  <td className="px-6 py-4 text-sm text-slate-300">{patient.studySiteCode}</td>
                   <td className="px-6 py-4 text-center">
                     <button
-                      onClick={() => openPatientDetail(patient)}
-                      className="p-2 hover:bg-slate-700/50 rounded-lg transition"
-                      title="View details"
+                      onClick={() => router.push(`/admin/patients/${patient.id}`)}
+                      className="inline-flex items-center gap-2 rounded-lg border border-blue-500/40 px-3 py-1.5 text-sm text-blue-300 hover:bg-blue-500/20"
                     >
-                      <Eye className="w-4 h-4 text-blue-400" />
+                      <Eye className="w-4 h-4" />
+                      View Details
                     </button>
                   </td>
                 </tr>
@@ -308,105 +245,6 @@ export default function PatientManagementPage() {
           </table>
         )}
       </div>
-
-      {/* Detail Modal */}
-      {showModal && selectedPatient && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto border border-slate-700">
-            <div className="sticky top-0 bg-slate-800 border-b border-slate-700 p-6 flex justify-between items-center">
-              <h2 className="text-2xl font-bold text-white">
-                {selectedPatient.patient.firstName} {selectedPatient.patient.lastName}
-              </h2>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-slate-400 hover:text-white text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <div className="p-6 space-y-6">
-              {/* Contact Info */}
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-3">Contact Information</h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-slate-400">Email</p>
-                    <p className="text-white">{selectedPatient.patient.email}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400">Phone</p>
-                    <p className="text-white">{selectedPatient.patient.phone}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400">Age</p>
-                    <p className="text-white">{selectedPatient.patient.age || 'N/A'}</p>
-                  </div>
-                  <div>
-                    <p className="text-slate-400">Gender</p>
-                    <p className="text-white">{selectedPatient.patient.gender || 'N/A'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Statistics */}
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-3">Statistics</h3>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <p className="text-slate-400 text-sm">Total Forms</p>
-                    <p className="text-2xl font-bold text-blue-400">
-                      {selectedPatient.patient.formsCount}
-                    </p>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <p className="text-slate-400 text-sm">Completed</p>
-                    <p className="text-2xl font-bold text-green-400">
-                      {selectedPatient.patient.completedFormsCount}
-                    </p>
-                  </div>
-                  <div className="bg-slate-800/50 rounded-lg p-4">
-                    <p className="text-slate-400 text-sm">Completion %</p>
-                    <p className="text-2xl font-bold text-purple-400">
-                      {completionPercentage(selectedPatient.patient)}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Recent Forms */}
-              <div>
-                <h3 className="text-lg font-semibold text-white mb-3">Recent Form Submissions</h3>
-                {selectedPatient.forms.length === 0 ? (
-                  <p className="text-slate-400">No forms submitted yet</p>
-                ) : (
-                  <div className="space-y-2">
-                    {selectedPatient.forms.slice(0, 5).map((form) => (
-                      <div key={form.id} className="bg-slate-800/30 rounded p-3 flex justify-between items-center">
-                        <div>
-                          <p className="text-sm font-medium text-white">{form.formType}</p>
-                          <p className="text-xs text-slate-400">
-                            {form.timestamp?.toLocaleDateString()}
-                          </p>
-                        </div>
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            form.isCompleted
-                              ? 'bg-green-900/30 text-green-300'
-                              : 'bg-orange-900/30 text-orange-300'
-                          }`}
-                        >
-                          {form.isCompleted ? 'Completed' : 'In Progress'}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

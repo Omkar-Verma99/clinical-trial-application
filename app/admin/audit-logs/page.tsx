@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getDocs, collection, query, where, orderBy, limit, doc, getDoc } from 'firebase/firestore';
+import { getDocs, collection, query, where, orderBy, limit } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import { useAdminAuth } from '@/contexts/admin-auth-context';
 import { Search, AlertCircle, Activity, Lock, Users, FileText, Download, Settings } from 'lucide-react';
@@ -76,16 +76,9 @@ export default function AuditLogsPage() {
         snapshot.docs.map(async (logDoc) => {
           const data = logDoc.data();
 
-          // Get admin name
-          let adminName = 'Unknown Admin';
-          try {
-            const adminSnap = await getDoc(doc(db, 'admins', data.adminId));
-            if (adminSnap.exists()) {
-              adminName = `${adminSnap.data().firstName} ${adminSnap.data().lastName}`;
-            }
-          } catch (error) {
-            console.error('Error fetching admin:', error);
-          }
+          const actorNameFromDetails =
+            typeof data?.details?.adminName === 'string' ? data.details.adminName : '';
+          const adminName = actorNameFromDetails || String(data.adminId || 'Unknown Admin');
 
           return {
             id: logDoc.id,

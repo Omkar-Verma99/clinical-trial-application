@@ -1,8 +1,8 @@
 import { cookies } from 'next/headers'
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/firebase-admin'
-import { AdminRole, sanitizePermissions } from '@/lib/admin-permissions'
+import { AdminPermission, AdminRole, sanitizePermissions } from '@/lib/admin-permissions'
 
-async function getAuthorizedSuperAdmin() {
+async function getAuthorizedSuperAdmin(requiredPermission: AdminPermission = 'manage_admins') {
   const cookieStore = await cookies()
   const hasAdminSession = cookieStore.get('adminAuth')?.value === 'true'
   const adminSessionCookie = cookieStore.get('adminSession')?.value
@@ -42,11 +42,22 @@ async function getAuthorizedSuperAdmin() {
     return { ok: false as const, response: Response.json({ success: false, error: 'Super admin access required' }, { status: 403 }) }
   }
 
+  const actorPermissions = sanitizePermissions('super_admin', actorData.permissions)
+  if (!actorPermissions.includes(requiredPermission)) {
+    return {
+      ok: false as const,
+      response: Response.json(
+        { success: false, error: `Missing permission: ${requiredPermission}` },
+        { status: 403 }
+      ),
+    }
+  }
+
   return { ok: true as const, adminId: sessionAdminId }
 }
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ adminId: string }> }) {
-  const authResult = await getAuthorizedSuperAdmin()
+  const authResult = await getAuthorizedSuperAdmin('manage_admins')
   if (!authResult.ok) return authResult.response
 
   try {
@@ -118,7 +129,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ad
 }
 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ adminId: string }> }) {
-  const authResult = await getAuthorizedSuperAdmin()
+  const authResult = await getAuthorizedSuperAdmin('manage_admins')
   if (!authResult.ok) return authResult.response
 
   try {

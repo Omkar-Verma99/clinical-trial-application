@@ -3,6 +3,14 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { AdminUser } from '@/lib/admin-auth';
 import { getDefaultPermissionsForRole } from '@/lib/admin-permissions';
+import { auth } from '@/lib/firebase';
+import {
+  setPersistence,
+  browserLocalPersistence,
+  signInWithEmailAndPassword,
+  signInWithCustomToken,
+  signOut,
+} from 'firebase/auth';
 
 interface AdminContextType {
   adminUser: AdminUser | null;
@@ -45,11 +53,57 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   // Check session on mount
   useEffect(() => {
-    const checkSession = () => {
+    const checkSession = async () => {
       try {
         if (typeof window !== 'undefined') {
           const sessionRaw = localStorage.getItem('adminAuth');
           const session = sessionRaw ? JSON.parse(sessionRaw) : null;
+
+          // Restore Firebase client auth from secure server session when available.
+          const bootstrapResponse = await fetch('/api/admin/session', { method: 'GET' });
+          if (bootstrapResponse.ok) {
+            const bootstrapData = await bootstrapResponse.json();
+            if (bootstrapData?.success && bootstrapData?.customToken && auth) {
+              await setPersistence(auth, browserLocalPersistence);
+              await signInWithCustomToken(auth, String(bootstrapData.customToken));
+            }
+
+            if (bootstrapData?.success && bootstrapData?.user) {
+              const serverUser = buildAdminUserFromSession({
+                adminId: bootstrapData.user.id,
+                email: bootstrapData.user.email,
+                role: bootstrapData.user.role,
+                firstName: bootstrapData.user.firstName,
+                lastName: bootstrapData.user.lastName,
+                status: bootstrapData.user.status,
+                permissions: bootstrapData.user.permissions,
+                loginCount: bootstrapData.user.loginCount,
+                lastLogin: bootstrapData.user.lastLogin,
+                createdAt: bootstrapData.user.createdAt,
+              });
+
+              if (serverUser) {
+                localStorage.setItem('adminAuth', JSON.stringify({
+                  adminId: serverUser.id,
+                  email: serverUser.email,
+                  role: serverUser.role,
+                  firstName: serverUser.firstName,
+                  lastName: serverUser.lastName,
+                  status: serverUser.status,
+                  permissions: serverUser.permissions,
+                  loginCount: serverUser.loginCount,
+                  lastLogin: serverUser.lastLogin.toISOString(),
+                  createdAt: serverUser.createdAt.toISOString(),
+                  loginTime: new Date().toISOString(),
+                }));
+
+                setAdminUser(serverUser);
+                setPermissions(serverUser.permissions);
+                return;
+              }
+            }
+          }
+
           const user = buildAdminUserFromSession(session);
           if (user) {
             setAdminUser(user);
@@ -97,6 +151,12 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
           permissions: resolvedPermissions,
         };
 
+        // Keep Firebase client auth in sync so admin Firestore reads are authorized by rules.
+        if (auth) {
+          await setPersistence(auth, browserLocalPersistence);
+          await signInWithEmailAndPassword(auth, email, password);
+        }
+
         // Also store in localStorage for client-side access
         if (typeof window !== 'undefined') {
           localStorage.setItem('adminAuth', JSON.stringify({
@@ -137,6 +197,10 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       // Clear localStorage
       if (typeof window !== 'undefined') {
         localStorage.removeItem('adminAuth');
+      }
+
+      if (auth) {
+        await signOut(auth);
       }
 
       setAdminUser(null);

@@ -67,8 +67,7 @@ service cloud.firestore {
     // ===== DOCTORS COLLECTION =====
     // Doctor profile information
     match /doctors/{doctorId} {
-      allow read: if isAuthenticated() && 
-        request.auth.uid == doctorId;
+      allow read: if (isAuthenticated() && request.auth.uid == doctorId) || isAdmin();
       
       allow create: if isAuthenticated() &&
         request.auth.uid == doctorId;

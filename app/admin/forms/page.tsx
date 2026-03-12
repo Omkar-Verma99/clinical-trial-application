@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getDocs, collection, query, where, getDoc, doc } from 'firebase/firestore';
+import { getDocs, collection } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import { Eye, Search, AlertCircle } from 'lucide-react';
 
@@ -46,57 +46,76 @@ export default function FormResponsesPage() {
   const fetchForms = async () => {
     try {
       setLoading(true);
-      const formsRef = collection(db, 'formResponses');
-      const snapshot = await getDocs(formsRef);
+      const [patientsSnapshot, doctorsSnapshot] = await Promise.all([
+        getDocs(collection(db, 'patients')),
+        getDocs(collection(db, 'doctors')),
+      ]);
 
-      const formsData = await Promise.all(
-        snapshot.docs.map(async (formDoc) => {
-          const data = formDoc.data();
+      const patientNameById = new Map<string, string>();
+      patientsSnapshot.docs.forEach((patientDoc) => {
+        const patientData = patientDoc.data() as Record<string, any>;
+        const fullName = `${patientData.firstName || ''} ${patientData.lastName || ''}`.trim();
+        patientNameById.set(patientDoc.id, fullName || 'Unknown');
+      });
 
-          // Get patient name
-          let patientName = 'Unknown';
-          try {
-            const patientSnap = await getDoc(doc(db, 'patients', data.patientId));
-            if (patientSnap.exists()) {
-              patientName = `${patientSnap.data().firstName} ${patientSnap.data().lastName}`;
-            }
-          } catch (error) {
-            console.error('Error fetching patient:', error);
-          }
+      const doctorNameById = new Map<string, string>();
+      doctorsSnapshot.docs.forEach((doctorDoc) => {
+        const doctorData = doctorDoc.data() as Record<string, any>;
+        const fullName = `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim();
+        doctorNameById.set(doctorDoc.id, fullName || 'Unknown');
+      });
 
-          // Get doctor name
-          let doctorName = 'Unknown';
-          try {
-            const doctorSnap = await getDoc(doc(db, 'doctors', data.doctorId));
-            if (doctorSnap.exists()) {
-              doctorName = `${doctorSnap.data().firstName} ${doctorSnap.data().lastName}`;
-            }
-          } catch (error) {
-            console.error('Error fetching doctor:', error);
-          }
+      const formsData = patientsSnapshot.docs.flatMap((patientDoc) => {
+        const patientData = patientDoc.data() as Record<string, any>;
+        const patientId = patientDoc.id;
+        const patientName = patientNameById.get(patientId) || patientData.patientCode || 'Unknown';
+        const baselineForms: FormResponse[] = [];
 
-          // Calculate completion percentage
-          let completionPercentage = 0;
-          if (data.formData && typeof data.formData === 'object') {
-            const fields = Object.keys(data.formData).filter((k) => !k.startsWith('_'));
-            const filledFields = fields.filter((k) => data.formData[k] && data.formData[k] !== '');
-            completionPercentage = fields.length > 0 ? Math.round((filledFields.length / fields.length) * 100) : 0;
-          }
-
-          return {
-            id: formDoc.id,
-            formType: data.formType || 'Unknown',
-            patientId: data.patientId || '',
+        if (patientData.baseline && typeof patientData.baseline === 'object') {
+          const baselineDoctorId = String(patientData.baseline?.doctorId || patientData.doctorId || '');
+          baselineForms.push({
+            id: `${patientId}-baseline`,
+            formType: 'baseline',
+            patientId,
             patientName,
-            doctorId: data.doctorId || '',
-            doctorName,
-            isCompleted: data.isCompleted || false,
-            completionPercentage,
-            submittedAt: data.submittedAt?.toDate() || new Date(),
-            data: data.formData || {},
+            doctorId: baselineDoctorId,
+            doctorName: doctorNameById.get(baselineDoctorId) || 'Unknown',
+            isCompleted: true,
+            completionPercentage: 100,
+            submittedAt: patientData.baseline?.updatedAt
+              ? new Date(patientData.baseline.updatedAt)
+              : patientData.baseline?.createdAt
+              ? new Date(patientData.baseline.createdAt)
+              : new Date(),
+            data: patientData.baseline,
+          });
+        }
+
+        const followups = Array.isArray(patientData.followups) ? patientData.followups : [];
+        const followupForms: FormResponse[] = followups.map((followup: any, index: number) => {
+          const followupDoctorId = String(followup?.doctorId || patientData.doctorId || '');
+          return {
+            id: `${patientId}-followup-${index + 1}`,
+            formType: `followup_week_${followup?.visitNumber || index + 1}`,
+            patientId,
+            patientName,
+            doctorId: followupDoctorId,
+            doctorName: doctorNameById.get(followupDoctorId) || 'Unknown',
+            isCompleted: true,
+            completionPercentage: 100,
+            submittedAt: followup?.updatedAt
+              ? new Date(followup.updatedAt)
+              : followup?.createdAt
+              ? new Date(followup.createdAt)
+              : followup?.visitDate
+              ? new Date(followup.visitDate)
+              : new Date(),
+            data: followup || {},
           };
-        })
-      );
+        });
+
+        return [...baselineForms, ...followupForms];
+      });
 
       setForms(formsData);
 

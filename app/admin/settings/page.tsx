@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAdminAuth } from '@/contexts/admin-auth-context';
 import {
   ALL_ADMIN_PERMISSIONS,
@@ -10,6 +10,69 @@ import {
   sanitizePermissions,
 } from '@/lib/admin-permissions';
 import { Trash2, Edit2, CheckCircle, AlertCircle } from 'lucide-react';
+
+const PERMISSION_GROUPS: Array<{ title: string; permissions: AdminPermission[] }> = [
+  {
+    title: 'Core Access',
+    permissions: ['view_dashboard', 'view_doctors', 'view_analytics'],
+  },
+  {
+    title: 'Patient Data',
+    permissions: ['view_patients', 'edit_patient_records', 'delete_patient_records'],
+  },
+  {
+    title: 'Data Exports',
+    permissions: ['export_data', 'schedule_exports'],
+  },
+  {
+    title: 'Operational Oversight',
+    permissions: ['view_operations', 'view_data_quality', 'manage_quality_reviews'],
+  },
+  {
+    title: 'Safety Oversight',
+    permissions: ['view_safety', 'approve_high_risk_actions', 'manage_safety_escalations', 'manage_protocol_rules'],
+  },
+  {
+    title: 'Cohorts & Outcome Intelligence',
+    permissions: ['view_cohorts', 'manage_cohorts'],
+  },
+  {
+    title: 'Governance',
+    permissions: ['view_audit_logs', 'manage_system_config', 'manage_automation', 'manage_admins'],
+  },
+];
+
+const PERMISSION_LABELS: Partial<Record<AdminPermission, string>> = {
+  view_dashboard: 'View Dashboard',
+  view_analytics: 'View Analytics',
+  view_doctors: 'View Doctors',
+  view_patients: 'View Patients',
+  edit_patient_records: 'Edit Patient Records',
+  delete_patient_records: 'Delete Patient Records',
+  export_data: 'Export Data',
+  schedule_exports: 'Schedule Exports',
+  view_operations: 'View Operations Center',
+  view_data_quality: 'View Data Quality',
+  manage_quality_reviews: 'Manage Quality Reviews',
+  view_safety: 'View Safety Center',
+  approve_high_risk_actions: 'Approve High-Risk Actions',
+  manage_safety_escalations: 'Manage Safety Escalations',
+  manage_protocol_rules: 'Manage Protocol Rules',
+  view_cohorts: 'View Cohort Analytics',
+  manage_cohorts: 'Manage Cohorts',
+  view_audit_logs: 'View Audit Logs',
+  manage_system_config: 'Manage System Configuration',
+  manage_automation: 'Manage Automation',
+  manage_admins: 'Manage Admin Users',
+};
+
+function humanizePermission(permission: AdminPermission): string {
+  if (PERMISSION_LABELS[permission]) return PERMISSION_LABELS[permission] as string;
+  return permission
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
 
 interface AdminUser {
   id: string;
@@ -58,6 +121,20 @@ export default function SettingsPage() {
     permissions: getDefaultPermissionsForRole('admin'),
   });
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null);
+
+  const uncategorizedPermissions = ALL_ADMIN_PERMISSIONS.filter(
+    (permission) => !PERMISSION_GROUPS.some((group) => group.permissions.includes(permission))
+  );
+
+  const effectivePermissionGroups =
+    uncategorizedPermissions.length > 0
+      ? [...PERMISSION_GROUPS, { title: 'Other', permissions: uncategorizedPermissions }]
+      : PERMISSION_GROUPS;
+
+  const matrixPermissions = useMemo(
+    () => effectivePermissionGroups.flatMap((group) => group.permissions),
+    [effectivePermissionGroups]
+  );
 
   useEffect(() => {
     if (adminUser?.role !== 'super_admin') {
@@ -310,28 +387,35 @@ export default function SettingsPage() {
 
           <div>
             <p className="text-sm font-medium text-slate-300 mb-2">Access Permissions</p>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {ALL_ADMIN_PERMISSIONS.map((permission) => {
-                const checked = newAdmin.permissions.includes(permission);
-                return (
-                  <label
-                    key={`create-${permission}`}
-                    className="flex items-center gap-2 rounded border border-slate-700/60 bg-slate-800/60 px-3 py-2"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={newAdmin.role === 'super_admin'}
-                      onChange={() =>
-                        togglePermission(permission, newAdmin.role, newAdmin.permissions, (nextPermissions) =>
-                          setNewAdmin((prev) => ({ ...prev, permissions: nextPermissions }))
-                        )
-                      }
-                    />
-                    <span className="text-sm text-slate-200">{permission}</span>
-                  </label>
-                );
-              })}
+            <div className="space-y-4">
+              {effectivePermissionGroups.map((group) => (
+                <div key={`create-group-${group.title}`} className="rounded border border-slate-700/60 bg-slate-800/40 p-3">
+                  <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">{group.title}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {group.permissions.map((permission) => {
+                      const checked = newAdmin.permissions.includes(permission);
+                      return (
+                        <label
+                          key={`create-${permission}`}
+                          className="flex items-center gap-2 rounded border border-slate-700/60 bg-slate-800/60 px-3 py-2"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={newAdmin.role === 'super_admin'}
+                            onChange={() =>
+                              togglePermission(permission, newAdmin.role, newAdmin.permissions, (nextPermissions) =>
+                                setNewAdmin((prev) => ({ ...prev, permissions: nextPermissions }))
+                              )
+                            }
+                          />
+                          <span className="text-sm text-slate-200">{humanizePermission(permission)}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -401,25 +485,32 @@ export default function SettingsPage() {
                             <option value="super_admin">Super Admin</option>
                           </select>
 
-                          <div className="grid grid-cols-1 gap-1 max-h-44 overflow-auto pr-2">
-                            {ALL_ADMIN_PERMISSIONS.map((permission) => (
-                              <label key={`${admin.id}-${permission}`} className="flex items-center gap-2 text-xs text-slate-300">
-                                <input
-                                  type="checkbox"
-                                  checked={editingAdmin.permissions.includes(permission)}
-                                  disabled={editingAdmin.role === 'super_admin'}
-                                  onChange={() =>
-                                    togglePermission(
-                                      permission,
-                                      editingAdmin.role,
-                                      editingAdmin.permissions,
-                                      (nextPermissions) =>
-                                        setEditingAdmin({ ...editingAdmin, permissions: nextPermissions })
-                                    )
-                                  }
-                                />
-                                {permission}
-                              </label>
+                          <div className="space-y-2 max-h-56 overflow-auto pr-2">
+                            {effectivePermissionGroups.map((group) => (
+                              <div key={`${admin.id}-group-${group.title}`} className="rounded border border-slate-700/50 bg-slate-800/40 p-2">
+                                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">{group.title}</p>
+                                <div className="grid grid-cols-1 gap-1">
+                                  {group.permissions.map((permission) => (
+                                    <label key={`${admin.id}-${permission}`} className="flex items-center gap-2 text-xs text-slate-300">
+                                      <input
+                                        type="checkbox"
+                                        checked={editingAdmin.permissions.includes(permission)}
+                                        disabled={editingAdmin.role === 'super_admin'}
+                                        onChange={() =>
+                                          togglePermission(
+                                            permission,
+                                            editingAdmin.role,
+                                            editingAdmin.permissions,
+                                            (nextPermissions) =>
+                                              setEditingAdmin({ ...editingAdmin, permissions: nextPermissions })
+                                          )
+                                        }
+                                      />
+                                      {humanizePermission(permission)}
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
                             ))}
                           </div>
                         </div>
@@ -527,6 +618,63 @@ export default function SettingsPage() {
             {admins.filter((a) => a.status === 'active').length}
           </p>
         </div>
+      </div>
+
+      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+        <div className="flex items-start justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-xl font-bold text-white">Permission Matrix</h2>
+            <p className="text-slate-400 text-sm mt-1">Audit access coverage across all admin users in one grid.</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-slate-400">Permissions</p>
+            <p className="text-lg font-semibold text-white">{matrixPermissions.length}</p>
+          </div>
+        </div>
+
+        {admins.length === 0 ? (
+          <p className="text-slate-400">No admin users available for matrix view.</p>
+        ) : (
+          <div className="overflow-x-auto border border-slate-700/40 rounded-lg">
+            <table className="min-w-full text-xs">
+              <thead>
+                <tr className="bg-slate-900/60 border-b border-slate-700/50">
+                  <th className="sticky left-0 z-10 bg-slate-900/80 text-left px-3 py-2 text-slate-300 min-w-[240px]">Permission</th>
+                  {admins.map((admin) => (
+                    <th key={`matrix-header-${admin.id}`} className="text-center px-3 py-2 text-slate-300 min-w-[150px]">
+                      <div className="font-semibold text-white">{admin.firstName} {admin.lastName}</div>
+                      <div className="text-[10px] text-slate-400">{admin.role}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {matrixPermissions.map((permission) => (
+                  <tr key={`matrix-row-${permission}`} className="border-b border-slate-700/30 hover:bg-slate-700/10">
+                    <td className="sticky left-0 z-10 bg-slate-900/75 px-3 py-2 text-slate-200">{humanizePermission(permission)}</td>
+                    {admins.map((admin) => {
+                      const enabled = sanitizePermissions(admin.role, admin.permissions).includes(permission);
+                      return (
+                        <td key={`matrix-cell-${permission}-${admin.id}`} className="text-center px-3 py-2">
+                          <span
+                            className={`inline-flex items-center justify-center w-6 h-6 rounded-full font-bold ${
+                              enabled
+                                ? 'bg-green-900/40 text-green-300 border border-green-700/60'
+                                : 'bg-slate-700/50 text-slate-400 border border-slate-600/60'
+                            }`}
+                            title={enabled ? 'Allowed' : 'Not allowed'}
+                          >
+                            {enabled ? 'Y' : 'N'}
+                          </span>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* Delete Confirmation Modal */}

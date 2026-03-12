@@ -17,6 +17,11 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Button } from "@/components/ui/button"
 import { sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
+import {
+  ClinicalValidationRanges,
+  DEFAULT_CLINICAL_VALIDATION_RANGES,
+  normalizeClinicalValidationRanges,
+} from "@/lib/clinical-ranges"
 
 interface BaselineFormProps {
   patientId: string
@@ -30,6 +35,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
   const { toast } = useToast()
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [ranges, setRanges] = useState<ClinicalValidationRanges>(DEFAULT_CLINICAL_VALIDATION_RANGES)
   const submitLockRef = useRef(false)
 
   const [formData, setFormData] = useState({
@@ -93,6 +99,22 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
     }))
   }, [patientBaselineVisitDate, patientWeight])
 
+  useEffect(() => {
+    const loadRanges = async () => {
+      try {
+        const response = await fetch('/api/config/clinical-ranges', { cache: 'no-store' })
+        const data = await response.json()
+        if (response.ok && data?.success) {
+          setRanges(normalizeClinicalValidationRanges(data.ranges))
+        }
+      } catch {
+        setRanges(DEFAULT_CLINICAL_VALIDATION_RANGES)
+      }
+    }
+
+    loadRanges()
+  }, [])
+
   const [counseling, setCounseling] = useState({
     dietAndLifestyle: (existingData as any)?.counseling?.dietAndLifestyle ?? existingData?.dietAdvice ?? false,
     hypoglycemiaAwareness: (existingData as any)?.counseling?.hypoglycemiaAwareness ?? false,
@@ -150,17 +172,46 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
       // VALIDATION PHASE 2: Parse and validate numeric ranges
       const hba1c = formData.hba1c ? Number.parseFloat(formData.hba1c) : NaN
       const fpg = formData.fpg ? Number.parseFloat(formData.fpg) : NaN
+      const ppg = formData.ppg ? Number.parseFloat(formData.ppg) : NaN
       const weight = formData.weight ? Number.parseFloat(formData.weight) : NaN
       const bpSystolic = formData.bloodPressureSystolic ? Number.parseInt(formData.bloodPressureSystolic) : NaN
       const bpDiastolic = formData.bloodPressureDiastolic ? Number.parseInt(formData.bloodPressureDiastolic) : NaN
+      const heartRate = formData.heartRate ? Number.parseInt(formData.heartRate) : NaN
+      const serumCreatinine = formData.serumCreatinine ? Number.parseFloat(formData.serumCreatinine) : NaN
+      const egfr = formData.egfr ? Number.parseFloat(formData.egfr) : NaN
 
       const rangeErrors: string[] = []
       
-      if (isNaN(hba1c) || hba1c < 4 || hba1c > 15) rangeErrors.push("HbA1c must be between 4-15%")
-      if (isNaN(fpg) || fpg < 50 || fpg > 500) rangeErrors.push("FPG must be between 50-500 mg/dL")
-      if (isNaN(weight) || weight < 30 || weight > 200) rangeErrors.push("Weight must be between 30-200 kg")
-      if (isNaN(bpSystolic) || bpSystolic < 70 || bpSystolic > 200) rangeErrors.push("BP Systolic must be between 70-200 mmHg")
-      if (isNaN(bpDiastolic) || bpDiastolic < 40 || bpDiastolic > 130) rangeErrors.push("BP Diastolic must be between 40-130 mmHg")
+      if (isNaN(hba1c) || hba1c < ranges.hba1c.min || hba1c > ranges.hba1c.max) {
+        rangeErrors.push(`HbA1c must be between ${ranges.hba1c.min}-${ranges.hba1c.max}%`)
+      }
+      if (isNaN(fpg) || fpg < ranges.fpg.min || fpg > ranges.fpg.max) {
+        rangeErrors.push(`FPG must be between ${ranges.fpg.min}-${ranges.fpg.max} mg/dL`)
+      }
+      if (formData.ppg && (isNaN(ppg) || ppg < ranges.ppg.min || ppg > ranges.ppg.max)) {
+        rangeErrors.push(`PPG must be between ${ranges.ppg.min}-${ranges.ppg.max} mg/dL`)
+      }
+      if (isNaN(weight) || weight < ranges.weight.min || weight > ranges.weight.max) {
+        rangeErrors.push(`Weight must be between ${ranges.weight.min}-${ranges.weight.max} kg`)
+      }
+      if (isNaN(bpSystolic) || bpSystolic < ranges.bpSystolic.min || bpSystolic > ranges.bpSystolic.max) {
+        rangeErrors.push(`BP Systolic must be between ${ranges.bpSystolic.min}-${ranges.bpSystolic.max} mmHg`)
+      }
+      if (isNaN(bpDiastolic) || bpDiastolic < ranges.bpDiastolic.min || bpDiastolic > ranges.bpDiastolic.max) {
+        rangeErrors.push(`BP Diastolic must be between ${ranges.bpDiastolic.min}-${ranges.bpDiastolic.max} mmHg`)
+      }
+      if (formData.heartRate && (isNaN(heartRate) || heartRate < ranges.heartRate.min || heartRate > ranges.heartRate.max)) {
+        rangeErrors.push(`Heart Rate must be between ${ranges.heartRate.min}-${ranges.heartRate.max} bpm`)
+      }
+      if (
+        formData.serumCreatinine &&
+        (isNaN(serumCreatinine) || serumCreatinine < ranges.serumCreatinine.min || serumCreatinine > ranges.serumCreatinine.max)
+      ) {
+        rangeErrors.push(`Serum Creatinine must be between ${ranges.serumCreatinine.min}-${ranges.serumCreatinine.max} mg/dL`)
+      }
+      if (formData.egfr && (isNaN(egfr) || egfr < ranges.egfr.min || egfr > ranges.egfr.max)) {
+        rangeErrors.push(`eGFR must be between ${ranges.egfr.min}-${ranges.egfr.max} mL/min/1.73m2`)
+      }
 
       if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify) {
         rangeErrors.push("Please specify abnormality for urinalysis")
@@ -312,6 +363,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                   id="hba1c"
                   type="number"
                   step="0.1"
+                  min={ranges.hba1c.min}
+                  max={ranges.hba1c.max}
                   placeholder="7.5"
                   value={formData.hba1c}
                   onChange={(e) => setFormData({ ...formData, hba1c: e.target.value })}
@@ -325,6 +378,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 <Input
                   id="fpg"
                   type="number"
+                  min={ranges.fpg.min}
+                  max={ranges.fpg.max}
                   placeholder="140"
                   value={formData.fpg}
                   onChange={(e) => setFormData({ ...formData, fpg: e.target.value })}                  aria-label="Fasting plasma glucose in milligrams per deciliter required"
@@ -336,6 +391,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 <Input
                   id="ppg"
                   type="number"
+                  min={ranges.ppg.min}
+                  max={ranges.ppg.max}
                   placeholder="180"
                   value={formData.ppg}
                   onChange={(e) => setFormData({ ...formData, ppg: e.target.value })}
@@ -350,6 +407,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                   id="weight"
                   type="number"
                   step="0.1"
+                  min={ranges.weight.min}
+                  max={ranges.weight.max}
                   placeholder="75.5"
                   value={formData.weight}
                   readOnly
@@ -362,6 +421,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 <Input
                   id="bpSys"
                   type="number"
+                  min={ranges.bpSystolic.min}
+                  max={ranges.bpSystolic.max}
                   placeholder="130"
                   value={formData.bloodPressureSystolic}
                   onChange={(e) => setFormData({ ...formData, bloodPressureSystolic: e.target.value })}
@@ -373,6 +434,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 <Input
                   id="bpDia"
                   type="number"
+                  min={ranges.bpDiastolic.min}
+                  max={ranges.bpDiastolic.max}
                   placeholder="85"
                   value={formData.bloodPressureDiastolic}
                   onChange={(e) => setFormData({ ...formData, bloodPressureDiastolic: e.target.value })}
@@ -387,6 +450,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 <Input
                   id="heartRate"
                   type="number"
+                  min={ranges.heartRate.min}
+                  max={ranges.heartRate.max}
                   placeholder="72"
                   value={formData.heartRate}
                   onChange={(e) => setFormData({ ...formData, heartRate: e.target.value })}
@@ -398,6 +463,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                   id="creatinine"
                   type="number"
                   step="0.01"
+                  min={ranges.serumCreatinine.min}
+                  max={ranges.serumCreatinine.max}
                   placeholder="1.0"
                   value={formData.serumCreatinine}
                   onChange={(e) => setFormData({ ...formData, serumCreatinine: e.target.value })}
@@ -408,6 +475,8 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
                 <Input
                   id="egfr"
                   type="number"
+                  min={ranges.egfr.min}
+                  max={ranges.egfr.max}
                   placeholder="90"
                   value={formData.egfr}
                   onChange={(e) => setFormData({ ...formData, egfr: e.target.value })}

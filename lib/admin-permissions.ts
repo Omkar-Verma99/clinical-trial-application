@@ -1,16 +1,29 @@
 export const BASE_ADMIN_PERMISSIONS = [
+  'view_dashboard',
   'view_doctors',
   'view_patients',
-  'view_forms',
-  'export_data',
+  'edit_patient_records',
   'view_analytics',
+  'view_operations',
+  'view_data_quality',
+  'view_safety',
+  'view_cohorts',
+  'export_data',
+  'schedule_exports',
 ] as const
 
 export const SUPER_ADMIN_EXTRA_PERMISSIONS = [
   'manage_admins',
   'view_audit_logs',
   'change_settings',
-  'delete_data',
+  'delete_patient_records',
+  'approve_high_risk_actions',
+  'manage_quality_reviews',
+  'manage_safety_escalations',
+  'manage_cohorts',
+  'manage_automation',
+  'manage_protocol_rules',
+  'manage_system_config',
   'manage_roles',
 ] as const
 

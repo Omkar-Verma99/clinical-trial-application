@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getDocs, collection, doc, setDoc } from 'firebase/firestore';
+import { getDocs, collection, doc, setDoc, query, where } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
+import { useAdminAuth } from '@/contexts/admin-auth-context';
 import { Download, FileText, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import type { Patient as StudyPatient, BaselineData, FollowUpData } from '@/lib/types';
 import { downloadQuestionAnswerDynamicCsv, downloadQuestionAnswerDynamicExcel } from '@/lib/flat-export';
@@ -29,6 +30,7 @@ interface ExportHistory {
 }
 
 export default function ExportsPage() {
+  const { adminUser } = useAdminAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
   const [selectedPatients, setSelectedPatients] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
@@ -38,9 +40,10 @@ export default function ExportsPage() {
   const db = getFirestore();
 
   useEffect(() => {
+    if (!adminUser) return;
     fetchPatients();
     fetchExportHistory();
-  }, []);
+  }, [adminUser]);
 
   const fetchPatients = async () => {
     try {
@@ -59,14 +62,18 @@ export default function ExportsPage() {
   };
 
   const fetchExportHistory = async () => {
+    if (!adminUser) return;
     try {
-      const exportsSnap = await getDocs(
-        query(collection(db, 'exports'), where('adminId', '==', 'current-admin-id'))
-      );
+      const exportsQuery =
+        adminUser.role === 'super_admin'
+          ? collection(db, 'exports')
+          : query(collection(db, 'exports'), where('adminId', '==', adminUser.id));
+
+      const exportsSnap = await getDocs(exportsQuery);
       const history = exportsSnap.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate(),
+        createdAt: doc.data().createdAt?.toDate() || new Date(),
       } as ExportHistory));
       setExportHistory(history.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
     } catch (error) {
@@ -173,10 +180,11 @@ export default function ExportsPage() {
   };
 
   const recordExport = async (type: 'csv' | 'pdf' | 'xlsx', count: number) => {
+    if (!adminUser) return;
     try {
       const exportId = `export_${Date.now()}`;
       await setDoc(doc(db, 'exports', exportId), {
-        adminId: 'current-admin-id',
+        adminId: adminUser.id,
         exportType: type,
         patientCount: count,
         createdAt: new Date(),

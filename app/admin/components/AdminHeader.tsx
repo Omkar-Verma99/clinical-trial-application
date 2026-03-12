@@ -22,6 +22,14 @@ export default function AdminHeader() {
     router.push('/admin/login');
   };
 
+  const handleOpenProfile = () => {
+    router.push('/admin/profile');
+  };
+
+  const handleOpenSettings = () => {
+    router.push('/admin/settings');
+  };
+
   return (
     <header className="border-b border-slate-700/50 bg-slate-800/50 backdrop-blur-sm sticky top-0 z-40">
       <div className="flex items-center justify-between h-16 px-6">
@@ -79,12 +87,18 @@ export default function AdminHeader() {
 
               <DropdownMenuSeparator className="bg-slate-700" />
 
-              <DropdownMenuItem className="text-slate-300 cursor-pointer hover:bg-slate-700">
+              <DropdownMenuItem
+                onClick={handleOpenProfile}
+                className="text-slate-300 cursor-pointer hover:bg-slate-700"
+              >
                 <User className="mr-2 h-4 w-4" />
                 <span>My Profile</span>
               </DropdownMenuItem>
 
-              <DropdownMenuItem className="text-slate-300 cursor-pointer hover:bg-slate-700">
+              <DropdownMenuItem
+                onClick={handleOpenSettings}
+                className="text-slate-300 cursor-pointer hover:bg-slate-700"
+              >
                 <Settings className="mr-2 h-4 w-4" />
                 <span>Settings</span>
               </DropdownMenuItem>

@@ -33,6 +33,7 @@ import {
   ComposedChart,
 } from 'recharts';
 import { format } from 'date-fns';
+import { useAdminAuth } from '@/contexts/admin-auth-context';
 
 interface DashboardStats {
   totalPatients: number;
@@ -69,6 +70,7 @@ interface DoctorPerformance {
 }
 
 export default function AdminDashboard() {
+  const { adminUser } = useAdminAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0,
     activeDoctors: 0,
@@ -101,16 +103,28 @@ export default function AdminDashboard() {
           (doc) => doc.data().status === 'active'
         ).length;
 
-        // Fetch form responses
-        const formsSnapshot = await getDocs(collection(db, 'formResponses'));
-        const formData = formsSnapshot.docs.map((doc) => doc.data());
+        // Derive forms from unified patient records.
+        const formData = patientsSnapshot.docs.flatMap((patientDoc) => {
+          const patientData = patientDoc.data() as Record<string, any>;
+          const forms: Array<Record<string, any>> = [];
 
-        const completedForms = formData.filter(
-          (f) => f.completionStatus === 'complete'
-        ).length;
-        const inProgressForms = formData.filter(
-          (f) => f.completionStatus === 'incomplete'
-        ).length;
+          if (patientData.baseline && typeof patientData.baseline === 'object') {
+            forms.push({ formType: 'baseline', completionStatus: 'complete' });
+          }
+
+          const followups = Array.isArray(patientData.followups) ? patientData.followups : [];
+          followups.forEach((followup: any) => {
+            forms.push({
+              formType: `followup_week_${followup?.visitNumber || 'unknown'}`,
+              completionStatus: 'complete',
+            });
+          });
+
+          return forms;
+        });
+
+        const completedForms = formData.length;
+        const inProgressForms = 0;
 
         const completionRate =
           totalPatients > 0 ? Math.round((completedForms / (totalPatients * 3)) * 100) : 0;
@@ -136,20 +150,29 @@ export default function AdminDashboard() {
           avgFormCompletionTime: 8.5, // Example data
         });
 
-        // Fetch recent activities
-        const auditLogsSnapshot = await getDocs(
-          query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(10))
-        );
+        // Fetch recent activities only for super admins.
+        if (adminUser?.role === 'super_admin') {
+          try {
+            const auditLogsSnapshot = await getDocs(
+              query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(10))
+            );
 
-        const recentActivities: RecentActivity[] = auditLogsSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          type: doc.data().action as any,
-          description: `${doc.data().action.replace(/_/g, ' ').toUpperCase()}`,
-          timestamp: doc.data().timestamp?.toDate() || new Date(),
-          doctor: doc.data().doctorId,
-        }));
+            const recentActivities: RecentActivity[] = auditLogsSnapshot.docs.map((doc) => ({
+              id: doc.id,
+              type: doc.data().action as any,
+              description: `${doc.data().action.replace(/_/g, ' ').toUpperCase()}`,
+              timestamp: doc.data().timestamp?.toDate() || new Date(),
+              doctor: doc.data().doctorId,
+            }));
 
-        setActivities(recentActivities);
+            setActivities(recentActivities);
+          } catch (auditError) {
+            console.error('Error fetching dashboard audit logs:', auditError);
+            setActivities([]);
+          }
+        } else {
+          setActivities([]);
+        }
 
         // Calculate form statistics by type
         const formStatsByType: Record<string, FormStats> = {};
@@ -159,11 +182,7 @@ export default function AdminDashboard() {
             formStatsByType[type] = { formType: type, completed: 0, incomplete: 0, inProgress: 0 };
           }
 
-          if (form.completionStatus === 'complete') {
-            formStatsByType[type].completed++;
-          } else {
-            formStatsByType[type].inProgress++;
-          }
+          formStatsByType[type].completed++;
         });
 
         setFormStats(Object.values(formStatsByType));
@@ -181,16 +200,53 @@ export default function AdminDashboard() {
         }
         setEnrollmentTrend(trendData);
 
-        // Generate doctor performance
-        const doctorPerf: DoctorPerformance[] = [];
-        doctorsSnapshot.docs.slice(0, 5).forEach((doc) => {
-          doctorPerf.push({
-            name: `${doc.data().firstName} ${doc.data().lastName}`,
-            patients: Math.floor(Math.random() * 50) + 10,
-            forms: Math.floor(Math.random() * 100) + 20,
-            completion: Math.floor(Math.random() * 40) + 60,
+        // Build doctor performance from real patient + form data.
+        const doctorPerfMap = new Map<string, DoctorPerformance>();
+        doctorsSnapshot.docs.forEach((doctorDoc) => {
+          doctorPerfMap.set(doctorDoc.id, {
+            name: `${doctorDoc.data().firstName || ''} ${doctorDoc.data().lastName || ''}`.trim() || 'Unknown',
+            patients: 0,
+            forms: 0,
+            completion: 100,
           });
         });
+
+        patientsSnapshot.docs.forEach((patientDoc) => {
+          const patientData = patientDoc.data() as Record<string, any>;
+          const ownerDoctorId = String(patientData.doctorId || patientData.assignedDoctorId || '');
+          if (ownerDoctorId && doctorPerfMap.has(ownerDoctorId)) {
+            const current = doctorPerfMap.get(ownerDoctorId)!;
+            current.patients += 1;
+            doctorPerfMap.set(ownerDoctorId, current);
+          }
+
+          if (patientData.baseline && typeof patientData.baseline === 'object') {
+            const baselineDoctorId = String(patientData.baseline?.doctorId || ownerDoctorId);
+            if (baselineDoctorId && doctorPerfMap.has(baselineDoctorId)) {
+              const current = doctorPerfMap.get(baselineDoctorId)!;
+              current.forms += 1;
+              doctorPerfMap.set(baselineDoctorId, current);
+            }
+          }
+
+          const followups = Array.isArray(patientData.followups) ? patientData.followups : [];
+          followups.forEach((followup: any) => {
+            const followupDoctorId = String(followup?.doctorId || ownerDoctorId);
+            if (followupDoctorId && doctorPerfMap.has(followupDoctorId)) {
+              const current = doctorPerfMap.get(followupDoctorId)!;
+              current.forms += 1;
+              doctorPerfMap.set(followupDoctorId, current);
+            }
+          });
+        });
+
+        const doctorPerf = Array.from(doctorPerfMap.values())
+          .map((entry) => ({
+            ...entry,
+            completion: entry.forms > 0 ? 100 : 0,
+          }))
+          .sort((a, b) => b.forms - a.forms)
+          .slice(0, 5);
         setDoctorPerformance(doctorPerf);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -200,7 +256,7 @@ export default function AdminDashboard() {
     };
 
     fetchDashboardData();
-  }, []);
+  }, [adminUser?.role]);
 
   const StatCard = ({
     icon: Icon,

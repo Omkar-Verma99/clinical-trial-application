@@ -45,12 +45,14 @@ export default function AnalyticsPage() {
         ...doc.data(),
       }));
 
-      // Fetch forms
-      const formsSnap = await getDocs(collection(db, 'formResponses'));
-      const forms = formsSnap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      // Derive forms from unified patient records (baseline + followups).
+      const forms = patients.flatMap((patient: any) => {
+        const baselineForms = patient?.baseline ? [{ doctorId: patient?.baseline?.doctorId || patient?.doctorId }] : [];
+        const followupForms = Array.isArray(patient?.followups)
+          ? patient.followups.map((followup: any) => ({ doctorId: followup?.doctorId || patient?.doctorId }))
+          : [];
+        return [...baselineForms, ...followupForms];
+      });
 
       // Fetch doctors
       const doctorsSnap = await getDocs(collection(db, 'doctors'));

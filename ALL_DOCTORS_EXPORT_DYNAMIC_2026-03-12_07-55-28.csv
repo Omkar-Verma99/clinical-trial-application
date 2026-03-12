@@ -1,0 +1,6 @@
+"patient_code","doctor_code","doctor_name","center_id","patient_added_date","baseline_date","baseline_ckd_stage","baseline_bp_systolic","baseline_bp_diastolic","baseline_weight_kg","baseline_hba1c","baseline_comorbidities","followup_1_date","followup_1_bp_systolic","followup_1_bp_diastolic","followup_1_weight_kg","followup_1_hba1c","followup_1_comorbidities","followup_1_adverse_event_1_type","followup_1_adverse_event_1_severity","comparison_delta_weight_kg","comparison_delta_hba1c","comparison_delta_bp_systolic","comparison_delta_bp_diastolic","comparison_summary"
+001-ABC,rvuVcZ65psaCDsqZp5flnTurUZI3,Dr. Omkar verma,RWE-10,2026-03-11,2026-03-12,,130,85,70,7.5,"hypertension, dyslipidemia, obesity, ascvd, heartFailure",,,,,,,,,,,,,
+002-QWE,meNdgYPEtrZrNVFnsA4F6WRaYww1,Sachin ,TES-011,2026-03-12,2026-02-15,,156,85,55,7.8,,2026-05-15,120,87,69,6,,,,14,-1.7999999999999998,-36,2,Improved
+002-ABC,rvuVcZ65psaCDsqZp5flnTurUZI3,Dr. Omkar verma,RWE-10,2026-03-11,2000-03-22,45–59,130,85,70,7.5,"hypertension, dyslipidemia, obesity, ascvd, heartFailure, chronicKidneyDisease",,,,,,,,,,,,,
+001-ABC,meNdgYPEtrZrNVFnsA4F6WRaYww1,Sachin ,RWE-011,2026-03-12,2026-10-12,,140,80,65,8,obesity,2026-06-10,125,76,65,6,,fever,Mild,0,-2,-15,-4,Improved
+001-ABC,0T0RENLPfzc5Hc00M2P7Kbvyxnm1,Dr Omkar Verma,RWE-01,2026-03-12,2000-03-24,,130,85,70,7.5,heartFailure,,,,,,,,,,,,,

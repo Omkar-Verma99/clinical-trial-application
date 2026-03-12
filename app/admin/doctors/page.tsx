@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, where, orderBy } from 'firebase/firestore';
+import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -44,26 +44,49 @@ export default function DoctorsManagementPage() {
       try {
         setIsLoading(true);
 
-        // Fetch all doctors
-        const doctorsSnapshot = await getDocs(collection(db, 'doctors'));
+        const [doctorsSnapshot, patientsSnapshot] = await Promise.all([
+          getDocs(collection(db, 'doctors')),
+          getDocs(collection(db, 'patients')),
+        ]);
+
+        const patientCountByDoctor = new Map<string, Set<string>>();
+        patientsSnapshot.docs.forEach((patientDoc) => {
+          const patientData = patientDoc.data() as Record<string, any>;
+          const doctorIds = [patientData.doctorId, patientData.assignedDoctorId].filter(Boolean);
+          doctorIds.forEach((doctorId) => {
+            const key = String(doctorId);
+            if (!patientCountByDoctor.has(key)) {
+              patientCountByDoctor.set(key, new Set<string>());
+            }
+            patientCountByDoctor.get(key)?.add(patientDoc.id);
+          });
+        });
+
+        const formCountByDoctor = new Map<string, number>();
+        patientsSnapshot.docs.forEach((patientDoc) => {
+          const patientData = patientDoc.data() as Record<string, any>;
+
+          const baseline = patientData.baseline;
+          if (baseline && typeof baseline === 'object') {
+            const baselineDoctorId = String((baseline as Record<string, any>).doctorId || patientData.doctorId || '');
+            if (baselineDoctorId) {
+              formCountByDoctor.set(baselineDoctorId, (formCountByDoctor.get(baselineDoctorId) || 0) + 1);
+            }
+          }
+
+          const followups = Array.isArray(patientData.followups) ? patientData.followups : [];
+          followups.forEach((followup: any) => {
+            const followupDoctorId = String(followup?.doctorId || patientData.doctorId || '');
+            if (followupDoctorId) {
+              formCountByDoctor.set(followupDoctorId, (formCountByDoctor.get(followupDoctorId) || 0) + 1);
+            }
+          });
+        });
+
         const doctorsList: Doctor[] = [];
 
         for (const docSnap of doctorsSnapshot.docs) {
           const docData = docSnap.data();
-
-          // Count patients assigned to this doctor
-          const patientsQuery = query(
-            collection(db, 'patients'),
-            where('assignedDoctorId', '==', docSnap.id)
-          );
-          const patientsSnapshot = await getDocs(patientsQuery);
-
-          // Count forms submitted by this doctor
-          const formsQuery = query(
-            collection(db, 'formResponses'),
-            where('doctorId', '==', docSnap.id)
-          );
-          const formsSnapshot = await getDocs(formsQuery);
 
           doctorsList.push({
             id: docSnap.id,
@@ -73,8 +96,8 @@ export default function DoctorsManagementPage() {
             phone: docData.phone,
             department: docData.department,
             status: docData.status || 'active',
-            patientCount: patientsSnapshot.size,
-            formCount: formsSnapshot.size,
+            patientCount: patientCountByDoctor.get(docSnap.id)?.size || 0,
+            formCount: formCountByDoctor.get(docSnap.id) || 0,
             lastLogin: docData.lastLogin?.toDate(),
             createdAt: docData.createdAt?.toDate() || new Date(),
           });
