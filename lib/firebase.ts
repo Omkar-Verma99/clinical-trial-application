@@ -1,13 +1,14 @@
 import { initializeApp, getApps, getApp } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
-import { getAnalytics } from "firebase/analytics"
+import { getAnalytics, isSupported as isAnalyticsSupported } from "firebase/analytics"
 import { firebaseConfig } from "./firebase-config"
 
 // Initialize Firebase only in browser environment
 let firebaseApp: any = null
 let auth: any = null
 let db: any = null
+const enableAnalytics = process.env.NEXT_PUBLIC_ENABLE_FIREBASE_ANALYTICS === "true"
 
 // Firebase initialization - only runs in browser
 if (typeof window !== "undefined") {
@@ -34,16 +35,21 @@ if (typeof window !== "undefined") {
       auth = getAuth(firebaseApp)
       db = getFirestore(firebaseApp)
 
-      // Disable analytics SDK warnings
-      if (typeof window !== 'undefined') {
-        (window as any)['FIREBASE_ANALYTICS_ENABLED'] = false
-      }
-
-      // Initialize Analytics only in browser environment
-      try {
-        getAnalytics(firebaseApp)
-      } catch (e) {
-        // Analytics init failures are non-critical
+      // Initialize Analytics only when explicitly enabled.
+      if (enableAnalytics) {
+        isAnalyticsSupported()
+          .then((supported) => {
+            if (supported) {
+              try {
+                getAnalytics(firebaseApp)
+              } catch {
+                // Analytics init failures are non-critical.
+              }
+            }
+          })
+          .catch(() => {
+            // Analytics support detection failures are non-critical.
+          })
       }
     } catch (error) {
       // Suppress Firebase initialization errors in console (they're handled by error logging)

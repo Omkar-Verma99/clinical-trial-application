@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { AdminUser } from '@/lib/admin-auth';
 import { getDefaultPermissionsForRole } from '@/lib/admin-permissions';
 import { auth } from '@/lib/firebase';
+import { usePathname } from 'next/navigation';
 import {
   setPersistence,
   browserLocalPersistence,
@@ -50,11 +51,19 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [permissions, setPermissions] = useState<string[]>([]);
+  const pathname = usePathname();
 
   // Check session on mount
   useEffect(() => {
     const checkSession = async () => {
       try {
+        // Avoid admin session bootstrap on non-admin routes.
+        if (!pathname?.startsWith('/admin')) {
+          setAdminUser(null);
+          setPermissions([]);
+          return;
+        }
+
         if (typeof window !== 'undefined') {
           const sessionRaw = localStorage.getItem('adminAuth');
           const session = sessionRaw ? JSON.parse(sessionRaw) : null;
@@ -124,7 +133,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     };
 
     checkSession();
-  }, []);
+  }, [pathname]);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);

@@ -41,6 +41,11 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: NEXT_PUBLIC_ENABLE_FIREBASE_ANALYTICS
+    value: "false"
+    availability:
+      - BUILD
+      - RUNTIME
   - variable: NEXT_PUBLIC_ENCRYPTION_KEY
     value: 906af497b3f4d5b3ff46dde386dd4aa6325b65c845d1cea23d24a47798f78a5d
     availability:
