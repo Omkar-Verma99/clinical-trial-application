@@ -3,11 +3,12 @@ import { cookies } from 'next/headers';
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from '@/lib/firebase-admin';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getDefaultPermissionsForRole, sanitizePermissions } from '@/lib/admin-permissions';
+import { firebaseConfig } from '@/lib/firebase-config';
 
 const adminDb = getFirebaseAdminDb();
 
 async function verifyFirebaseCredentials(email: string, password: string) {
-  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY
+  const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey
   if (!apiKey) {
     throw new Error('MISSING_FIREBASE_API_KEY')
   }
