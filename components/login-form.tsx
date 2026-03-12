@@ -24,6 +24,24 @@ function LoginFormContent() {
   // Get the intended destination URL from search params
   const redirectTo = searchParams?.get("from") || "/dashboard"
 
+  const waitForDoctorSession = async () => {
+    const timeoutMs = 2000
+    const intervalMs = 100
+    const deadline = Date.now() + timeoutMs
+
+    while (Date.now() < deadline) {
+      if (typeof document !== "undefined") {
+        const cookie = document.cookie || ""
+        const hasDoctorAuth = cookie.includes("doctorAuth=true")
+        const hasDoctorRole = cookie.includes("appRole=doctor")
+        if (hasDoctorAuth && hasDoctorRole) {
+          return
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+  }
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -44,10 +62,10 @@ function LoginFormContent() {
         title: "Welcome back!",
         description: "You have successfully logged in.",
       })
-      // Wait a moment for auth state to update, then redirect
-      setTimeout(() => {
-        router.push(redirectTo)
-      }, 500)
+
+      // Give auth listeners/cookies a short window to settle before middleware-protected navigation.
+      await waitForDoctorSession()
+      router.push(redirectTo)
     } catch (error: any) {
       const errorInfo = getAuthErrorMessage(error)
       toast({

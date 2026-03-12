@@ -177,6 +177,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         err.code = "app/not-doctor-account"
         throw err
       }
+
+      // Set doctor session cookies immediately to prevent middleware redirect races.
+      if (typeof document !== "undefined") {
+        document.cookie = `doctorAuth=true; path=/; max-age=${7 * 24 * 60 * 60}`
+        document.cookie = `appRole=doctor; path=/; max-age=${7 * 24 * 60 * 60}`
+      }
+
+      const docData = doctorDoc.data()
+      setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
+      setDoctorDataError(null)
     }
 
     void syncRoleClaim(userCredential.user)
