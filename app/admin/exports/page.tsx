@@ -1,21 +1,27 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getDocs, collection, query, where, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getDocs, collection, doc, setDoc } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
 import { Download, FileText, AlertCircle, CheckCircle, Clock } from 'lucide-react';
+import type { Patient as StudyPatient, BaselineData, FollowUpData } from '@/lib/types';
+import { downloadQuestionAnswerDynamicCsv, downloadQuestionAnswerDynamicExcel } from '@/lib/flat-export';
 
 interface Patient {
   id: string;
-  firstName: string;
-  lastName: string;
-  email: string;
+  patientCode?: string;
+  studySiteCode?: string;
+  investigatorName?: string;
+  doctorId?: string;
+  baseline?: BaselineData | null;
+  followups?: FollowUpData[];
+  [key: string]: unknown;
 }
 
 interface ExportHistory {
   id: string;
   filename: string;
-  exportType: 'csv' | 'pdf';
+  exportType: 'csv' | 'pdf' | 'xlsx';
   patientCount: number;
   createdAt: Date;
   status: 'completed' | 'processing' | 'failed';
@@ -42,9 +48,7 @@ export default function ExportsPage() {
       const patientsSnap = await getDocs(collection(db, 'patients'));
       const patientsData = patientsSnap.docs.map((doc) => ({
         id: doc.id,
-        firstName: doc.data().firstName,
-        lastName: doc.data().lastName,
-        email: doc.data().email,
+        ...doc.data(),
       }));
       setPatients(patientsData);
     } catch (error) {
@@ -99,53 +103,24 @@ export default function ExportsPage() {
 
     setExporting(true);
     try {
-      let csvContent = 'PatientID,FirstName,LastName,Email,FormType,FieldName,FieldValue,IsCompleted,SubmittedDate\n';
+      const selectedData = patients.filter((p) => selectedPatients.has(p.id)) as StudyPatient[];
+      const baselines = new Map<string, BaselineData | null>();
+      const followUps = new Map<string, FollowUpData[]>();
+      const doctorNames = new Map<string, string>();
 
-      for (const patientId of selectedPatients) {
-        // Get patient data
-        const patientDoc = await getDoc(doc(db, 'patients', patientId));
-        const patientData = patientDoc.data();
+      selectedData.forEach((patient: any) => {
+        baselines.set(patient.id, patient.baseline || null);
+        followUps.set(patient.id, Array.isArray(patient.followups) ? patient.followups : []);
+        doctorNames.set(patient.id, patient.investigatorName || '');
+      });
 
-        // Skip if patient data doesn't exist
-        if (!patientData) {
-          continue;
-        }
-
-        // Get forms for this patient
-        const formsSnap = await getDocs(
-          query(collection(db, 'formResponses'), where('patientId', '==', patientId))
-        );
-
-        formsSnap.docs.forEach((formDoc) => {
-          const formData = formDoc.data();
-          const formFields = formData.formData || {};
-
-          // Create one row per field
-          Object.entries(formFields).forEach(([fieldName, fieldValue]) => {
-            const row = [
-              patientId,
-              patientData.firstName,
-              patientData.lastName,
-              patientData.email,
-              formData.formType,
-              fieldName,
-              String(fieldValue).replace(/"/g, '""'), // Escape quotes
-              formData.isCompleted ? 'Yes' : 'No',
-              formData.submittedAt?.toDate().toLocaleDateString() || '',
-            ];
-            csvContent += row.map((cell) => `"${cell}"`).join(',') + '\n';
-          });
-        });
-      }
-
-      // Create and download file
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `rwe-study-export-${new Date().getTime()}.csv`;
-      link.click();
-      window.URL.revokeObjectURL(url);
+      downloadQuestionAnswerDynamicCsv(
+        selectedData,
+        baselines,
+        followUps,
+        `rwe-study-export-${new Date().getTime()}.csv`,
+        doctorNames
+      );
 
       // Record export
       await recordExport('csv', selectedPatients.size);
@@ -159,7 +134,7 @@ export default function ExportsPage() {
     }
   };
 
-  const generatePDF = async () => {
+  const generateExcel = async () => {
     if (selectedPatients.size === 0) {
       alert('Please select at least one patient');
       return;
@@ -167,64 +142,37 @@ export default function ExportsPage() {
 
     setExporting(true);
     try {
-      let pdfContent = '%PDF-1.4\n%Start PDF content\n';
-      pdfContent += '1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n';
-      pdfContent += '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n';
-      pdfContent += '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n';
+      const selectedData = patients.filter((p) => selectedPatients.has(p.id)) as StudyPatient[];
+      const baselines = new Map<string, BaselineData | null>();
+      const followUps = new Map<string, FollowUpData[]>();
+      const doctorNames = new Map<string, string>();
 
-      let content = 'RWE Study Export Report\n\n';
-      content += `Generated: ${new Date().toLocaleString()}\n`;
-      content += `Patients Exported: ${selectedPatients.size}\n\n`;
+      selectedData.forEach((patient: any) => {
+        baselines.set(patient.id, patient.baseline || null);
+        followUps.set(patient.id, Array.isArray(patient.followups) ? patient.followups : []);
+        doctorNames.set(patient.id, patient.investigatorName || '');
+      });
 
-      for (const patientId of Array.from(selectedPatients).slice(0, 10)) {
-        const patientDoc = await getDoc(doc(db, 'patients', patientId));
-        const patientData = patientDoc.data();
-        
-        // Skip if patient data doesn't exist
-        if (!patientData) {
-          continue;
-        }
-        
-        const formsSnap = await getDocs(
-          query(collection(db, 'formResponses'), where('patientId', '==', patientId))
-        );
+      await downloadQuestionAnswerDynamicExcel(
+        selectedData,
+        baselines,
+        followUps,
+        `rwe-study-export-${new Date().getTime()}.xlsx`,
+        doctorNames
+      );
 
-        content += `\n=== Patient: ${patientData.firstName} ${patientData.lastName} ===\n`;
-        content += `Email: ${patientData.email}\n`;
-        content += `Total Forms: ${formsSnap.size}\n`;
-
-        formsSnap.docs.forEach((formDoc, idx) => {
-          const formData = formDoc.data();
-          content += `\n  Form ${idx + 1}: ${formData.formType} - ${formData.isCompleted ? 'Completed' : 'In Progress'}\n`;
-        });
-      }
-
-      pdfContent += `4 0 obj<</Length ${content.length}>>stream\n${content}\nendstream endobj\n`;
-      pdfContent += '5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n';
-      pdfContent += 'xref\n0 6\n0000000000 65535 f\n0000000009 00000 n\n';
-      pdfContent += '0000000074 00000 n\n0000000133 00000 n\n0000000281 00000 n\n';
-      pdfContent += '0000000403 00000 n\ntrailer<</Size 6/Root 1 0 R>>\nstartxref\n477\n%%EOF';
-
-      const blob = new Blob([pdfContent], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `rwe-study-export-${new Date().getTime()}.pdf`;
-      link.click();
-      window.URL.revokeObjectURL(url);
-
-      await recordExport('pdf', selectedPatients.size);
+      await recordExport('xlsx', selectedPatients.size);
       await fetchExportHistory();
-      alert('PDF export completed successfully!');
+      alert('Excel export completed successfully!');
     } catch (error) {
-      console.error('Error exporting PDF:', error);
-      alert('Error exporting PDF. Please try again.');
+      console.error('Error exporting Excel:', error);
+      alert('Error exporting Excel. Please try again.');
     } finally {
       setExporting(false);
     }
   };
 
-  const recordExport = async (type: 'csv' | 'pdf', count: number) => {
+  const recordExport = async (type: 'csv' | 'pdf' | 'xlsx', count: number) => {
     try {
       const exportId = `export_${Date.now()}`;
       await setDoc(doc(db, 'exports', exportId), {
@@ -269,22 +217,22 @@ export default function ExportsPage() {
           </button>
         </div>
 
-        {/* PDF Export */}
+        {/* Excel Export */}
         <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6 hover:border-slate-600 transition">
           <div className="flex items-center gap-3 mb-4">
-            <FileText className="w-8 h-8 text-red-400" />
-            <h3 className="text-lg font-semibold text-white">PDF Export</h3>
+            <FileText className="w-8 h-8 text-emerald-400" />
+            <h3 className="text-lg font-semibold text-white">Excel Export</h3>
           </div>
           <p className="text-slate-400 text-sm mb-4">
-            Export as PDF with clinical summaries. Perfect for reports and documentation.
+            Export as real .xlsx with bordered cells in the same format as doctor exports.
           </p>
           <button
-            onClick={generatePDF}
+            onClick={generateExcel}
             disabled={exporting || selectedPatients.size === 0}
-            className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
+            className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
           >
             <Download className="w-4 h-4" />
-            {exporting ? 'Exporting...' : 'Export as PDF'}
+            {exporting ? 'Exporting...' : 'Export as Excel'}
           </button>
         </div>
       </div>
@@ -322,9 +270,9 @@ export default function ExportsPage() {
                 />
                 <div>
                   <p className="text-sm font-medium text-white">
-                    {patient.firstName} {patient.lastName}
+                    {patient.patientCode || patient.id}
                   </p>
-                  <p className="text-xs text-slate-400">{patient.email}</p>
+                  <p className="text-xs text-slate-400">{patient.studySiteCode || '-'}</p>
                 </div>
               </label>
             ))}
@@ -356,7 +304,7 @@ export default function ExportsPage() {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-400">{exp.createdAt.toLocaleDateString()}</p>
-                  <span className={`text-xs font-medium ${exp.exportType === 'csv' ? 'text-green-400' : 'text-red-400'}`}>
+                  <span className={`text-xs font-medium ${exp.exportType === 'csv' ? 'text-green-400' : exp.exportType === 'xlsx' ? 'text-emerald-400' : 'text-red-400'}`}>
                     {exp.exportType.toUpperCase()}
                   </span>
                 </div>

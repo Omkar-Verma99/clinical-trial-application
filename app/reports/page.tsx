@@ -11,12 +11,8 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import Link from "next/link"
 import {
-  FLAT_EXPORT_COLUMNS,
-  buildFlatExportRows,
-  downloadCsvFile,
-  downloadExcelFile,
-  downloadDynamicCsv,
-  downloadDynamicExcel,
+  downloadQuestionAnswerDynamicCsv,
+  downloadQuestionAnswerDynamicExcel,
 } from "@/lib/flat-export"
 
 export default function ReportsPage() {
@@ -95,43 +91,47 @@ export default function ReportsPage() {
     })
   }, [user])
 
-  const exportExcel = () => {
-    const completeReports = reportData.filter((r) => r.baseline && r.followUps && r.followUps.length > 0)
-
-    if (completeReports.length === 0) {
-      alert("No complete RWE studies to export")
+  const exportExcel = async () => {
+    if (reportData.length === 0) {
+      alert("No RWE patient data available to export")
       return
     }
 
-    // Extract patients with complete data
-    const patientsToExport = completeReports.map((r) => r.patient)
+    const patientsToExport = reportData.map((r) => r.patient)
 
-    // Use dynamic export
-    downloadDynamicExcel(
+    const doctorNamesByPatientId = new Map<string, string>()
+    reportData.forEach((r) => {
+      doctorNamesByPatientId.set(r.patient.id, r.patient.investigatorName || doctor?.name || "")
+    })
+
+    await downloadQuestionAnswerDynamicExcel(
       patientsToExport,
       baselines,
       followUpData,
-      `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.xls`,
+      `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.xlsx`,
+      doctorNamesByPatientId,
     )
   }
 
   const exportCSV = () => {
-    const completeReports = reportData.filter((r) => r.baseline && r.followUps && r.followUps.length > 0)
-
-    if (completeReports.length === 0) {
-      alert("No complete RWE studies to export")
+    if (reportData.length === 0) {
+      alert("No RWE patient data available to export")
       return
     }
 
-    // Extract patients with complete data
-    const patientsToExport = completeReports.map((r) => r.patient)
+    const patientsToExport = reportData.map((r) => r.patient)
 
-    // Use dynamic export
-    downloadDynamicCsv(
+    const doctorNamesByPatientId = new Map<string, string>()
+    reportData.forEach((r) => {
+      doctorNamesByPatientId.set(r.patient.id, r.patient.investigatorName || doctor?.name || "")
+    })
+
+    downloadQuestionAnswerDynamicCsv(
       patientsToExport,
       baselines,
       followUpData,
       `kollectcare-rwe-data-${new Date().toISOString().split("T")[0]}.csv`,
+      doctorNamesByPatientId,
     )
   }
 

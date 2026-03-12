@@ -238,10 +238,10 @@ export default function PatientDetailPage({ params }: Props) {
     }
   }, [patient, baseline, followUps, doctorForExports])
 
-  const handleExportExcel = useCallback(() => {
+  const handleExportExcel = useCallback(async () => {
     if (!patient) return
     try {
-      downloadExcel(patient, baseline, followUps.length > 0 ? followUps[0] : null, followUps, doctorForExports)
+      await downloadExcel(patient, baseline, followUps.length > 0 ? followUps[0] : null, followUps, doctorForExports)
       toast({
         title: "Success",
         description: "Patient data exported to Excel successfully",

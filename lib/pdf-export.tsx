@@ -16,10 +16,8 @@ import {
 } from '@react-pdf/renderer'
 import type { Patient, BaselineData, FollowUpData, Doctor } from './types'
 import {
-	FLAT_EXPORT_COLUMNS,
-	buildFlatExportRows,
-	downloadCsvFile,
-	downloadExcelFile,
+	downloadQuestionAnswerDynamicCsv,
+	downloadQuestionAnswerDynamicExcel,
 } from './flat-export'
 
 // ============================================================================
@@ -844,26 +842,36 @@ export function downloadCSV(
 	doctor?: Doctor
 ): void {
 	const allFollowUps = followUps && followUps.length > 0 ? followUps : followUp ? [followUp] : []
-	const rows = buildFlatExportRows(patient, baseline, allFollowUps)
-	downloadCsvFile(
-		FLAT_EXPORT_COLUMNS,
-		rows,
-		`CRF_${patient.patientCode}_${new Date().toISOString().split('T')[0]}.csv`
+	const baselines = new Map<string, BaselineData | null>([[patient.id, baseline]])
+	const followUpData = new Map<string, FollowUpData[]>([[patient.id, allFollowUps]])
+	const doctorNames = new Map<string, string>([[patient.id, patient.investigatorName || doctor?.name || '']])
+
+	downloadQuestionAnswerDynamicCsv(
+		[patient],
+		baselines,
+		followUpData,
+		`CRF_${patient.patientCode}_${new Date().toISOString().split('T')[0]}.csv`,
+		doctorNames,
 	)
 }
 
-export function downloadExcel(
+export async function downloadExcel(
 	patient: Patient,
 	baseline: BaselineData | null,
 	followUp: FollowUpData | null,
 	followUps?: FollowUpData[],
 	doctor?: Doctor
-): void {
+): Promise<void> {
 	const allFollowUps = followUps && followUps.length > 0 ? followUps : followUp ? [followUp] : []
-	const rows = buildFlatExportRows(patient, baseline, allFollowUps)
-	downloadExcelFile(
-		FLAT_EXPORT_COLUMNS,
-		rows,
-		`CRF_${patient.patientCode}_${new Date().toISOString().split('T')[0]}.xls`
+	const baselines = new Map<string, BaselineData | null>([[patient.id, baseline]])
+	const followUpData = new Map<string, FollowUpData[]>([[patient.id, allFollowUps]])
+	const doctorNames = new Map<string, string>([[patient.id, patient.investigatorName || doctor?.name || '']])
+
+	await downloadQuestionAnswerDynamicExcel(
+		[patient],
+		baselines,
+		followUpData,
+		`CRF_${patient.patientCode}_${new Date().toISOString().split('T')[0]}.xlsx`,
+		doctorNames,
 	)
 }
