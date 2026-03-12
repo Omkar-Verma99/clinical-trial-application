@@ -35,11 +35,20 @@ export default function SignupPage() {
   const router = useRouter()
   const { toast } = useToast()
 
+  const formatStudySiteCodeInput = (rawValue: string) => {
+    const upperAlphaNum = rawValue.toUpperCase().replace(/[^A-Z0-9]/g, "")
+    const letters = upperAlphaNum.replace(/[^A-Z]/g, "").slice(0, 3)
+    const digits = upperAlphaNum.replace(/[^0-9]/g, "").slice(0, 2)
+
+    if (letters.length < 3) return letters
+    return `${letters}-${digits}`.slice(0, 6)
+  }
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
-    // Convert study site code to uppercase
+    // Enforce strict format while typing: AAA-00
     if (name === "studySiteCode") {
-      setFormData({ ...formData, [name]: value.toUpperCase() })
+      setFormData({ ...formData, [name]: formatStudySiteCodeInput(value) })
     } else if (name === "dateOfBirth") {
       setFormData({ ...formData, [name]: value })
     } else {
@@ -293,7 +302,7 @@ export default function SignupPage() {
                 value={formData.studySiteCode}
                 onChange={handleChange}
                 pattern="^[A-Z]{3}-\d{2}$"
-                maxLength={7}
+                maxLength={6}
                 required
               />
               <p className="text-xs text-muted-foreground">Format: 3 uppercase letters + hyphen + 2 digits (e.g., RWE-01)</p>
