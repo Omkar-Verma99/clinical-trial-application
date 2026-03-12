@@ -72,25 +72,57 @@ export async function POST(request: Request) {
 
     let adminDocId = ''
     let adminData: any = null
+    const uid = String(firebaseAuthData?.localId || '')
+
+    if (!uid) {
+      return Response.json(
+        { success: false, error: 'Admin account not found' },
+        { status: 401 }
+      )
+    }
 
     try {
-      // Primary path: resolve admin profile from Firestore.
-      const querySnapshot = await adminDb
-        .collection('admins')
-        .where('email', '==', normalizedEmail)
-        .limit(1)
-        .get()
+      // Primary path: resolve admin profile by auth uid (required by Firestore rules).
+      const uidDocRef = adminDb.collection('admins').doc(uid)
+      const uidDocSnap = await uidDocRef.get()
 
-      if (querySnapshot.empty) {
-        return Response.json(
-          { success: false, error: 'Admin account not found' },
-          { status: 401 }
+      if (uidDocSnap.exists) {
+        adminDocId = uid
+        adminData = uidDocSnap.data()
+      } else {
+        // Backward compatibility: support legacy admin docs keyed by non-uid IDs.
+        const querySnapshot = await adminDb
+          .collection('admins')
+          .where('email', '==', normalizedEmail)
+          .limit(1)
+          .get()
+
+        if (querySnapshot.empty) {
+          return Response.json(
+            { success: false, error: 'Admin account not found' },
+            { status: 401 }
+          )
+        }
+
+        const legacyDoc = querySnapshot.docs[0]
+        const legacyData = legacyDoc.data() || {}
+
+        // Auto-migrate legacy admin profile to uid-keyed document.
+        await uidDocRef.set(
+          {
+            ...legacyData,
+            email: normalizedEmail,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true }
         )
-      }
 
-      const adminDoc = querySnapshot.docs[0]
-      adminDocId = adminDoc.id
-      adminData = adminDoc.data()
+        adminDocId = uid
+        adminData = {
+          ...legacyData,
+          email: normalizedEmail,
+        }
+      }
 
       if (adminData.status !== 'active') {
         return Response.json(
@@ -100,7 +132,7 @@ export async function POST(request: Request) {
       }
 
       const lastLoginTimestamp = new Date()
-      await adminDb.collection('admins').doc(adminDoc.id).set(
+      await adminDb.collection('admins').doc(adminDocId).set(
         {
           lastLogin: lastLoginTimestamp,
           loginCount: Number(adminData.loginCount || 0) + 1,
@@ -118,14 +150,6 @@ export async function POST(request: Request) {
       }
 
       // Fallback path: allow login based on verified Auth custom role claims.
-      const uid = String(firebaseAuthData?.localId || '')
-      if (!uid) {
-        return Response.json(
-          { success: false, error: 'Admin account not found' },
-          { status: 401 }
-        )
-      }
-
       const adminAuth = getFirebaseAdminAuth()
       const userRecord = await adminAuth.getUser(uid)
       const roleClaim = String(userRecord.customClaims?.role || '')
