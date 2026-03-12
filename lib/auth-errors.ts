@@ -137,6 +137,18 @@ export function getAuthErrorMessage(error: any): AuthErrorInfo {
         description: "Unable to process your password reset request right now. Please try again.",
       }
 
+    case "app/doctor-profile-permission-denied":
+      return {
+        title: "Profile Setup Delayed",
+        description: "Your account was created but profile setup hit a permission sync issue. Please try signup again.",
+      }
+
+    case "app/doctor-profile-write-failed":
+      return {
+        title: "Profile Setup Failed",
+        description: "We could not save your doctor profile. Please check your connection and try again.",
+      }
+
     default:
       // Check for custom error messages
       if (errorMessage.includes("No internet connection")) {

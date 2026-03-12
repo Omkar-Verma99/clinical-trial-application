@@ -10,7 +10,7 @@ import {
   signOut,
   sendEmailVerification,
 } from "firebase/auth"
-import { doc, getDoc, writeBatch } from "firebase/firestore"
+import { doc, getDoc, setDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
 import { logError, logInfo } from "@/lib/error-tracking"
 import type { Doctor } from "@/lib/types"
@@ -140,6 +140,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signup = useCallback(async (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => {
+    const createAppError = (code: string, message: string) => {
+      const err = new Error(message) as Error & { code?: string }
+      err.code = code
+      return err
+    }
+
+    const isRetryableProfileWriteError = (error: any): boolean => {
+      const code = String(error?.code || "").toLowerCase()
+      return (
+        code === "permission-denied" ||
+        code === "firestore/permission-denied" ||
+        code === "unauthenticated" ||
+        code === "firestore/unauthenticated"
+      )
+    }
+
     if (typeof navigator !== "undefined" && !navigator.onLine) {
       throw new Error("No internet connection. Please check your network.")
     }
@@ -150,58 +166,98 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password)
     const user = userCredential.user
 
-    try {
-      // Send Firebase email verification with custom template
-      // Template is customized in Firebase Console: Authentication → Email Templates
-      await sendEmailVerification(user)
-      logInfo("Verification email sent", { userId: user.uid, email })
-    } catch (error) {
-      logError(error as Error, {
-        action: "sendEmailVerification",
-        userId: user.uid,
-        severity: "low"
-      })
-      // Don't throw - verification is optional
-    }
-
-    // Atomically create site-code lock and doctor profile to prevent duplicate center registration.
+    // Create doctor profile document after auth signup.
     if (!db) {
       throw new Error("Firestore is not initialized. Please refresh the page.")
     }
 
-    const studySiteCode = doctorData.studySiteCode
     const createdAt = new Date().toISOString()
     const doctorRef = doc(db, "doctors", user.uid)
-    const studySiteCodeRef = doc(db, "studySiteCodes", studySiteCode)
-    const batch = writeBatch(db)
-
-    batch.set(studySiteCodeRef, {
-      doctorId: user.uid,
-      studySiteCode,
-      createdAt,
-    })
-
-    batch.set(doctorRef, {
+    const doctorPayload = {
       ...doctorData,
       createdAt,
-    })
+    }
 
     try {
-      await batch.commit()
+      // Force token refresh to reduce first-write auth propagation races.
+      await user.getIdToken(true)
+    } catch (error) {
+      logError(error as Error, {
+        action: "refreshSignupToken",
+        userId: user.uid,
+        severity: "medium",
+      })
+      // Continue - setDoc retry block below can still succeed.
+    }
+
+    try {
+      let writeSucceeded = false
+      let profileWriteError: any = null
+
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          await setDoc(doctorRef, doctorPayload)
+          writeSucceeded = true
+          break
+        } catch (error: any) {
+          profileWriteError = error
+
+          if (attempt === 0 && isRetryableProfileWriteError(error)) {
+            await new Promise((resolve) => setTimeout(resolve, 400))
+            try {
+              await user.getIdToken(true)
+            } catch {
+              // Ignore refresh retry failures; second write attempt still proceeds.
+            }
+            continue
+          }
+
+          break
+        }
+      }
+
+      if (!writeSucceeded) {
+        throw profileWriteError || createAppError("app/doctor-profile-write-failed", "Failed to create doctor profile")
+      }
     } catch (error: any) {
-      // Roll back Firebase Auth user when profile/lock creation fails.
+      // Roll back Firebase Auth user when profile creation fails.
       try {
         await user.delete()
       } catch {
         // Best-effort cleanup only.
       }
 
-      if (error?.code === "permission-denied") {
-        throw new Error(`Study Site Code "${studySiteCode}" is already in use. Only one doctor per center is allowed.`)
+      const code = String(error?.code || "").toLowerCase()
+      if (
+        code === "permission-denied" ||
+        code === "firestore/permission-denied" ||
+        code === "unauthenticated" ||
+        code === "firestore/unauthenticated"
+      ) {
+        throw createAppError(
+          "app/doctor-profile-permission-denied",
+          "Unable to create doctor profile due to a permission sync issue. Please try again."
+        )
       }
 
-      throw error
+      throw createAppError(
+        "app/doctor-profile-write-failed",
+        error?.message || "Failed to create doctor profile. Please try again."
+      )
     }
+
+    // Send verification email after successful profile write (non-blocking).
+    void sendEmailVerification(user)
+      .then(() => {
+        logInfo("Verification email sent", { userId: user.uid, email })
+      })
+      .catch((error) => {
+        logError(error as Error, {
+          action: "sendEmailVerification",
+          userId: user.uid,
+          severity: "low",
+        })
+      })
 
     // IMPORTANT: Immediately fetch and set the doctor data after signup
     // This ensures doctor context is available immediately after registration
