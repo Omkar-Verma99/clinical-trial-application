@@ -102,6 +102,12 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
                 return;
               }
             }
+          } else {
+            // Prevent stale localStorage-only admin sessions when secure server session is invalid.
+            localStorage.removeItem('adminAuth');
+            setAdminUser(null);
+            setPermissions([]);
+            return;
           }
 
           const user = buildAdminUserFromSession(session);
@@ -152,6 +158,10 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
         };
 
         // Keep Firebase client auth in sync so admin Firestore reads are authorized by rules.
+        if (!auth) {
+          return { success: false, error: 'Firebase client auth is not initialized on this build.' };
+        }
+
         if (auth) {
           await setPersistence(auth, browserLocalPersistence);
           await signInWithEmailAndPassword(auth, email, password);
