@@ -31,6 +31,19 @@ interface Doctor {
   createdAt: Date;
 }
 
+function asDate(value: unknown): Date | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value;
+  if (typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  }
+  return undefined;
+}
+
 export default function DoctorsManagementPage() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
@@ -98,8 +111,8 @@ export default function DoctorsManagementPage() {
             status: docData.status || 'active',
             patientCount: patientCountByDoctor.get(docSnap.id)?.size || 0,
             formCount: formCountByDoctor.get(docSnap.id) || 0,
-            lastLogin: docData.lastLogin?.toDate(),
-            createdAt: docData.createdAt?.toDate() || new Date(),
+            lastLogin: asDate(docData.lastLogin),
+            createdAt: asDate(docData.createdAt) || new Date(),
           });
         }
 

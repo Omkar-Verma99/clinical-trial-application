@@ -29,6 +29,18 @@ interface ExportHistory {
   size?: number;
 }
 
+function asDate(value: unknown): Date {
+  if (value instanceof Date) return value;
+  if (value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date();
+}
+
 export default function ExportsPage() {
   const { adminUser } = useAdminAuth();
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -73,7 +85,7 @@ export default function ExportsPage() {
       const history = exportsSnap.docs.map((doc) => ({
         id: doc.id,
         ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date(),
+        createdAt: asDate(doc.data().createdAt),
       } as ExportHistory));
       setExportHistory(history.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()));
     } catch (error) {

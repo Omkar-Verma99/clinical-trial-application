@@ -69,6 +69,19 @@ interface DoctorPerformance {
   completion: number;
 }
 
+function asDate(value: unknown): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  if (typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
+
 export default function AdminDashboard() {
   const { adminUser } = useAdminAuth();
   const [stats, setStats] = useState<DashboardStats>({
@@ -134,7 +147,7 @@ export default function AdminDashboard() {
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
         const newPatientsThisWeek = patientsSnapshot.docs.filter((doc) => {
-          const enrollmentDate = doc.data().enrollmentDate?.toDate();
+          const enrollmentDate = asDate(doc.data().enrollmentDate);
           return enrollmentDate && enrollmentDate > oneWeekAgo;
         }).length;
 
@@ -161,7 +174,7 @@ export default function AdminDashboard() {
               id: doc.id,
               type: doc.data().action as any,
               description: `${doc.data().action.replace(/_/g, ' ').toUpperCase()}`,
-              timestamp: doc.data().timestamp?.toDate() || new Date(),
+              timestamp: asDate(doc.data().timestamp) || new Date(),
               doctor: doc.data().doctorId,
             }));
 

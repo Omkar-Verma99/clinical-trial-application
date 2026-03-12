@@ -58,7 +58,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     const checkSession = async () => {
       try {
         // Avoid admin session bootstrap on non-admin routes.
-        if (!pathname?.startsWith('/admin')) {
+        if (!pathname?.startsWith('/admin') || pathname === '/admin/login') {
           setAdminUser(null);
           setPermissions([]);
           return;

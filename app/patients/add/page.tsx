@@ -25,10 +25,11 @@ const PATIENT_CODE_REGEX = /^\d{3}-[A-Z]{3}$/
 interface PatientFormPageProps {
   presetEditPatientId?: string
   forceEmbedded?: boolean
+  allowAnyDoctorEdit?: boolean
   onSaved?: () => void
 }
 
-export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }: PatientFormPageProps = {}) {
+export function PatientFormPage({ presetEditPatientId, forceEmbedded, allowAnyDoctorEdit = false, onSaved }: PatientFormPageProps = {}) {
   const { user, doctor } = useAuth()
   const router = useRouter()
   const [editPatientId, setEditPatientId] = useState<string | null>(presetEditPatientId ?? null)
@@ -38,6 +39,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
   const [loading, setLoading] = useState(false)
   const submitLockRef = useRef(false)
   const [loadingPatientData, setLoadingPatientData] = useState(false)
+  const [ownerDoctorId, setOwnerDoctorId] = useState<string>("")
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
   const [showIneligibleModal, setShowIneligibleModal] = useState(false)
 
@@ -241,8 +243,9 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         if (prefetchedPatientRaw) {
           try {
             const prefetchedPatient = JSON.parse(prefetchedPatientRaw)
-            if (!prefetchedPatient?.doctorId || prefetchedPatient.doctorId === user.uid) {
+            if (!prefetchedPatient?.doctorId || prefetchedPatient.doctorId === user.uid || allowAnyDoctorEdit) {
               hydrateFormFromPatientData(prefetchedPatient)
+              setOwnerDoctorId(String(prefetchedPatient?.doctorId || ""))
               hasPrefetchedData = true
             }
           } catch {
@@ -267,7 +270,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         }
 
         const patientData = patientSnap.data() as any
-        if (patientData.doctorId && patientData.doctorId !== user.uid) {
+        if (!allowAnyDoctorEdit && patientData.doctorId && patientData.doctorId !== user.uid) {
           toast({
             variant: "destructive",
             title: "Access denied",
@@ -277,6 +280,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           return
         }
 
+        setOwnerDoctorId(String(patientData.doctorId || ""))
         hydrateFormFromPatientData(patientData)
       } catch (error) {
         toast({
@@ -290,7 +294,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
     }
 
     void loadPatientForEdit()
-  }, [db, doctor?.name, doctor?.studySiteCode, editPatientId, isEditMode, router, toast, user?.uid])
+  }, [allowAnyDoctorEdit, db, doctor?.name, doctor?.studySiteCode, editPatientId, isEditMode, router, toast, user?.uid])
 
   const handleHeightChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const height = parseFloat(e.target.value)
@@ -547,7 +551,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
       const sanitizedFormData = sanitizeObject(formData, ['patientCode', 'studySiteCode', 'investigatorName', 'smokingStatus', 'alcoholIntake', 'physicalActivityLevel'])
 
       const patientData = {
-        doctorId: user.uid,
+        doctorId: isEditMode && allowAnyDoctorEdit ? ownerDoctorId || user.uid : user.uid,
         patientCode: normalizedPatientCode,
         studySiteCode: sanitizedFormData.studySiteCode,
         investigatorName: sanitizedFormData.investigatorName,
@@ -609,7 +613,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
         // Legacy fields for backward compatibility
         previousTherapy: selectedDrugClasses,
         
-        createdAt: new Date().toISOString(),
+        createdAt: isEditMode ? undefined : new Date().toISOString(),
       }
 
       try {
@@ -619,6 +623,10 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
           const updatePayload: Record<string, unknown> = {
             ...patientData,
             updatedAt: nowIso,
+          }
+
+          if (updatePayload.createdAt === undefined) {
+            delete updatePayload.createdAt
           }
 
           // Defensive guard: never replace nested baseline object from Patient Info update.

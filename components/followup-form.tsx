@@ -32,9 +32,10 @@ interface FollowUpFormProps {
   baselineDate?: string // Baseline visit date to calculate weeks
   allFollowUps?: FollowUpData[] // Track all existing visits
   followUpIndex?: number
+  doctorIdOverride?: string
 }
 
-export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess, baselineDate, allFollowUps = [], followUpIndex = 0 }: FollowUpFormProps) {
+export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess, baselineDate, allFollowUps = [], followUpIndex = 0, doctorIdOverride }: FollowUpFormProps) {
   const { toast } = useToast()
   const { user, doctor } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -52,6 +53,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
     title: "",
     message: "",
   })
+  const resolvedDoctorId = doctorIdOverride || user?.uid || ""
   
   // Calculate visitNumber based on date difference from baseline (in weeks)
   // For editing, use existing; for new, calculate from dates
@@ -442,7 +444,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
       const data = {
         visitNumber: formData.visitNumber,
         patientId,
-        doctorId: user?.uid || "",
+        doctorId: resolvedDoctorId,
         visitDate: formData.visitDate,
         hba1c: formData.hba1c ? Number.parseFloat(formData.hba1c) : null,
         fpg: formData.fpg ? Number.parseFloat(formData.fpg) : null,
@@ -532,7 +534,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
           
           // Find if this follow-up already exists (by visitNumber + doctorId)
           const existingIndex = existingFollowups.findIndex(
-            (fu: any) => fu.visitNumber === formData.visitNumber && fu.doctorId === user?.uid
+            (fu: any) => fu.visitNumber === formData.visitNumber && fu.doctorId === resolvedDoctorId
           )
           
           if (existingIndex >= 0) {

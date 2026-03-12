@@ -28,10 +28,11 @@ interface BaselineFormProps {
   existingData: BaselineData | null
   patientBaselineVisitDate?: string
   patientWeight?: number | null
+  doctorIdOverride?: string
   onSuccess: () => void
 }
 
-export const BaselineForm = memo(function BaselineForm({ patientId, existingData, patientBaselineVisitDate, patientWeight, onSuccess }: BaselineFormProps) {
+export const BaselineForm = memo(function BaselineForm({ patientId, existingData, patientBaselineVisitDate, patientWeight, doctorIdOverride, onSuccess }: BaselineFormProps) {
   const { toast } = useToast()
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -238,7 +239,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
 
       const data = {
         patientId,
-        doctorId: user?.uid || "",
+        doctorId: doctorIdOverride || user?.uid || "",
         baselineVisitDate: formData.baselineVisitDate,
         
         // Clinical Parameters
