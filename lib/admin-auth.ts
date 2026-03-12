@@ -11,6 +11,7 @@ import {
 } from 'firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
 import bcrypt from 'bcryptjs';
+import { getDefaultPermissionsForRole, sanitizePermissions } from '@/lib/admin-permissions';
 
 interface AdminUser {
   id: string;
@@ -111,7 +112,7 @@ export const adminLogin = async (email: string, password: string): Promise<Admin
       createdAt: adminData.createdAt?.toDate() || new Date(),
       lastLogin: lastLoginTimestamp,
       loginCount: (adminData.loginCount || 0) + 1,
-      permissions: getAdminPermissions(adminData.role),
+      permissions: resolveAdminPermissions(adminData.role, adminData.permissions),
     };
 
     // Store in localStorage
@@ -203,7 +204,7 @@ export const fetchAdminUser = async (adminId: string): Promise<AdminUser | null>
       createdAt: adminData.createdAt?.toDate() || new Date(),
       lastLogin: adminData.lastLogin?.toDate() || new Date(),
       loginCount: adminData.loginCount || 0,
-      permissions: getAdminPermissions(adminData.role),
+      permissions: resolveAdminPermissions(adminData.role, adminData.permissions),
     };
   } catch (error) {
     console.error('Error fetching admin user:', error);
@@ -215,24 +216,14 @@ export const fetchAdminUser = async (adminId: string): Promise<AdminUser | null>
  * Get admin permissions based on role
  */
 export const getAdminPermissions = (role: 'admin' | 'super_admin'): string[] => {
-  const basePermissions = [
-    'view_doctors',
-    'view_patients',
-    'view_forms',
-    'export_data',
-    'view_analytics',
-  ];
+  return getDefaultPermissionsForRole(role);
+};
 
-  const superAdminPermissions = [
-    ...basePermissions,
-    'manage_admins',
-    'view_audit_logs',
-    'change_settings',
-    'delete_data',
-    'manage_roles',
-  ];
-
-  return role === 'super_admin' ? superAdminPermissions : basePermissions;
+export const resolveAdminPermissions = (role: 'admin' | 'super_admin', storedPermissions: unknown): string[] => {
+  if (Array.isArray(storedPermissions) && storedPermissions.length > 0) {
+    return sanitizePermissions(role, storedPermissions);
+  }
+  return getAdminPermissions(role);
 };
 
 /**

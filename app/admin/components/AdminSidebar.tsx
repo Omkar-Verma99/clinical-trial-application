@@ -21,7 +21,7 @@ import { useState } from 'react';
 const navigationItems = [
   {
     label: 'Dashboard',
-    href: '/admin/dashboard',
+    href: '/admin',
     icon: LayoutDashboard,
     permission: 'view_analytics',
   },

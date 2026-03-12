@@ -27,7 +27,7 @@
 ```
 1. Collection ID: admins
 2. Click "Next"
-3. Click "Auto ID" to generate first document ID
+3. Use the Firebase Auth UID as the document ID (DO NOT use Auto ID)
 4. Fill in the following fields:
 ```
 
@@ -105,9 +105,13 @@ We'll create a Cloud Function to hash passwords and create admin accounts.
 
 Here are 3 example admin accounts to create in Firebase:
 
+NOTE:
+- `admin_001`, `admin_002`, `admin_003` below are labels only.
+- Actual Firestore document IDs must be each user's Firebase Auth UID.
+
 ### Account 1: Super Admin
 ```
-Document ID: admin_001
+Document ID: <FIREBASE_AUTH_UID_OF_ADMIN_1>
 Email: admin@hospital.com
 Password: AdminPass123!
 Password Hash: $2a$10$[bcrypt hash here]
@@ -117,7 +121,7 @@ Status: active
 
 ### Account 2: Study Coordinator
 ```
-Document ID: admin_002
+Document ID: <FIREBASE_AUTH_UID_OF_ADMIN_2>
 Email: coordinator@hospital.com
 Password: CoordPass123!
 Password Hash: $2a$10$[bcrypt hash here]
@@ -127,7 +131,7 @@ Status: active
 
 ### Account 3: Data Analyst
 ```
-Document ID: admin_003
+Document ID: <FIREBASE_AUTH_UID_OF_ADMIN_3>
 Email: analyst@hospital.com
 Password: AnalystPass123!
 Password Hash: $2a$10$[bcrypt hash here]
@@ -159,6 +163,10 @@ Click "Auto ID" for document ID
 ```
 
 **4. Add Fields**
+
+IMPORTANT:
+- Document ID must be the Firebase Authentication UID of that admin user.
+- Using Auto ID or custom IDs not matching UID will break rules that check `admins/{request.auth.uid}`.
 
 | Field Name | Type | Value |
 |-----------|------|-------|

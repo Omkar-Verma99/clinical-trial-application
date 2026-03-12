@@ -5,6 +5,9 @@ export async function POST(request: Request) {
     const cookieStore = await cookies();
     cookieStore.delete('adminAuth');
     cookieStore.delete('adminAuthData');
+    cookieStore.delete('adminSession');
+    cookieStore.delete('adminIdToken');
+    cookieStore.delete('appRole');
 
     return Response.json({ success: true });
   } catch (error: any) {

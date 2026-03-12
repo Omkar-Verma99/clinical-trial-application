@@ -46,6 +46,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [doctorDataError, setDoctorDataError] = useState<string | null>(null)
 
+  const syncRoleClaim = useCallback(async (currentUser: User) => {
+    try {
+      const idToken = await currentUser.getIdToken(true)
+      await fetch("/api/auth/sync-role", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+      await currentUser.getIdToken(true)
+    } catch (error) {
+      // Keep auth flow resilient; role sync can retry later.
+      logError(error as Error, {
+        action: "syncRoleClaim",
+        userId: currentUser.uid,
+        severity: "low",
+      })
+    }
+  }, [])
+
   useEffect(() => {
     if (typeof window === "undefined" || !auth) {
       setLoading(false)
@@ -55,23 +75,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser)
 
-      if (typeof document !== "undefined") {
-        if (currentUser) {
-          document.cookie = `doctorAuth=true; path=/; max-age=${7 * 24 * 60 * 60}`
-        } else {
-          document.cookie = `doctorAuth=; path=/; max-age=0`
-        }
-      }
-
       if (currentUser && db) {
         try {
           const doctorDoc = await getDoc(doc(db, "doctors", currentUser.uid))
           if (doctorDoc.exists()) {
             const docData = doctorDoc.data()
             setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
+            if (typeof document !== "undefined") {
+              document.cookie = `doctorAuth=true; path=/; max-age=${7 * 24 * 60 * 60}`
+              document.cookie = `appRole=doctor; path=/; max-age=${7 * 24 * 60 * 60}`
+            }
+            void syncRoleClaim(currentUser)
             logInfo("Doctor data fetched successfully", { userId: currentUser.uid })
           } else {
             setDoctor(null)
+            if (typeof document !== "undefined") {
+              document.cookie = `doctorAuth=; path=/; max-age=0`
+              document.cookie = `appRole=; path=/; max-age=0`
+            }
           }
         } catch (error) {
           logError(error as Error, {
@@ -80,10 +101,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             severity: "medium",
           })
           setDoctor(null)
+          if (typeof document !== "undefined") {
+            document.cookie = `doctorAuth=; path=/; max-age=0`
+            document.cookie = `appRole=; path=/; max-age=0`
+          }
         }
       } else {
         setDoctor(null)
         setDoctorDataError(null)
+        if (typeof document !== "undefined") {
+          document.cookie = `doctorAuth=; path=/; max-age=0`
+          document.cookie = `appRole=; path=/; max-age=0`
+        }
       }
 
       setLoading(false)
@@ -92,7 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       unsubscribe()
     }
-  }, [])
+  }, [syncRoleClaim])
 
   const retryDoctorDataFetch = useCallback(async () => {
     if (!user || !db) {
@@ -135,9 +164,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const normalizedEmail = email.trim().toLowerCase()
-    await signInWithEmailAndPassword(auth, normalizedEmail, password)
+    const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password)
+
+    // Prevent non-doctor accounts from entering doctor flow.
+    if (db) {
+      const doctorDoc = await getDoc(doc(db, "doctors", userCredential.user.uid))
+      if (!doctorDoc.exists()) {
+        await signOut(auth)
+        const err = new Error("This account does not have doctor access. Please use admin login.") as Error & {
+          code?: string
+        }
+        err.code = "app/not-doctor-account"
+        throw err
+      }
+    }
+
+    void syncRoleClaim(userCredential.user)
     logInfo("User logged in successfully", { email: normalizedEmail })
-  }, [])
+  }, [syncRoleClaim])
 
   const signup = useCallback(async (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => {
     const createAppError = (code: string, message: string) => {
@@ -266,6 +310,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (doctorDoc.exists()) {
         const docData = doctorDoc.data()
         setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
+        void syncRoleClaim(user)
         logInfo("Doctor data fetched immediately after signup", { userId: user.uid })
       } else {
         // Document exists but data is missing - set error for UI
@@ -288,7 +333,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     logInfo("Doctor account created successfully", { email, userId: user.uid })
-  }, [])
+  }, [syncRoleClaim])
 
   const logout = useCallback(async () => {
     if (!auth) {
@@ -304,6 +349,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Clear doctorAuth cookie on logout
     if (typeof window !== 'undefined') {
       document.cookie = `doctorAuth=; path=/; max-age=0`;
+      document.cookie = `appRole=; path=/; max-age=0`;
     }
     
     logInfo("User logged out successfully")

@@ -1,5 +1,6 @@
 import { getApps, initializeApp, cert, applicationDefault } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
 
 let initialized = false
 
@@ -27,4 +28,9 @@ function initAdminApp() {
 export function getFirebaseAdminAuth() {
   initAdminApp()
   return getAuth()
+}
+
+export function getFirebaseAdminDb() {
+  initAdminApp()
+  return getFirestore()
 }

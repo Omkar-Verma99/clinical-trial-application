@@ -2,73 +2,53 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const doctorAuth = request.cookies.get('doctorAuth');
+  const adminAuth = request.cookies.get('adminAuth');
+  const appRole = request.cookies.get('appRole')?.value;
+
+  const isDoctorSession = !!doctorAuth && appRole === 'doctor';
+  const isAdminSession = !!adminAuth && (appRole === 'admin' || appRole === 'super_admin');
 
   // DOCTOR ROUTES PROTECTION
   // NOTE: /forgot-password is NOT protected - users can access it without login
   const doctorProtectedRoutes = ['/dashboard', '/patients', '/reports'];
   
   if (doctorProtectedRoutes.some((route) => pathname.startsWith(route))) {
-    const doctorAuth = request.cookies.get('doctorAuth');
-    
-    if (!doctorAuth) {
+    if (!isDoctorSession) {
       return NextResponse.redirect(new URL('/login', request.url));
     }
   }
 
-  // ADMIN ROUTES PROTECTION
-  const adminProtectedRoutes = ['/admin/dashboard', '/admin/doctors', '/admin/patients', '/admin/forms', '/admin/analytics', '/admin/exports', '/admin/audit-logs', '/admin/settings'];
-  
-  if (adminProtectedRoutes.some((route) => pathname.startsWith(route))) {
-    const adminAuth = request.cookies.get('adminAuth');
-    const adminAuthData = request.cookies.get('adminAuthData')?.value;
-    
-    if (!adminAuth && !adminAuthData) {
+  // ADMIN ROUTES PROTECTION (canonical admin home: /admin)
+  if (pathname === '/admin/login') {
+    if (isAdminSession) {
+      return NextResponse.redirect(new URL('/admin', request.url));
+    }
+  } else if (pathname.startsWith('/admin')) {
+    if (!isAdminSession) {
       return NextResponse.redirect(new URL('/admin/login', request.url));
     }
   }
 
-  // Redirect /admin to /admin/dashboard if authenticated
-  if (pathname === '/admin') {
-    const adminAuth = request.cookies.get('adminAuth');
-    const adminAuthData = request.cookies.get('adminAuthData')?.value;
-    
-    if (adminAuth || adminAuthData) {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-    }
-    
-    return NextResponse.redirect(new URL('/admin/login', request.url));
-  }
-
-  // Redirect /admin/login to dashboard if already authenticated
-  if (pathname === '/admin/login') {
-    const adminAuth = request.cookies.get('adminAuth');
-    const adminAuthData = request.cookies.get('adminAuthData')?.value;
-    
-    if (adminAuth || adminAuthData) {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
-    }
+  // Backward compatibility route handling.
+  if (pathname === '/admin/dashboard') {
+    return NextResponse.redirect(new URL('/admin', request.url));
   }
   
   // Prevent logged-in doctors from accessing login/signup/forgot-password
   if (['/login', '/signup'].includes(pathname)) {
-    const doctorAuth = request.cookies.get('doctorAuth');
-    
-    if (doctorAuth) {
+    if (isDoctorSession) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
   }
 
   // Redirect root to /dashboard or /admin based on auth type
   if (pathname === '/' || pathname === '') {
-    const adminAuth = request.cookies.get('adminAuth');
-    const adminAuthData = request.cookies.get('adminAuthData')?.value;
-    const doctorAuth = request.cookies.get('doctorAuth');
-    
-    if (adminAuth || adminAuthData) {
-      return NextResponse.redirect(new URL('/admin/dashboard', request.url));
+    if (isAdminSession) {
+      return NextResponse.redirect(new URL('/admin', request.url));
     }
     
-    if (doctorAuth) {
+    if (isDoctorSession) {
       return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 

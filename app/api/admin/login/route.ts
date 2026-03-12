@@ -3,6 +3,8 @@ import { cookies } from 'next/headers';
 import { getFirestore, collection, getDocs, query, where, doc, setDoc } from 'firebase/firestore';
 import { initializeApp } from 'firebase/app';
 import { firebaseConfig } from '@/lib/firebase-config';
+import { getFirebaseAdminAuth } from '@/lib/firebase-admin';
+import { getDefaultPermissionsForRole, sanitizePermissions } from '@/lib/admin-permissions';
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -42,8 +44,9 @@ export async function POST(request: Request) {
 
     // First authenticate credentials against Firebase Authentication
     const normalizedEmail = email.toLowerCase()
+    let firebaseAuthData: any = null
     try {
-      await verifyFirebaseCredentials(normalizedEmail, password)
+      firebaseAuthData = await verifyFirebaseCredentials(normalizedEmail, password)
     } catch (error: any) {
       const code = error?.message || ''
       if (code === 'EMAIL_NOT_FOUND') {
@@ -117,12 +120,68 @@ export async function POST(request: Request) {
       firstName: adminData.firstName,
       lastName: adminData.lastName,
     }), {
-      httpOnly: false,
+      httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
       maxAge: 60 * 60 * 24 * 7,
       path: '/',
     });
+
+    try {
+      const adminAuth = getFirebaseAdminAuth()
+      const sessionCookie = await adminAuth.createSessionCookie(String(firebaseAuthData.idToken || ''), {
+        expiresIn: 7 * 24 * 60 * 60 * 1000,
+      })
+      cookieStore.set('adminSession', sessionCookie, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60 * 24 * 7,
+        path: '/',
+      })
+    } catch (sessionError) {
+      console.error('Admin session cookie creation failed:', sessionError)
+    }
+
+    if (firebaseAuthData?.idToken) {
+      cookieStore.set('adminIdToken', String(firebaseAuthData.idToken), {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 60 * 60,
+        path: '/',
+      });
+    }
+
+    const resolvedRole = adminData.role === 'super_admin' ? 'super_admin' : 'admin'
+    cookieStore.set('appRole', resolvedRole, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 60 * 60 * 24 * 7,
+      path: '/',
+    });
+
+    // Non-blocking claim sync for role-based auth token checks.
+    try {
+      const uid = String(firebaseAuthData?.localId || '')
+      if (uid) {
+        const adminAuth = getFirebaseAdminAuth()
+        const userRecord = await adminAuth.getUser(uid)
+        const existingClaims = userRecord.customClaims || {}
+        const role = resolvedRole
+        await adminAuth.setCustomUserClaims(uid, {
+          ...existingClaims,
+          role,
+        })
+      }
+    } catch (claimError) {
+      console.error('Admin claim sync failed:', claimError)
+    }
+
+    const permissions = Array.isArray(adminData.permissions)
+      ? sanitizePermissions(resolvedRole, adminData.permissions)
+      : getDefaultPermissionsForRole(resolvedRole)
 
     return Response.json({
       success: true,
@@ -131,7 +190,8 @@ export async function POST(request: Request) {
         email: adminData.email,
         firstName: adminData.firstName,
         lastName: adminData.lastName,
-        role: adminData.role,
+        role: resolvedRole,
+        permissions,
       },
     });
   } catch (error: any) {

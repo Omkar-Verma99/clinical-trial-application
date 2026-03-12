@@ -105,9 +105,16 @@ service cloud.firestore {
       // Only system/cloud functions can create admins
       allow create: if false;
       
-      // Admins can update their own password/settings
+      // Admins can update their own runtime metadata only.
+      // Privileged fields (role, permissions, status, identity) are immutable from client SDK.
       allow update: if isAuthenticated() && 
-        request.auth.uid == adminId;
+        request.auth.uid == adminId &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.permissions == resource.data.permissions &&
+        request.resource.data.status == resource.data.status &&
+        request.resource.data.email == resource.data.email &&
+        request.resource.data.firstName == resource.data.firstName &&
+        request.resource.data.lastName == resource.data.lastName;
       
       // Prevent admin deletion
       allow delete: if false;
@@ -156,7 +163,7 @@ service cloud.firestore {
     // Admin panel settings and configuration
     match /adminPanel/{document=**} {
       // Only authenticated admins can access
-      allow read: if isAuthenticated();
+      allow read: if isAdmin();
       allow write: if false; // Only system admin can modify
     }
   }

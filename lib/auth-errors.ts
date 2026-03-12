@@ -149,6 +149,14 @@ export function getAuthErrorMessage(error: any): AuthErrorInfo {
         description: "We could not save your doctor profile. Please check your connection and try again.",
       }
 
+    case "app/not-doctor-account":
+      return {
+        title: "Doctor Access Required",
+        description: "This account is not a doctor account. Please use the admin login page.",
+        action: "Go to Admin Login",
+        actionLink: "/admin/login",
+      }
+
     default:
       // Check for custom error messages
       if (errorMessage.includes("No internet connection")) {
