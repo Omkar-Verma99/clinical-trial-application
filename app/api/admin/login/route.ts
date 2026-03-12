@@ -68,41 +68,85 @@ export async function POST(request: Request) {
       )
     }
 
-    // Then query admin role/status in Firestore
-    const querySnapshot = await adminDb
-      .collection('admins')
-      .where('email', '==', normalizedEmail)
-      .limit(1)
-      .get()
+    let adminDocId = ''
+    let adminData: any = null
 
-    if (querySnapshot.empty) {
-      return Response.json(
-        { success: false, error: 'Admin account not found' },
-        { status: 401 }
-      );
+    try {
+      // Primary path: resolve admin profile from Firestore.
+      const querySnapshot = await adminDb
+        .collection('admins')
+        .where('email', '==', normalizedEmail)
+        .limit(1)
+        .get()
+
+      if (querySnapshot.empty) {
+        return Response.json(
+          { success: false, error: 'Admin account not found' },
+          { status: 401 }
+        )
+      }
+
+      const adminDoc = querySnapshot.docs[0]
+      adminDocId = adminDoc.id
+      adminData = adminDoc.data()
+
+      if (adminData.status !== 'active') {
+        return Response.json(
+          { success: false, error: 'Admin account is inactive' },
+          { status: 403 }
+        )
+      }
+
+      const lastLoginTimestamp = new Date()
+      await adminDb.collection('admins').doc(adminDoc.id).set(
+        {
+          lastLogin: lastLoginTimestamp,
+          loginCount: Number(adminData.loginCount || 0) + 1,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      )
+    } catch (firestoreError: any) {
+      const code = String(firestoreError?.code || '')
+      const message = String(firestoreError?.message || '')
+      const isPermissionDenied = code.includes('permission-denied') || message.includes('Missing or insufficient permissions')
+
+      if (!isPermissionDenied) {
+        throw firestoreError
+      }
+
+      // Fallback path: allow login based on verified Auth custom role claims.
+      const uid = String(firebaseAuthData?.localId || '')
+      if (!uid) {
+        return Response.json(
+          { success: false, error: 'Admin account not found' },
+          { status: 401 }
+        )
+      }
+
+      const adminAuth = getFirebaseAdminAuth()
+      const userRecord = await adminAuth.getUser(uid)
+      const roleClaim = String(userRecord.customClaims?.role || '')
+      const resolvedRole = roleClaim === 'super_admin' ? 'super_admin' : roleClaim === 'admin' ? 'admin' : ''
+
+      if (!resolvedRole) {
+        return Response.json(
+          { success: false, error: 'Admin account not found' },
+          { status: 401 }
+        )
+      }
+
+      const nameParts = String(userRecord.displayName || '').trim().split(/\s+/).filter(Boolean)
+      adminDocId = uid
+      adminData = {
+        email: String(userRecord.email || normalizedEmail),
+        firstName: nameParts[0] || 'Admin',
+        lastName: nameParts.slice(1).join(' ') || 'User',
+        role: resolvedRole,
+        status: 'active',
+        permissions: getDefaultPermissionsForRole(resolvedRole),
+      }
     }
-
-    const adminDoc = querySnapshot.docs[0];
-    const adminData = adminDoc.data();
-
-    // Check if admin is active
-    if (adminData.status !== 'active') {
-      return Response.json(
-        { success: false, error: 'Admin account is inactive' },
-        { status: 403 }
-      );
-    }
-
-    // Update last login
-    const lastLoginTimestamp = new Date();
-    await adminDb.collection('admins').doc(adminDoc.id).set(
-      {
-        lastLogin: lastLoginTimestamp,
-        loginCount: Number(adminData.loginCount || 0) + 1,
-        updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    )
 
     // Set secure cookies
     const cookieStore = await cookies();
@@ -115,7 +159,7 @@ export async function POST(request: Request) {
     });
 
     cookieStore.set('adminAuthData', JSON.stringify({
-      adminId: adminDoc.id,
+      adminId: adminDocId,
       email: adminData.email,
       role: adminData.role,
       firstName: adminData.firstName,
@@ -191,7 +235,7 @@ export async function POST(request: Request) {
     return Response.json({
       success: true,
       user: {
-        id: adminDoc.id,
+        id: adminDocId,
         email: adminData.email,
         firstName: adminData.firstName,
         lastName: adminData.lastName,
