@@ -5,7 +5,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { getDefaultPermissionsForRole, sanitizePermissions } from '@/lib/admin-permissions';
 import { firebaseConfig } from '@/lib/firebase-config';
 
-const adminDb = getFirebaseAdminDb();
+export const dynamic = 'force-dynamic';
 
 async function verifyFirebaseCredentials(email: string, password: string) {
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey
@@ -33,6 +33,7 @@ async function verifyFirebaseCredentials(email: string, password: string) {
 
 export async function POST(request: Request) {
   try {
+    const adminDb = getFirebaseAdminDb();
     const { email, password } = await request.json();
 
     if (!email || !password) {
