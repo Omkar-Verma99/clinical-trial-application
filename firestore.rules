@@ -7,7 +7,7 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isAuthenticated() && exists(/databases/{database}/documents/admins/$(request.auth.uid));
+      return isAuthenticated() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     function isDoctorOwner(doc) {
@@ -35,16 +35,16 @@ service cloud.firestore {
     // Read-only, used by real-time sync listeners
     match /baselineData/{docId} {
       allow read: if resource.data.patientId != null &&
-        exists(/databases/{database}/documents/patients/$(resource.data.patientId)) &&
-        (isDoctorOwner(get(/databases/{database}/documents/patients/$(resource.data.patientId)).data) || isAdmin());
+        exists(/databases/$(database)/documents/patients/$(resource.data.patientId)) &&
+        (isDoctorOwner(get(/databases/$(database)/documents/patients/$(resource.data.patientId)).data) || isAdmin());
       
       allow create, update: if request.resource.data.patientId != null &&
-        exists(/databases/{database}/documents/patients/$(request.resource.data.patientId)) &&
-        isDoctorOwner(get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data);
+        exists(/databases/$(database)/documents/patients/$(request.resource.data.patientId)) &&
+        isDoctorOwner(get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data);
       
       allow delete: if resource.data.patientId != null &&
-        exists(/databases/{database}/documents/patients/$(resource.data.patientId)) &&
-        isDoctorOwner(get(/databases/{database}/documents/patients/$(resource.data.patientId)).data);
+        exists(/databases/$(database)/documents/patients/$(resource.data.patientId)) &&
+        isDoctorOwner(get(/databases/$(database)/documents/patients/$(resource.data.patientId)).data);
     }
 
     // ===== FOLLOWUP DATA COLLECTION =====
@@ -52,16 +52,16 @@ service cloud.firestore {
     // Read-only, used by real-time sync listeners
     match /followUpData/{docId} {
       allow read: if resource.data.patientId != null &&
-        exists(/databases/{database}/documents/patients/$(resource.data.patientId)) &&
-        (isDoctorOwner(get(/databases/{database}/documents/patients/$(resource.data.patientId)).data) || isAdmin());
+        exists(/databases/$(database)/documents/patients/$(resource.data.patientId)) &&
+        (isDoctorOwner(get(/databases/$(database)/documents/patients/$(resource.data.patientId)).data) || isAdmin());
       
       allow create, update: if request.resource.data.patientId != null &&
-        exists(/databases/{database}/documents/patients/$(request.resource.data.patientId)) &&
-        isDoctorOwner(get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data);
+        exists(/databases/$(database)/documents/patients/$(request.resource.data.patientId)) &&
+        isDoctorOwner(get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data);
       
       allow delete: if resource.data.patientId != null &&
-        exists(/databases/{database}/documents/patients/$(resource.data.patientId)) &&
-        isDoctorOwner(get(/databases/{database}/documents/patients/$(resource.data.patientId)).data);
+        exists(/databases/$(database)/documents/patients/$(resource.data.patientId)) &&
+        isDoctorOwner(get(/databases/$(database)/documents/patients/$(resource.data.patientId)).data);
     }
 
     // ===== DOCTORS COLLECTION =====
@@ -88,7 +88,7 @@ service cloud.firestore {
       allow create: if isAuthenticated() &&
         request.resource.data.doctorId == request.auth.uid &&
         request.resource.data.studySiteCode == studySiteCode &&
-        !exists(/databases/{database}/documents/studySiteCodes/$(studySiteCode));
+        !exists(/databases/$(database)/documents/studySiteCodes/$(studySiteCode));
 
       // Lock records must remain immutable after creation.
       allow update, delete: if false;
@@ -127,8 +127,8 @@ service cloud.firestore {
       
       // Doctors can submit new forms for their patients
       allow create: if request.resource.data.doctorId == request.auth.uid &&
-        exists(/databases/{database}/documents/patients/$(request.resource.data.patientId)) &&
-        get(/databases/{database}/documents/patients/$(request.resource.data.patientId)).data.doctorId == request.auth.uid;
+        exists(/databases/$(database)/documents/patients/$(request.resource.data.patientId)) &&
+        get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data.doctorId == request.auth.uid;
       
       // Doctors cannot modify submitted forms; admins read-only
       allow update: if false;
@@ -140,8 +140,8 @@ service cloud.firestore {
     match /auditLogs/{logId} {
       // Only super admins can view audit logs
       allow read: if isAuthenticated() &&
-        exists(/databases/{database}/documents/admins/$(request.auth.uid)) &&
-        get(/databases/{database}/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
       
       // Only cloud functions can write audit logs
       allow create, write, update, delete: if false;
@@ -152,7 +152,7 @@ service cloud.firestore {
     match /exports/{exportId} {
       // Admins can read their own exports; super admins can read all
       allow read: if (resource.data.adminId == request.auth.uid && isAdmin()) ||
-        (isAdmin() && get(/databases/{database}/documents/admins/$(request.auth.uid)).data.role == 'super_admin');
+        (isAdmin() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin');
       
       // Only cloud functions can create/modify exports
       allow create, write, update, delete: if false;
