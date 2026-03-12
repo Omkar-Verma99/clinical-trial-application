@@ -1,7 +1,8 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { AdminUser, adminLogin, adminLogout, getAdminSession, fetchAdminUser } from '@/lib/admin-auth';
+import { AdminUser } from '@/lib/admin-auth';
+import { getDefaultPermissionsForRole } from '@/lib/admin-permissions';
 
 interface AdminContextType {
   adminUser: AdminUser | null;
@@ -15,6 +16,28 @@ interface AdminContextType {
 
 const AdminAuthContext = createContext<AdminContextType | undefined>(undefined);
 
+function buildAdminUserFromSession(raw: any): AdminUser | null {
+  if (!raw || !raw.adminId || !raw.email || !raw.role) return null;
+
+  const role = raw.role === 'super_admin' ? 'super_admin' : 'admin';
+  const permissions = Array.isArray(raw.permissions)
+    ? raw.permissions.map((p: unknown) => String(p))
+    : getDefaultPermissionsForRole(role);
+
+  return {
+    id: String(raw.adminId),
+    email: String(raw.email),
+    firstName: String(raw.firstName || 'Admin'),
+    lastName: String(raw.lastName || 'User'),
+    role,
+    status: raw.status === 'inactive' ? 'inactive' : 'active',
+    createdAt: raw.createdAt ? new Date(raw.createdAt) : new Date(),
+    lastLogin: raw.lastLogin ? new Date(raw.lastLogin) : new Date(),
+    loginCount: Number(raw.loginCount || 0),
+    permissions,
+  };
+}
+
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,11 +45,12 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
 
   // Check session on mount
   useEffect(() => {
-    const checkSession = async () => {
+    const checkSession = () => {
       try {
-        const session = getAdminSession();
-        if (session?.adminId) {
-          const user = await fetchAdminUser(session.adminId);
+        if (typeof window !== 'undefined') {
+          const sessionRaw = localStorage.getItem('adminAuth');
+          const session = sessionRaw ? JSON.parse(sessionRaw) : null;
+          const user = buildAdminUserFromSession(session);
           if (user) {
             setAdminUser(user);
             setPermissions(user.permissions);
@@ -55,22 +79,42 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
       const data = await response.json();
       
       if (data.success && data.user) {
+        const role = data.user.role === 'super_admin' ? 'super_admin' : 'admin';
+        const resolvedPermissions = Array.isArray(data.user.permissions)
+          ? data.user.permissions.map((p: unknown) => String(p))
+          : getDefaultPermissionsForRole(role);
+
+        const user: AdminUser = {
+          id: String(data.user.id),
+          email: String(data.user.email),
+          firstName: String(data.user.firstName || 'Admin'),
+          lastName: String(data.user.lastName || 'User'),
+          role,
+          status: 'active',
+          createdAt: new Date(),
+          lastLogin: new Date(),
+          loginCount: Number(data.user.loginCount || 0),
+          permissions: resolvedPermissions,
+        };
+
         // Also store in localStorage for client-side access
         if (typeof window !== 'undefined') {
           localStorage.setItem('adminAuth', JSON.stringify({
-            adminId: data.user.id,
-            email: data.user.email,
-            role: data.user.role,
+            adminId: user.id,
+            email: user.email,
+            role: user.role,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            status: user.status,
+            permissions: user.permissions,
+            loginCount: user.loginCount,
+            lastLogin: user.lastLogin.toISOString(),
             loginTime: new Date().toISOString(),
           }));
         }
 
-        // Fetch full user object
-        const user = await fetchAdminUser(data.user.id);
-        if (user) {
-          setAdminUser(user);
-          setPermissions(user.permissions);
-        }
+        setAdminUser(user);
+        setPermissions(user.permissions);
 
         return { success: true };
       }
