@@ -615,10 +615,29 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, onSaved }:
       try {
         if (isEditMode && editPatientId) {
           const patientDocRef = doc(db, "patients", editPatientId)
-          await updateDoc(patientDocRef, {
+          const nowIso = new Date().toISOString()
+          const updatePayload: Record<string, unknown> = {
             ...patientData,
-            updatedAt: new Date().toISOString(),
-          })
+            updatedAt: nowIso,
+          }
+
+          // Defensive guard: never replace nested baseline object from Patient Info update.
+          if ("baseline" in updatePayload) {
+            delete updatePayload.baseline
+          }
+
+          // Keep baseline fields synced with Patient Info edits when baseline already exists.
+          const existingPatientSnap = await getDoc(patientDocRef)
+          const existingPatientData = existingPatientSnap.exists() ? (existingPatientSnap.data() as any) : null
+          if (existingPatientData?.baseline && typeof existingPatientData.baseline === "object") {
+            updatePayload["baseline.baselineVisitDate"] = sanitizedFormData.baselineVisitDate
+            if (weightValue !== null) {
+              updatePayload["baseline.weight"] = weightValue
+            }
+            updatePayload["baseline.updatedAt"] = nowIso
+          }
+
+          await updateDoc(patientDocRef, updatePayload)
 
           toast({
             title: "Patient updated successfully",
