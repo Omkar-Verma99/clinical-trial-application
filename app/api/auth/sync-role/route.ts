@@ -1,4 +1,5 @@
 import { getFirebaseAdminAuth, getFirebaseAdminDb } from "@/lib/firebase-admin"
+import { NextResponse } from "next/server"
 
 type AppRole = "doctor" | "admin" | "super_admin"
 
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : ""
 
     if (!token) {
-      return Response.json({ success: false, error: "Missing authorization token" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Missing authorization token" }, { status: 401 })
     }
 
     const adminAuth = getFirebaseAdminAuth()
@@ -57,7 +58,7 @@ export async function POST(request: Request) {
     }
 
     if (!resolvedRole) {
-      return Response.json(
+      return NextResponse.json(
         { success: false, error: "No linked role profile found for this account" },
         { status: 403 }
       )
@@ -72,10 +73,28 @@ export async function POST(request: Request) {
       })
     }
 
-    return Response.json({ success: true, role: resolvedRole })
+    const isSecure = new URL(request.url).protocol === "https:"
+    const response = NextResponse.json({ success: true, role: resolvedRole })
+
+    if (resolvedRole === "doctor") {
+      response.cookies.set("doctorAuth", "true", {
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60,
+        sameSite: "lax",
+        secure: isSecure,
+      })
+      response.cookies.set("appRole", "doctor", {
+        path: "/",
+        maxAge: 7 * 24 * 60 * 60,
+        sameSite: "lax",
+        secure: isSecure,
+      })
+    }
+
+    return response
   } catch (error: any) {
     console.error("Role sync failed:", error)
-    return Response.json(
+    return NextResponse.json(
       { success: false, error: error?.message || "Role sync failed" },
       { status: 500 }
     )

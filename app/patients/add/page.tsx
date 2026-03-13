@@ -655,10 +655,19 @@ export function PatientFormPage({
             delete updatePayload.baseline
           }
 
-          // Keep baseline fields synced with Patient Info edits when baseline already exists.
+          // Keep baseline fields synced with Patient Info edits only when baseline is not locked.
           const existingPatientSnap = await getDoc(patientDocRef)
           const existingPatientData = existingPatientSnap.exists() ? (existingPatientSnap.data() as any) : null
-          if (existingPatientData?.baseline && typeof existingPatientData.baseline === "object") {
+          const baselineLocked =
+            existingPatientData?.sectionLocks &&
+            existingPatientData.sectionLocks.baseline &&
+            existingPatientData.sectionLocks.baseline.locked === true
+
+          if (
+            !baselineLocked &&
+            existingPatientData?.baseline &&
+            typeof existingPatientData.baseline === "object"
+          ) {
             updatePayload["baseline.baselineVisitDate"] = sanitizedFormData.baselineVisitDate
             if (weightValue !== null) {
               updatePayload["baseline.weight"] = weightValue

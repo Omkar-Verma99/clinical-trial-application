@@ -46,6 +46,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [doctorDataError, setDoctorDataError] = useState<string | null>(null)
 
+  const setDoctorSessionCookies = useCallback(() => {
+    if (typeof document === "undefined") return
+    const isSecure = typeof window !== "undefined" && window.location.protocol === "https:"
+    const secureAttr = isSecure ? "; secure" : ""
+    document.cookie = `doctorAuth=true; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax${secureAttr}`
+    document.cookie = `appRole=doctor; path=/; max-age=${7 * 24 * 60 * 60}; samesite=lax${secureAttr}`
+  }, [])
+
+  const clearDoctorSessionCookies = useCallback(() => {
+    if (typeof document === "undefined") return
+    document.cookie = `doctorAuth=; path=/; max-age=0`
+    document.cookie = `appRole=; path=/; max-age=0`
+  }, [])
+
   const syncRoleClaim = useCallback(async (currentUser: User) => {
     try {
       const idToken = await currentUser.getIdToken(true)
@@ -54,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
+        credentials: "include",
       })
       await currentUser.getIdToken(true)
     } catch (error) {
@@ -81,18 +96,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (doctorDoc.exists()) {
             const docData = doctorDoc.data()
             setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
-            if (typeof document !== "undefined") {
-              document.cookie = `doctorAuth=true; path=/; max-age=${7 * 24 * 60 * 60}`
-              document.cookie = `appRole=doctor; path=/; max-age=${7 * 24 * 60 * 60}`
-            }
+            setDoctorSessionCookies()
             void syncRoleClaim(currentUser)
             logInfo("Doctor data fetched successfully", { userId: currentUser.uid })
           } else {
             setDoctor(null)
-            if (typeof document !== "undefined") {
-              document.cookie = `doctorAuth=; path=/; max-age=0`
-              document.cookie = `appRole=; path=/; max-age=0`
-            }
+            clearDoctorSessionCookies()
           }
         } catch (error) {
           logError(error as Error, {
@@ -101,18 +110,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             severity: "medium",
           })
           setDoctor(null)
-          if (typeof document !== "undefined") {
-            document.cookie = `doctorAuth=; path=/; max-age=0`
-            document.cookie = `appRole=; path=/; max-age=0`
-          }
+          clearDoctorSessionCookies()
         }
       } else {
         setDoctor(null)
         setDoctorDataError(null)
-        if (typeof document !== "undefined") {
-          document.cookie = `doctorAuth=; path=/; max-age=0`
-          document.cookie = `appRole=; path=/; max-age=0`
-        }
+        clearDoctorSessionCookies()
       }
 
       setLoading(false)
@@ -121,7 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       unsubscribe()
     }
-  }, [syncRoleClaim])
+  }, [clearDoctorSessionCookies, setDoctorSessionCookies, syncRoleClaim])
 
   const retryDoctorDataFetch = useCallback(async () => {
     if (!user || !db) {
@@ -179,19 +182,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
 
       // Set doctor session cookies immediately to prevent middleware redirect races.
-      if (typeof document !== "undefined") {
-        document.cookie = `doctorAuth=true; path=/; max-age=${7 * 24 * 60 * 60}`
-        document.cookie = `appRole=doctor; path=/; max-age=${7 * 24 * 60 * 60}`
-      }
+      setDoctorSessionCookies()
 
       const docData = doctorDoc.data()
       setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
       setDoctorDataError(null)
     }
 
-    void syncRoleClaim(userCredential.user)
+    await syncRoleClaim(userCredential.user)
     logInfo("User logged in successfully", { email: normalizedEmail })
-  }, [syncRoleClaim])
+  }, [setDoctorSessionCookies, syncRoleClaim])
 
   const signup = useCallback(async (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => {
     const createAppError = (code: string, message: string) => {
@@ -357,15 +357,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signOut(auth)
     
     // Clear doctorAuth cookie on logout
-    if (typeof window !== 'undefined') {
-      document.cookie = `doctorAuth=; path=/; max-age=0`;
-      document.cookie = `appRole=; path=/; max-age=0`;
-    }
+    clearDoctorSessionCookies()
     
     logInfo("User logged out successfully")
     setDoctorDataError(null)
     router.push("/login")
-  }, [router])
+  }, [clearDoctorSessionCookies, router])
 
   // Memoize context value to prevent unnecessary re-renders
   const value = useMemo(

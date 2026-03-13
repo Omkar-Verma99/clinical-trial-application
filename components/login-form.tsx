@@ -25,8 +25,8 @@ function LoginFormContent() {
   const redirectTo = searchParams?.get("from") || "/dashboard"
 
   const waitForDoctorSession = async () => {
-    const timeoutMs = 2000
-    const intervalMs = 100
+    const timeoutMs = 8000
+    const intervalMs = 125
     const deadline = Date.now() + timeoutMs
 
     while (Date.now() < deadline) {
@@ -35,11 +35,13 @@ function LoginFormContent() {
         const hasDoctorAuth = cookie.includes("doctorAuth=true")
         const hasDoctorRole = cookie.includes("appRole=doctor")
         if (hasDoctorAuth && hasDoctorRole) {
-          return
+          return true
         }
       }
       await new Promise((resolve) => setTimeout(resolve, intervalMs))
     }
+
+    return false
   }
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -64,7 +66,15 @@ function LoginFormContent() {
       })
 
       // Give auth listeners/cookies a short window to settle before middleware-protected navigation.
-      await waitForDoctorSession()
+      const hasSession = await waitForDoctorSession()
+      if (!hasSession) {
+        toast({
+          variant: "destructive",
+          title: "Session setup delayed",
+          description: "Login succeeded, but secure session is still syncing. Please try once more.",
+        })
+        return
+      }
       router.push(redirectTo)
     } catch (error: any) {
       const errorInfo = getAuthErrorMessage(error)

@@ -25,26 +25,35 @@ service cloud.firestore {
           resource.data.sectionLocks[section].locked == true;
       }
 
-      function patientInfoFieldsUnchanged() {
-        return request.resource.data.patientCode == resource.data.patientCode &&
-          request.resource.data.studySiteCode == resource.data.studySiteCode &&
-          request.resource.data.investigatorName == resource.data.investigatorName &&
-          request.resource.data.baselineVisitDate == resource.data.baselineVisitDate &&
-          request.resource.data.age == resource.data.age &&
-          request.resource.data.gender == resource.data.gender &&
-          request.resource.data.height == resource.data.height &&
-          request.resource.data.weight == resource.data.weight &&
-          request.resource.data.bmi == resource.data.bmi &&
-          request.resource.data.durationOfDiabetes == resource.data.durationOfDiabetes &&
-          request.resource.data.baselineGlycemicSeverity == resource.data.baselineGlycemicSeverity &&
-          request.resource.data.smokingStatus == resource.data.smokingStatus &&
-          request.resource.data.alcoholIntake == resource.data.alcoholIntake &&
-          request.resource.data.physicalActivityLevel == resource.data.physicalActivityLevel &&
-          request.resource.data.diabetesComplications == resource.data.diabetesComplications &&
-          request.resource.data.comorbidities == resource.data.comorbidities &&
-          request.resource.data.previousTreatmentType == resource.data.previousTreatmentType &&
-          request.resource.data.previousDrugClasses == resource.data.previousDrugClasses &&
-          request.resource.data.reasonForTripleFDC == resource.data.reasonForTripleFDC;
+      function changedKeys() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      function patientInfoFieldsTouched() {
+        // Patient info is represented by top-level fields not part of baseline/follow-up modules.
+        return !changedKeys().hasOnly([
+          'baseline',
+          'followups',
+          'updatedAt'
+        ]);
+      }
+
+      function patientInfoLockedGuard() {
+        return !sectionLocked('patient_info') || !patientInfoFieldsTouched();
+      }
+
+      function baselineFieldsTouched() {
+        // Baseline module is the nested baseline object.
+        return changedKeys().hasAny(['baseline']);
+      }
+
+      function baselineLockedGuard() {
+        return !sectionLocked('baseline') || !baselineFieldsTouched();
+      }
+
+      function immutableGovernanceGuard() {
+        // Doctors must never mutate lock metadata from client writes.
+        return request.resource.data.sectionLocks == resource.data.sectionLocks;
       }
 
       function followupEntryAt(data, index) {
@@ -56,8 +65,8 @@ service cloud.firestore {
       }
 
       function doctorLockGuard() {
-        return (!sectionLocked('patient_info') || patientInfoFieldsUnchanged()) &&
-          (!sectionLocked('baseline') || request.resource.data.baseline == resource.data.baseline) &&
+        return patientInfoLockedGuard() &&
+          baselineLockedGuard() &&
           (!sectionLocked('followup_1') || followupUnchanged(0)) &&
           (!sectionLocked('followup_2') || followupUnchanged(1)) &&
           (!sectionLocked('followup_3') || followupUnchanged(2));
@@ -72,6 +81,7 @@ service cloud.firestore {
       allow update: if isAdmin() ||
         (isDoctorOwner(resource.data) &&
         isDoctorOwner(request.resource.data) &&
+        immutableGovernanceGuard() &&
         doctorLockGuard());
 
       allow delete: if isDoctorOwner(resource.data);
