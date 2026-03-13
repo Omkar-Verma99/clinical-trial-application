@@ -137,7 +137,7 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-96">
-        <p className="text-slate-400">Loading analytics...</p>
+        <p className="text-muted-foreground">Loading analytics...</p>
       </div>
     );
   }
@@ -147,7 +147,7 @@ export default function AnalyticsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">Advanced Analytics</h1>
-          <p className="text-slate-400 mt-2">Comprehensive analysis of RWE study data</p>
+          <p className="text-muted-foreground mt-2">Comprehensive analysis of RWE study data</p>
       </div>
 
       {/* Key Metrics */}
@@ -155,7 +155,7 @@ export default function AnalyticsPage() {
         <div className="bg-gradient-to-br from-blue-900/30 to-slate-900 border border-blue-700/30 rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-slate-400 text-sm">Total Patients</p>
+              <p className="text-muted-foreground text-sm">Total Patients</p>
               <p className="text-4xl font-bold text-blue-400 mt-2">{metrics.totalPatients}</p>
             </div>
             <Users className="w-12 h-12 text-blue-500 opacity-20" />
@@ -165,7 +165,7 @@ export default function AnalyticsPage() {
         <div className="bg-gradient-to-br from-green-900/30 to-slate-900 border border-green-700/30 rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-slate-400 text-sm">Active Patients</p>
+              <p className="text-muted-foreground text-sm">Active Patients</p>
               <p className="text-4xl font-bold text-green-400 mt-2">{metrics.activePatients}</p>
             </div>
             <CheckCircle2 className="w-12 h-12 text-green-500 opacity-20" />
@@ -175,7 +175,7 @@ export default function AnalyticsPage() {
         <div className="bg-gradient-to-br from-purple-900/30 to-slate-900 border border-purple-700/30 rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-slate-400 text-sm">Total Doctors</p>
+              <p className="text-muted-foreground text-sm">Total Doctors</p>
               <p className="text-4xl font-bold text-purple-400 mt-2">{metrics.totalDoctors}</p>
             </div>
             <Users className="w-12 h-12 text-purple-500 opacity-20" />
@@ -185,7 +185,7 @@ export default function AnalyticsPage() {
         <div className="bg-gradient-to-br from-orange-900/30 to-slate-900 border border-orange-700/30 rounded-lg p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-slate-400 text-sm">Total Forms</p>
+              <p className="text-muted-foreground text-sm">Total Forms</p>
               <p className="text-4xl font-bold text-orange-400 mt-2">{metrics.totalForms}</p>
             </div>
             <FileText className="w-12 h-12 text-orange-500 opacity-20" />
@@ -196,7 +196,7 @@ export default function AnalyticsPage() {
       {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Enrollment Trend */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+        <div className="bg-card border border-border rounded-lg p-6">
           <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
             <TrendingUp className="w-5 h-5" />
             7-Week Enrollment Trend
@@ -227,12 +227,12 @@ export default function AnalyticsPage() {
               </LineChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-slate-400 text-center py-8">No enrollment data available</p>
+            <p className="text-muted-foreground text-center py-8">No enrollment data available</p>
           )}
         </div>
 
         {/* Doctor Productivity */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+        <div className="bg-card border border-border rounded-lg p-6">
           <h3 className="text-lg font-semibold text-white mb-4">Top Doctors by Productivity</h3>
           {doctorProductivity.length > 0 ? (
             <ResponsiveContainer width="100%" height={250}>
@@ -254,27 +254,27 @@ export default function AnalyticsPage() {
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-slate-400 text-center py-8">No doctor data available</p>
+            <p className="text-muted-foreground text-center py-8">No doctor data available</p>
           )}
         </div>
       </div>
 
       {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
-          <p className="text-slate-400 text-sm">Avg Forms per Doctor</p>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <p className="text-muted-foreground text-sm">Avg Forms per Doctor</p>
           <p className="text-3xl font-bold text-blue-400 mt-2">
             {metrics.totalDoctors > 0 ? Math.round(metrics.totalForms / metrics.totalDoctors) : 0}
           </p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
-          <p className="text-slate-400 text-sm">Avg Patients per Doctor</p>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <p className="text-muted-foreground text-sm">Avg Patients per Doctor</p>
           <p className="text-3xl font-bold text-green-400 mt-2">
             {metrics.totalDoctors > 0 ? Math.round(metrics.totalPatients / metrics.totalDoctors) : 0}
           </p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
-          <p className="text-slate-400 text-sm">Active Rate</p>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <p className="text-muted-foreground text-sm">Active Rate</p>
           <p className="text-3xl font-bold text-purple-400 mt-2">
             {metrics.totalPatients > 0 ? Math.round((metrics.activePatients / metrics.totalPatients) * 100) : 0}%
           </p>

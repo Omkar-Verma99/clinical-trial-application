@@ -3,6 +3,7 @@ export const BASE_ADMIN_PERMISSIONS = [
   'view_doctors',
   'view_patients',
   'edit_patient_records',
+  'manage_section_locks',
   'view_analytics',
   'view_operations',
   'view_data_quality',
@@ -13,6 +14,8 @@ export const BASE_ADMIN_PERMISSIONS = [
 ] as const
 
 export const SUPER_ADMIN_EXTRA_PERMISSIONS = [
+  'bulk_lock_sections',
+  'assign_bulk_lock_sections',
   'manage_admins',
   'view_audit_logs',
   'change_settings',

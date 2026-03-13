@@ -123,7 +123,7 @@ export default function AdminOperationsPage() {
     return (
       <div className="space-y-4">
         <h1 className="text-3xl font-bold text-white">Access Denied</h1>
-        <p className="text-slate-400">You do not have permission to view Operations.</p>
+        <p className="text-muted-foreground">You do not have permission to view Operations.</p>
       </div>
     );
   }
@@ -132,54 +132,54 @@ export default function AdminOperationsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-white">Operations Center</h1>
-        <p className="text-slate-400 mt-2">Queues for protocol follow-up and data quality operations.</p>
+        <p className="text-muted-foreground mt-2">Queues for protocol follow-up and data quality operations.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Total Queue Items</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Total Queue Items</p>
           <p className="text-2xl font-bold text-white mt-2">{counts.total}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Missing Baseline</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Missing Baseline</p>
           <p className="text-2xl font-bold text-amber-400 mt-2">{counts.missingBaseline}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Overdue Follow-up</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Overdue Follow-up</p>
           <p className="text-2xl font-bold text-red-400 mt-2">{counts.overdueFollowup}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Data Quality</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Data Quality</p>
           <p className="text-2xl font-bold text-blue-400 mt-2">{counts.quality}</p>
         </div>
       </div>
 
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-400">Loading operations queue...</div>
+          <div className="p-8 text-center text-muted-foreground">Loading operations queue...</div>
         ) : queue.length === 0 ? (
           <div className="p-8 text-center">
             <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-3" />
-            <p className="text-slate-300">No open operation issues.</p>
+            <p className="text-foreground">No open operation issues.</p>
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700/50 bg-slate-900/50">
-                <th className="text-left px-4 py-3 text-slate-300">Patient</th>
-                <th className="text-left px-4 py-3 text-slate-300">Doctor</th>
-                <th className="text-left px-4 py-3 text-slate-300">Site</th>
-                <th className="text-left px-4 py-3 text-slate-300">Issue</th>
-                <th className="text-left px-4 py-3 text-slate-300">Action</th>
+              <tr className="border-b border-border bg-muted/50">
+                <th className="text-left px-4 py-3 text-foreground">Patient</th>
+                <th className="text-left px-4 py-3 text-foreground">Doctor</th>
+                <th className="text-left px-4 py-3 text-foreground">Site</th>
+                <th className="text-left px-4 py-3 text-foreground">Issue</th>
+                <th className="text-left px-4 py-3 text-foreground">Action</th>
               </tr>
             </thead>
             <tbody>
               {queue.slice(0, 150).map((item) => (
-                <tr key={`${item.id}-${item.issueType}`} className="border-b border-slate-700/20 hover:bg-slate-700/20">
+                <tr key={`${item.id}-${item.issueType}`} className="border-b border-border/50 hover:bg-muted/20">
                   <td className="px-4 py-3 text-white font-medium">{item.patientCode}</td>
-                  <td className="px-4 py-3 text-slate-300">{item.doctorName}</td>
-                  <td className="px-4 py-3 text-slate-300">{item.siteCode}</td>
-                  <td className="px-4 py-3 text-slate-200">
+                  <td className="px-4 py-3 text-foreground">{item.doctorName}</td>
+                  <td className="px-4 py-3 text-foreground">{item.siteCode}</td>
+                  <td className="px-4 py-3 text-foreground">
                     <span className="inline-flex items-center gap-2">
                       {item.issueType === 'missing_baseline' && <FileWarning className="w-4 h-4 text-amber-400" />}
                       {item.issueType === 'overdue_followup' && <Clock3 className="w-4 h-4 text-red-400" />}

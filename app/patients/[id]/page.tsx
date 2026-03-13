@@ -16,6 +16,7 @@ import { toast } from "@/hooks/use-toast"
 import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"
 import { PatientFormPage } from "@/app/patients/add/page"
+import { doctorLockedMessage, followupSectionKey, isSectionLocked, SectionLockMap } from "@/lib/section-locks"
 
 // OPTIMIZED: Memoize form components to prevent unnecessary re-renders
 const MemoizedBaselineForm = memo(BaselineForm)
@@ -64,6 +65,13 @@ export default function PatientDetailPage({ params }: Props) {
   const [exporting, setExporting] = useState(false)
   // Note: selectedFollowUp removed - now using dynamic visit tabs from followUps array
   const doctorForExports: Doctor | undefined = doctor ?? undefined
+  const sectionLocks: SectionLockMap = useMemo(() => {
+    const raw = (patient as any)?.sectionLocks
+    return raw && typeof raw === "object" ? (raw as SectionLockMap) : {}
+  }, [patient])
+
+  const patientInfoLocked = isSectionLocked(sectionLocks, "patient_info")
+  const baselineLocked = isSectionLocked(sectionLocks, "baseline")
 
   // Auth guard: redirect to login if not authenticated
   useEffect(() => {
@@ -565,6 +573,8 @@ export default function PatientDetailPage({ params }: Props) {
                 existingData={baseline}
                 patientBaselineVisitDate={patient.baselineVisitDate}
                 patientWeight={typeof patient.weight === "number" ? patient.weight : null}
+                isSectionLocked={baselineLocked}
+                lockMessage={doctorLockedMessage()}
                 onSuccess={() => setActiveTab("overview")}
               />
             </TabsContent>
@@ -574,6 +584,8 @@ export default function PatientDetailPage({ params }: Props) {
             <PatientFormPage
               presetEditPatientId={patient.id}
               forceEmbedded={true}
+              isSectionLocked={patientInfoLocked}
+              lockMessage={doctorLockedMessage()}
               onSaved={() => setActiveTab("overview")}
             />
           </TabsContent>
@@ -590,6 +602,8 @@ export default function PatientDetailPage({ params }: Props) {
                     baselineDate={patient.baselineVisitDate}
                     followUpIndex={visitIndex}
                     allFollowUps={followUps}
+                    isSectionLocked={isSectionLocked(sectionLocks, followupSectionKey(visitIndex))}
+                    lockMessage={doctorLockedMessage()}
                     onSuccess={() => {
                       // Refresh and stay on this visit
                       setActiveTab(`visit-${visitIndex}`)
@@ -650,6 +664,8 @@ export default function PatientDetailPage({ params }: Props) {
                     baselineDate={patient.baselineVisitDate}
                     followUpIndex={followUps.length}
                     allFollowUps={followUps}
+                    isSectionLocked={isSectionLocked(sectionLocks, followupSectionKey(followUps.length))}
+                    lockMessage={doctorLockedMessage()}
                     onSuccess={() => {
                       setCreatingFollowUp(false)
                       setActiveTab("overview")

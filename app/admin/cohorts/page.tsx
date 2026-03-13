@@ -95,7 +95,7 @@ export default function AdminCohortsPage() {
     return (
       <div className="space-y-4">
         <h1 className="text-3xl font-bold text-white">Access Denied</h1>
-        <p className="text-slate-400">You do not have permission to view Cohort Analytics.</p>
+        <p className="text-muted-foreground">You do not have permission to view Cohort Analytics.</p>
       </div>
     );
   }
@@ -104,13 +104,13 @@ export default function AdminCohortsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-white">Cohort Analytics</h1>
-        <p className="text-slate-400 mt-2">Create filtered cohorts and analyze outcomes.</p>
+        <p className="text-muted-foreground mt-2">Create filtered cohorts and analyze outcomes.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div>
-          <label className="block text-sm text-slate-300 mb-2">Site</label>
-          <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-white">
+          <label className="block text-sm text-foreground mb-2">Site</label>
+          <select value={siteFilter} onChange={(e) => setSiteFilter(e.target.value)} className="w-full rounded border border-border bg-background px-3 py-2 text-white">
             <option value="all">All Sites</option>
             {siteOptions.map((site) => (
               <option key={site} value={site}>{site}</option>
@@ -118,8 +118,8 @@ export default function AdminCohortsPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm text-slate-300 mb-2">Gender</label>
-          <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)} className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-white">
+          <label className="block text-sm text-foreground mb-2">Gender</label>
+          <select value={genderFilter} onChange={(e) => setGenderFilter(e.target.value)} className="w-full rounded border border-border bg-background px-3 py-2 text-white">
             <option value="all">All</option>
             <option value="Male">Male</option>
             <option value="Female">Female</option>
@@ -128,8 +128,8 @@ export default function AdminCohortsPage() {
           </select>
         </div>
         <div>
-          <label className="block text-sm text-slate-300 mb-2">Age Band</label>
-          <select value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)} className="w-full rounded border border-slate-700 bg-slate-900 px-3 py-2 text-white">
+          <label className="block text-sm text-foreground mb-2">Age Band</label>
+          <select value={ageFilter} onChange={(e) => setAgeFilter(e.target.value)} className="w-full rounded border border-border bg-background px-3 py-2 text-white">
             <option value="all">All</option>
             <option value="<40">&lt;40</option>
             <option value="40-49">40-49</option>
@@ -142,50 +142,50 @@ export default function AdminCohortsPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Cohort Size</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Cohort Size</p>
           <p className="text-2xl font-bold text-white mt-2">{metrics.count}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">With Outcomes</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">With Outcomes</p>
           <p className="text-2xl font-bold text-blue-400 mt-2">{metrics.withOutcome}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Avg HbA1c Change</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Avg HbA1c Change</p>
           <p className={`text-2xl font-bold mt-2 ${metrics.avgHba1cChange <= 0 ? 'text-green-400' : 'text-red-400'}`}>
             {metrics.avgHba1cChange > 0 ? '+' : ''}{metrics.avgHba1cChange.toFixed(2)}
           </p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Improvement Rate</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Improvement Rate</p>
           <p className="text-2xl font-bold text-purple-400 mt-2">{metrics.improvedRate}%</p>
         </div>
       </div>
 
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-400">Loading cohorts...</div>
+          <div className="p-8 text-center text-muted-foreground">Loading cohorts...</div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700/50 bg-slate-900/50">
-                <th className="text-left px-4 py-3 text-slate-300">Patient</th>
-                <th className="text-left px-4 py-3 text-slate-300">Site</th>
-                <th className="text-left px-4 py-3 text-slate-300">Gender</th>
-                <th className="text-left px-4 py-3 text-slate-300">Age</th>
-                <th className="text-left px-4 py-3 text-slate-300">Baseline HbA1c</th>
-                <th className="text-left px-4 py-3 text-slate-300">Latest HbA1c</th>
+              <tr className="border-b border-border bg-muted/50">
+                <th className="text-left px-4 py-3 text-foreground">Patient</th>
+                <th className="text-left px-4 py-3 text-foreground">Site</th>
+                <th className="text-left px-4 py-3 text-foreground">Gender</th>
+                <th className="text-left px-4 py-3 text-foreground">Age</th>
+                <th className="text-left px-4 py-3 text-foreground">Baseline HbA1c</th>
+                <th className="text-left px-4 py-3 text-foreground">Latest HbA1c</th>
               </tr>
             </thead>
             <tbody>
               {filtered.slice(0, 200).map((p) => (
-                <tr key={p.id} className="border-b border-slate-700/20 hover:bg-slate-700/20">
+                <tr key={p.id} className="border-b border-border/50 hover:bg-muted/20">
                   <td className="px-4 py-3 text-white font-medium">{p.patientCode}</td>
-                  <td className="px-4 py-3 text-slate-300">{p.siteCode}</td>
-                  <td className="px-4 py-3 text-slate-300">{p.gender}</td>
-                  <td className="px-4 py-3 text-slate-300">{p.age ?? 'N/A'}</td>
-                  <td className="px-4 py-3 text-slate-300">{p.baselineHba1c ?? 'N/A'}</td>
-                  <td className="px-4 py-3 text-slate-300">{p.latestHba1c ?? 'N/A'}</td>
+                  <td className="px-4 py-3 text-foreground">{p.siteCode}</td>
+                  <td className="px-4 py-3 text-foreground">{p.gender}</td>
+                  <td className="px-4 py-3 text-foreground">{p.age ?? 'N/A'}</td>
+                  <td className="px-4 py-3 text-foreground">{p.baselineHba1c ?? 'N/A'}</td>
+                  <td className="px-4 py-3 text-foreground">{p.latestHba1c ?? 'N/A'}</td>
                 </tr>
               ))}
             </tbody>

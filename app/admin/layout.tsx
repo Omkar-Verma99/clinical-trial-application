@@ -24,15 +24,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-950">
+      <div className="flex h-screen items-center justify-center bg-gradient-to-br from-background via-muted/20 to-background">
         <div className="space-y-4 text-center">
           <div className="flex justify-center">
             <div className="relative w-12 h-12">
               <div className="absolute inset-0 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full animate-spin"></div>
-              <div className="absolute inset-1 bg-slate-950 rounded-full"></div>
+              <div className="absolute inset-1 bg-background rounded-full"></div>
             </div>
           </div>
-          <p className="text-slate-400">Loading admin panel...</p>
+          <p className="text-muted-foreground">Loading admin panel...</p>
         </div>
       </div>
     );
@@ -43,7 +43,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-slate-950">
+    <div className="flex h-screen bg-gradient-to-br from-background via-muted/10 to-background">
       {/* Sidebar */}
       <AdminSidebar />
 
@@ -53,7 +53,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <AdminHeader />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gradient-to-b from-slate-900 to-slate-950">
+        <main className="flex-1 overflow-auto bg-gradient-to-b from-background to-muted/20">
           <div className="p-6">
             {children}
           </div>

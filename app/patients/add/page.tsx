@@ -26,10 +26,21 @@ interface PatientFormPageProps {
   presetEditPatientId?: string
   forceEmbedded?: boolean
   allowAnyDoctorEdit?: boolean
+  isSectionLocked?: boolean
+  lockMessage?: string
+  canOverrideLock?: boolean
   onSaved?: () => void
 }
 
-export function PatientFormPage({ presetEditPatientId, forceEmbedded, allowAnyDoctorEdit = false, onSaved }: PatientFormPageProps = {}) {
+export function PatientFormPage({
+  presetEditPatientId,
+  forceEmbedded,
+  allowAnyDoctorEdit = false,
+  isSectionLocked = false,
+  lockMessage = "Locked. You cannot edit this section.",
+  canOverrideLock = false,
+  onSaved,
+}: PatientFormPageProps = {}) {
   const { user, doctor } = useAuth()
   const router = useRouter()
   const [editPatientId, setEditPatientId] = useState<string | null>(presetEditPatientId ?? null)
@@ -327,6 +338,16 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, allowAnyDo
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (isSectionLocked && !canOverrideLock) {
+      toast({
+        variant: "destructive",
+        title: "Section locked",
+        description: lockMessage,
+      })
+      return
+    }
+
     if (submitLockRef.current) return
     submitLockRef.current = true
     setLoading(true)
@@ -753,6 +774,11 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, allowAnyDo
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {isSectionLocked && !canOverrideLock && (
+              <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                {lockMessage}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-8">
               {loadingPatientData && !isEmbedded && (
                 <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
@@ -760,7 +786,7 @@ export function PatientFormPage({ presetEditPatientId, forceEmbedded, allowAnyDo
                 </div>
               )}
 
-              <fieldset disabled={loading || loadingPatientData || isCkdIneligible} className="space-y-8">
+              <fieldset disabled={loading || loadingPatientData || isCkdIneligible || (isSectionLocked && !canOverrideLock)} className="space-y-8">
               {/* Patient Identification */}
               <div className="border-t pt-6">
                 <h3 className="text-lg font-bold mb-4">Patient Identification</h3>

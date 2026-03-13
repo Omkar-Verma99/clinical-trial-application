@@ -213,24 +213,24 @@ export default function ExportsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">Data Export</h1>
-        <p className="text-slate-400 mt-2">Export patient data as CSV or PDF format</p>
+        <p className="text-muted-foreground mt-2">Export patient data as CSV or PDF format</p>
       </div>
 
       {/* Export Type Selection */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* CSV Export */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6 hover:border-slate-600 transition">
+        <div className="bg-card border border-border rounded-lg p-6 hover:border-border transition">
           <div className="flex items-center gap-3 mb-4">
             <FileText className="w-8 h-8 text-green-400" />
             <h3 className="text-lg font-semibold text-white">CSV Export</h3>
           </div>
-          <p className="text-slate-400 text-sm mb-4">
+          <p className="text-muted-foreground text-sm mb-4">
             Export as CSV with deep structure - one row per field per patient. Perfect for spreadsheet analysis.
           </p>
           <button
             onClick={generateCSV}
             disabled={exporting || selectedPatients.size === 0}
-            className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
+            className="w-full px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
           >
             <Download className="w-4 h-4" />
             {exporting ? 'Exporting...' : 'Export as CSV'}
@@ -238,18 +238,18 @@ export default function ExportsPage() {
         </div>
 
         {/* Excel Export */}
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6 hover:border-slate-600 transition">
+        <div className="bg-card border border-border rounded-lg p-6 hover:border-border transition">
           <div className="flex items-center gap-3 mb-4">
             <FileText className="w-8 h-8 text-emerald-400" />
             <h3 className="text-lg font-semibold text-white">Excel Export</h3>
           </div>
-          <p className="text-slate-400 text-sm mb-4">
+          <p className="text-muted-foreground text-sm mb-4">
             Export as real .xlsx with bordered cells in the same format as doctor exports.
           </p>
           <button
             onClick={generateExcel}
             disabled={exporting || selectedPatients.size === 0}
-            className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
+            className="w-full px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-muted disabled:cursor-not-allowed text-white rounded-lg font-medium transition flex items-center justify-center gap-2"
           >
             <Download className="w-4 h-4" />
             {exporting ? 'Exporting...' : 'Export as Excel'}
@@ -258,29 +258,29 @@ export default function ExportsPage() {
       </div>
 
       {/* Patient Selection */}
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+      <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold text-white">
             Select Patients ({selectedPatients.size} selected)
           </h3>
           <button
             onClick={toggleSelectAll}
-            className="text-sm px-3 py-1 bg-slate-700 hover:bg-slate-600 text-white rounded transition"
+            className="text-sm px-3 py-1 bg-muted hover:bg-muted text-white rounded transition"
           >
             {selectAll ? 'Deselect All' : 'Select All'}
           </button>
         </div>
 
         {loading ? (
-          <p className="text-slate-400">Loading patients...</p>
+          <p className="text-muted-foreground">Loading patients...</p>
         ) : patients.length === 0 ? (
-          <p className="text-slate-400">No patients available</p>
+          <p className="text-muted-foreground">No patients available</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-96 overflow-y-auto">
             {patients.map((patient) => (
               <label
                 key={patient.id}
-                className="flex items-center gap-3 p-3 bg-slate-900/50 rounded hover:bg-slate-700/50 transition cursor-pointer"
+                className="flex items-center gap-3 p-3 bg-muted/50 rounded hover:bg-muted/40 transition cursor-pointer"
               >
                 <input
                   type="checkbox"
@@ -292,7 +292,7 @@ export default function ExportsPage() {
                   <p className="text-sm font-medium text-white">
                     {patient.patientCode || patient.id}
                   </p>
-                  <p className="text-xs text-slate-400">{patient.studySiteCode || '-'}</p>
+                  <p className="text-xs text-muted-foreground">{patient.studySiteCode || '-'}</p>
                 </div>
               </label>
             ))}
@@ -301,14 +301,14 @@ export default function ExportsPage() {
       </div>
 
       {/* Export History */}
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+      <div className="bg-card border border-border rounded-lg p-6">
         <h3 className="text-lg font-semibold text-white mb-4">Export History</h3>
         {exportHistory.length === 0 ? (
-          <p className="text-slate-400">No exports yet</p>
+          <p className="text-muted-foreground">No exports yet</p>
         ) : (
           <div className="space-y-3">
             {exportHistory.map((exp) => (
-              <div key={exp.id} className="flex items-center justify-between p-3 bg-slate-900/50 rounded">
+              <div key={exp.id} className="flex items-center justify-between p-3 bg-muted/50 rounded">
                 <div className="flex items-center gap-3">
                   {exp.status === 'completed' ? (
                     <CheckCircle className="w-5 h-5 text-green-400" />
@@ -319,11 +319,11 @@ export default function ExportsPage() {
                   )}
                   <div>
                     <p className="text-sm font-medium text-white">{exp.filename}</p>
-                    <p className="text-xs text-slate-400">{exp.patientCount} patients exported</p>
+                    <p className="text-xs text-muted-foreground">{exp.patientCount} patients exported</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-400">{exp.createdAt.toLocaleDateString()}</p>
+                  <p className="text-xs text-muted-foreground">{exp.createdAt.toLocaleDateString()}</p>
                   <span className={`text-xs font-medium ${exp.exportType === 'csv' ? 'text-green-400' : exp.exportType === 'xlsx' ? 'text-emerald-400' : 'text-red-400'}`}>
                     {exp.exportType.toUpperCase()}
                   </span>

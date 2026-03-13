@@ -38,7 +38,7 @@ import { useAdminAuth } from '@/contexts/admin-auth-context';
 interface DashboardStats {
   totalPatients: number;
   activeDoctors: number;
-  completedForms: number;
+  completedPatients: number;
   inProgressForms: number;
   completionRate: number;
   pendingReview: number;
@@ -87,7 +87,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<DashboardStats>({
     totalPatients: 0,
     activeDoctors: 0,
-    completedForms: 0,
+    completedPatients: 0,
     inProgressForms: 0,
     completionRate: 0,
     pendingReview: 0,
@@ -116,38 +116,37 @@ export default function AdminDashboard() {
           (doc) => doc.data().status === 'active'
         ).length;
 
-        // Derive forms from unified patient records.
-        const formData = patientsSnapshot.docs.flatMap((patientDoc) => {
+        // Derive patient completion states from unified patient records.
+        const patientRows = patientsSnapshot.docs.map((patientDoc) => {
           const patientData = patientDoc.data() as Record<string, any>;
-          const forms: Array<Record<string, any>> = [];
-
-          if (patientData.baseline && typeof patientData.baseline === 'object') {
-            forms.push({ formType: 'baseline', completionStatus: 'complete' });
-          }
-
+          const hasBaseline = !!(patientData.baseline && typeof patientData.baseline === 'object');
           const followups = Array.isArray(patientData.followups) ? patientData.followups : [];
-          followups.forEach((followup: any) => {
-            forms.push({
-              formType: `followup_week_${followup?.visitNumber || 'unknown'}`,
-              completionStatus: 'complete',
-            });
-          });
+          const hasFollowup = followups.length > 0;
 
-          return forms;
+          return {
+            id: patientDoc.id,
+            doctorId: String(patientData.doctorId || patientData.assignedDoctorId || ''),
+            hasBaseline,
+            hasFollowup,
+            isCompleted: hasBaseline && hasFollowup,
+            createdAt: asDate(patientData.createdAt || patientData.enrollmentDate),
+            followups,
+            baseline: patientData.baseline,
+          };
         });
 
-        const completedForms = formData.length;
+        const completedPatients = patientRows.filter((row) => row.isCompleted).length;
         const inProgressForms = 0;
 
         const completionRate =
-          totalPatients > 0 ? Math.round((completedForms / (totalPatients * 3)) * 100) : 0;
+          totalPatients > 0 ? Math.round((completedPatients / totalPatients) * 100) : 0;
 
         // Calculate new patients this week
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
 
-        const newPatientsThisWeek = patientsSnapshot.docs.filter((doc) => {
-          const enrollmentDate = asDate(doc.data().enrollmentDate);
+        const newPatientsThisWeek = patientRows.filter((row) => {
+          const enrollmentDate = row.createdAt;
           return enrollmentDate && enrollmentDate > oneWeekAgo;
         }).length;
 
@@ -155,7 +154,7 @@ export default function AdminDashboard() {
         setStats({
           totalPatients,
           activeDoctors,
-          completedForms,
+          completedPatients,
           inProgressForms,
           completionRate,
           pendingReview: inProgressForms,
@@ -188,6 +187,20 @@ export default function AdminDashboard() {
         }
 
         // Calculate form statistics by type
+        const formData = patientRows.flatMap((row) => {
+          const forms: Array<Record<string, any>> = [];
+          if (row.baseline && typeof row.baseline === 'object') {
+            forms.push({ formType: 'baseline', completionStatus: 'complete' });
+          }
+          row.followups.forEach((followup: any) => {
+            forms.push({
+              formType: `followup_week_${followup?.visitNumber || 'unknown'}`,
+              completionStatus: 'complete',
+            });
+          });
+          return forms;
+        });
+
         const formStatsByType: Record<string, FormStats> = {};
         formData.forEach((form) => {
           const type = form.formType || 'unknown';
@@ -200,17 +213,31 @@ export default function AdminDashboard() {
 
         setFormStats(Object.values(formStatsByType));
 
-        // Generate mock enrollment trend data
-        const trendData = [];
+        // Build real enrollment trend data for last 30 days.
+        const trendMap = new Map<string, { enrolled: number; completed: number }>();
         for (let i = 30; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
-          trendData.push({
-            date: format(date, 'MMM d'),
-            enrolled: Math.floor(Math.random() * 10) + 5,
-            completed: Math.floor(Math.random() * 5) + 2,
-          });
+          trendMap.set(format(date, 'yyyy-MM-dd'), { enrolled: 0, completed: 0 });
         }
+
+        patientRows.forEach((row) => {
+          if (!row.createdAt) return;
+          const key = format(row.createdAt, 'yyyy-MM-dd');
+          const bucket = trendMap.get(key);
+          if (!bucket) return;
+          bucket.enrolled += 1;
+          if (row.isCompleted) {
+            bucket.completed += 1;
+          }
+          trendMap.set(key, bucket);
+        });
+
+        const trendData = Array.from(trendMap.entries()).map(([key, value]) => ({
+          date: format(new Date(key), 'MMM d'),
+          enrolled: value.enrolled,
+          completed: value.completed,
+        }));
         setEnrollmentTrend(trendData);
 
         // Build doctor performance from real patient + form data.
@@ -224,17 +251,16 @@ export default function AdminDashboard() {
           });
         });
 
-        patientsSnapshot.docs.forEach((patientDoc) => {
-          const patientData = patientDoc.data() as Record<string, any>;
-          const ownerDoctorId = String(patientData.doctorId || patientData.assignedDoctorId || '');
+        patientRows.forEach((row) => {
+          const ownerDoctorId = row.doctorId;
           if (ownerDoctorId && doctorPerfMap.has(ownerDoctorId)) {
             const current = doctorPerfMap.get(ownerDoctorId)!;
             current.patients += 1;
             doctorPerfMap.set(ownerDoctorId, current);
           }
 
-          if (patientData.baseline && typeof patientData.baseline === 'object') {
-            const baselineDoctorId = String(patientData.baseline?.doctorId || ownerDoctorId);
+          if (row.baseline && typeof row.baseline === 'object') {
+            const baselineDoctorId = String((row.baseline as any)?.doctorId || ownerDoctorId);
             if (baselineDoctorId && doctorPerfMap.has(baselineDoctorId)) {
               const current = doctorPerfMap.get(baselineDoctorId)!;
               current.forms += 1;
@@ -242,8 +268,7 @@ export default function AdminDashboard() {
             }
           }
 
-          const followups = Array.isArray(patientData.followups) ? patientData.followups : [];
-          followups.forEach((followup: any) => {
+          row.followups.forEach((followup: any) => {
             const followupDoctorId = String(followup?.doctorId || ownerDoctorId);
             if (followupDoctorId && doctorPerfMap.has(followupDoctorId)) {
               const current = doctorPerfMap.get(followupDoctorId)!;
@@ -286,14 +311,14 @@ export default function AdminDashboard() {
     color: string;
     trend?: number;
   }) => (
-    <Card className="bg-slate-800/50 border-slate-700/50 hover:border-slate-600/50 transition-colors">
+    <Card className="bg-card border-border hover:border-border/50 transition-colors">
       <CardContent className="pt-6">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-slate-400 text-sm font-medium">{label}</p>
+            <p className="text-muted-foreground text-sm font-medium">{label}</p>
             <p className="text-3xl font-bold text-white mt-2">
               {value}
-              {suffix && <span className="text-lg text-slate-400 ml-1">{suffix}</span>}
+              {suffix && <span className="text-lg text-muted-foreground ml-1">{suffix}</span>}
             </p>
             {trend !== undefined && (
               <div className="flex items-center gap-1 mt-2">
@@ -317,7 +342,7 @@ export default function AdminDashboard() {
       <div className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 bg-slate-800/50 rounded-lg animate-pulse"></div>
+            <div key={i} className="h-32 bg-card rounded-lg animate-pulse"></div>
           ))}
         </div>
       </div>
@@ -329,7 +354,7 @@ export default function AdminDashboard() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">Dashboard</h1>
-        <p className="text-slate-400 mt-2">Welcome to the RWE Study Admin Panel</p>
+        <p className="text-muted-foreground mt-2">Welcome to the RWE Study Admin Panel</p>
       </div>
 
       {/* Key Metrics */}
@@ -350,8 +375,8 @@ export default function AdminDashboard() {
         />
         <StatCard
           icon={FileText}
-          label="Completed Forms"
-          value={stats.completedForms}
+          label="Completed Patients"
+          value={stats.completedPatients}
           color="bg-purple-500/20"
           trend={8}
         />
@@ -368,7 +393,7 @@ export default function AdminDashboard() {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Enrollment Trend */}
-        <Card className="bg-slate-800/50 border-slate-700/50">
+        <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-white">Enrollment Trend</CardTitle>
             <CardDescription>Last 30 days enrollment and completion</CardDescription>
@@ -398,7 +423,7 @@ export default function AdminDashboard() {
         </Card>
 
         {/* Form Status Distribution */}
-        <Card className="bg-slate-800/50 border-slate-700/50">
+        <Card className="bg-card border-border">
           <CardHeader>
             <CardTitle className="text-white">Form Status Distribution</CardTitle>
             <CardDescription>Status breakdown of all forms</CardDescription>
@@ -408,8 +433,8 @@ export default function AdminDashboard() {
               <PieChart>
                 <Pie
                   data={[
-                    { name: 'Completed', value: stats.completedForms, fill: '#10b981' },
-                    { name: 'In Progress', value: stats.inProgressForms, fill: '#f59e0b' },
+                    { name: 'Completed Patients', value: stats.completedPatients, fill: '#10b981' },
+                    { name: 'Not Completed', value: Math.max(stats.totalPatients - stats.completedPatients, 0), fill: '#f59e0b' },
                   ]}
                   cx="50%"
                   cy="50%"
@@ -433,7 +458,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Doctor Performance */}
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-white">Top Performing Doctors</CardTitle>
           <CardDescription>Doctor performance metrics and statistics</CardDescription>
@@ -442,25 +467,25 @@ export default function AdminDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-700">
-                  <th className="text-left py-3 px-4 text-slate-400 font-semibold">Doctor Name</th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-semibold">Patients</th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-semibold">Forms Submitted</th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-semibold">Completion %</th>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 text-muted-foreground font-semibold">Doctor Name</th>
+                  <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Patients</th>
+                  <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Forms Submitted</th>
+                  <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Completion %</th>
                 </tr>
               </thead>
               <tbody>
                 {doctorPerformance.map((doctor, idx) => (
                   <tr
                     key={idx}
-                    className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
+                    className="border-b border-border hover:bg-muted/30 transition-colors"
                   >
                     <td className="py-3 px-4 text-white font-medium">{doctor.name}</td>
-                    <td className="text-center py-3 px-4 text-slate-300">{doctor.patients}</td>
-                    <td className="text-center py-3 px-4 text-slate-300">{doctor.forms}</td>
+                    <td className="text-center py-3 px-4 text-foreground">{doctor.patients}</td>
+                    <td className="text-center py-3 px-4 text-foreground">{doctor.forms}</td>
                     <td className="text-center py-3 px-4">
                       <div className="flex items-center justify-center gap-2">
-                        <div className="w-24 bg-slate-700 rounded-full h-2 overflow-hidden">
+                        <div className="w-24 bg-muted rounded-full h-2 overflow-hidden">
                           <div
                             className="bg-gradient-to-r from-green-500 to-green-400 h-full"
                             style={{ width: `${doctor.completion}%` }}
@@ -478,7 +503,7 @@ export default function AdminDashboard() {
       </Card>
 
       {/* Recent Activities */}
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-white">Recent Activities</CardTitle>
           <CardDescription>Latest actions and events in the system</CardDescription>
@@ -489,41 +514,41 @@ export default function AdminDashboard() {
               activities.map((activity) => (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-4 p-3 bg-slate-700/30 rounded-lg hover:bg-slate-700/50 transition-colors"
+                  className="flex items-start gap-4 p-3 bg-muted/30 rounded-lg hover:bg-muted/40 transition-colors"
                 >
                   <div className="mt-1 p-2 bg-blue-500/20 rounded-lg">
                     <Activity className="w-4 h-4 text-blue-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white font-medium text-sm">{activity.description}</p>
-                    <p className="text-slate-400 text-xs mt-1">
+                    <p className="text-muted-foreground text-xs mt-1">
                       {format(activity.timestamp, 'MMM d, yyyy h:mm a')}
                     </p>
                   </div>
-                  <Badge variant="outline" className="bg-slate-700/50 text-slate-300 border-slate-600">
+                  <Badge variant="outline" className="bg-muted/40 text-foreground border-border">
                     {activity.type.replace(/_/g, ' ')}
                   </Badge>
                 </div>
               ))
             ) : (
-              <p className="text-slate-400 text-sm py-4">No activities yet</p>
+              <p className="text-muted-foreground text-sm py-4">No activities yet</p>
             )}
           </div>
         </CardContent>
       </Card>
 
       {/* Quick Stats Footer */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-800/30 border border-slate-700/50 rounded-lg p-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-card/80 border border-border rounded-lg p-6">
         <div>
-          <p className="text-slate-400 text-sm">New Patients This Week</p>
+          <p className="text-muted-foreground text-sm">New Patients This Week</p>
           <p className="text-2xl font-bold text-white mt-1">{stats.newPatientsThisWeek}</p>
         </div>
         <div>
-          <p className="text-slate-400 text-sm">Pending Review</p>
+          <p className="text-muted-foreground text-sm">Pending Review</p>
           <p className="text-2xl font-bold text-orange-400 mt-1">{stats.pendingReview}</p>
         </div>
         <div>
-          <p className="text-slate-400 text-sm">Avg Completion Time</p>
+          <p className="text-muted-foreground text-sm">Avg Completion Time</p>
           <p className="text-2xl font-bold text-purple-400 mt-1">{stats.avgFormCompletionTime} days</p>
         </div>
       </div>

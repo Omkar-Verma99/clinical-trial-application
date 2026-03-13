@@ -29,10 +29,23 @@ interface BaselineFormProps {
   patientBaselineVisitDate?: string
   patientWeight?: number | null
   doctorIdOverride?: string
+  isSectionLocked?: boolean
+  lockMessage?: string
+  canOverrideLock?: boolean
   onSuccess: () => void
 }
 
-export const BaselineForm = memo(function BaselineForm({ patientId, existingData, patientBaselineVisitDate, patientWeight, doctorIdOverride, onSuccess }: BaselineFormProps) {
+export const BaselineForm = memo(function BaselineForm({
+  patientId,
+  existingData,
+  patientBaselineVisitDate,
+  patientWeight,
+  doctorIdOverride,
+  isSectionLocked = false,
+  lockMessage = "Locked. You cannot edit this section.",
+  canOverrideLock = false,
+  onSuccess,
+}: BaselineFormProps) {
   const { toast } = useToast()
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -125,6 +138,15 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (isSectionLocked && !canOverrideLock) {
+      toast({
+        variant: "destructive",
+        title: "Section locked",
+        description: lockMessage,
+      })
+      return
+    }
 
     // Prevent double-submission
     if (submitLockRef.current || loading) {
@@ -334,7 +356,13 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
         <CardDescription>Record initial clinical measurements and treatment plan per KC MeSempa CRF</CardDescription>
       </CardHeader>
       <CardContent>
+        {isSectionLocked && !canOverrideLock && (
+          <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {lockMessage}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-6">
+          <fieldset disabled={loading || (isSectionLocked && !canOverrideLock)} className="space-y-6">
           <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <h3 className="font-semibold text-lg">Baseline Visit</h3>
             <div className="space-y-2">
@@ -616,6 +644,7 @@ export const BaselineForm = memo(function BaselineForm({ patientId, existingData
               )}
             </Button>
           </div>
+          </fieldset>
         </form>
       </CardContent>
     </Card>

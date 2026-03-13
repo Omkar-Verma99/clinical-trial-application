@@ -85,7 +85,7 @@ export default function AdminSafetyPage() {
     return (
       <div className="space-y-4">
         <h1 className="text-3xl font-bold text-white">Access Denied</h1>
-        <p className="text-slate-400">You do not have permission to view Safety Center.</p>
+        <p className="text-muted-foreground">You do not have permission to view Safety Center.</p>
       </div>
     );
   }
@@ -94,55 +94,55 @@ export default function AdminSafetyPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-white">Safety Signal Center</h1>
-        <p className="text-slate-400 mt-2">Detect and review potential adverse-event safety signals.</p>
+        <p className="text-muted-foreground mt-2">Detect and review potential adverse-event safety signals.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Total Signals</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Total Signals</p>
           <p className="text-2xl font-bold text-white mt-2">{summary.totalSignals}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Severe Signals</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Severe Signals</p>
           <p className="text-2xl font-bold text-orange-400 mt-2">{summary.severeSignals}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">Serious Signals</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">Serious Signals</p>
           <p className="text-2xl font-bold text-red-400 mt-2">{summary.seriousSignals}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-4">
-          <p className="text-slate-400 text-sm">High Risk Cases</p>
+        <div className="bg-card border border-border rounded-lg p-4">
+          <p className="text-muted-foreground text-sm">High Risk Cases</p>
           <p className="text-2xl font-bold text-rose-400 mt-2">{summary.highRisk}</p>
         </div>
       </div>
 
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
+      <div className="bg-card border border-border rounded-lg overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-slate-400">Loading safety signals...</div>
+          <div className="p-8 text-center text-muted-foreground">Loading safety signals...</div>
         ) : rows.length === 0 ? (
-          <div className="p-8 text-center text-slate-300">
+          <div className="p-8 text-center text-foreground">
             <ShieldAlert className="w-12 h-12 text-green-400 mx-auto mb-3" />
             No active safety signals detected.
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-700/50 bg-slate-900/50">
-                <th className="text-left px-4 py-3 text-slate-300">Patient</th>
-                <th className="text-left px-4 py-3 text-slate-300">Site</th>
-                <th className="text-left px-4 py-3 text-slate-300">Visit</th>
-                <th className="text-left px-4 py-3 text-slate-300">Events</th>
-                <th className="text-left px-4 py-3 text-slate-300">Severity</th>
-                <th className="text-left px-4 py-3 text-slate-300">Action</th>
+              <tr className="border-b border-border bg-muted/50">
+                <th className="text-left px-4 py-3 text-foreground">Patient</th>
+                <th className="text-left px-4 py-3 text-foreground">Site</th>
+                <th className="text-left px-4 py-3 text-foreground">Visit</th>
+                <th className="text-left px-4 py-3 text-foreground">Events</th>
+                <th className="text-left px-4 py-3 text-foreground">Severity</th>
+                <th className="text-left px-4 py-3 text-foreground">Action</th>
               </tr>
             </thead>
             <tbody>
               {rows.slice(0, 200).map((r, idx) => (
-                <tr key={`${r.patientId}-${idx}`} className="border-b border-slate-700/20 hover:bg-slate-700/20">
+                <tr key={`${r.patientId}-${idx}`} className="border-b border-border/50 hover:bg-muted/20">
                   <td className="px-4 py-3 text-white font-medium">{r.patientCode}</td>
-                  <td className="px-4 py-3 text-slate-300">{r.siteCode}</td>
-                  <td className="px-4 py-3 text-slate-300">Week {r.visitNumber || 'N/A'}</td>
-                  <td className="px-4 py-3 text-slate-200">{r.eventCount}</td>
+                  <td className="px-4 py-3 text-foreground">{r.siteCode}</td>
+                  <td className="px-4 py-3 text-foreground">Week {r.visitNumber || 'N/A'}</td>
+                  <td className="px-4 py-3 text-foreground">{r.eventCount}</td>
                   <td className="px-4 py-3">
                     <span className="inline-flex items-center gap-2">
                       {r.seriousEvents > 0 ? <Siren className="w-4 h-4 text-red-400" /> : <AlertTriangle className="w-4 h-4 text-orange-400" />}

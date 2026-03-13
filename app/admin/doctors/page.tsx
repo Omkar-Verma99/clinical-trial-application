@@ -159,31 +159,31 @@ export default function DoctorsManagementPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">Doctor Management</h1>
-        <p className="text-slate-400 mt-2">Manage and monitor all doctors in the system</p>
+        <p className="text-muted-foreground mt-2">Manage and monitor all doctors in the system</p>
       </div>
 
       {/* Search & Filter */}
       <div className="flex flex-col gap-4 md:flex-row md:items-end">
         <div className="flex-1">
-          <label className="text-sm text-slate-300 mb-2 block">Search Doctors</label>
+          <label className="text-sm text-foreground mb-2 block">Search Doctors</label>
           <div className="relative">
-            <Search className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+            <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
             <Input
               placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder-slate-400"
+              className="pl-10 bg-muted/40 border-border text-white placeholder-slate-400"
             />
           </div>
         </div>
 
         <div className="w-full md:w-48">
-          <label className="text-sm text-slate-300 mb-2 block">Filter by Status</label>
+          <label className="text-sm text-foreground mb-2 block">Filter by Status</label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+            <SelectTrigger className="bg-muted/40 border-border text-white">
               <SelectValue />
             </SelectTrigger>
-            <SelectContent className="bg-slate-700 border-slate-600">
+            <SelectContent className="bg-muted border-border">
               <SelectItem value="all">All Doctors</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
@@ -193,7 +193,7 @@ export default function DoctorsManagementPage() {
       </div>
 
       {/* Doctors Table */}
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-card border-border">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -207,39 +207,39 @@ export default function DoctorsManagementPage() {
           {isLoading ? (
             <div className="space-y-3">
               {[...Array(5)].map((_, i) => (
-                <div key={i} className="h-16 bg-slate-700/30 rounded animate-pulse"></div>
+                <div key={i} className="h-16 bg-muted/30 rounded animate-pulse"></div>
               ))}
             </div>
           ) : filteredDoctors.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700">
-                    <th className="text-left py-3 px-4 text-slate-400 font-semibold">Name</th>
-                    <th className="text-left py-3 px-4 text-slate-400 font-semibold">Email</th>
-                    <th className="text-left py-3 px-4 text-slate-400 font-semibold">Department</th>
-                    <th className="text-center py-3 px-4 text-slate-400 font-semibold">Patients</th>
-                    <th className="text-center py-3 px-4 text-slate-400 font-semibold">Forms</th>
-                    <th className="text-left py-3 px-4 text-slate-400 font-semibold">Status</th>
-                    <th className="text-center py-3 px-4 text-slate-400 font-semibold">Actions</th>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-3 px-4 text-muted-foreground font-semibold">Name</th>
+                    <th className="text-left py-3 px-4 text-muted-foreground font-semibold">Email</th>
+                    <th className="text-left py-3 px-4 text-muted-foreground font-semibold">Department</th>
+                    <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Patients</th>
+                    <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Forms</th>
+                    <th className="text-left py-3 px-4 text-muted-foreground font-semibold">Status</th>
+                    <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filteredDoctors.map((doctor) => (
                     <tr
                       key={doctor.id}
-                      className="border-b border-slate-700/50 hover:bg-slate-700/30 transition-colors"
+                      className="border-b border-border hover:bg-muted/30 transition-colors"
                     >
                       <td className="py-3 px-4 text-white font-medium">
                         {doctor.firstName} {doctor.lastName}
                       </td>
-                      <td className="py-3 px-4 text-slate-300 flex items-center gap-2">
-                        <Mail className="w-4 h-4 text-slate-500" />
+                      <td className="py-3 px-4 text-foreground flex items-center gap-2">
+                        <Mail className="w-4 h-4 text-muted-foreground" />
                         {doctor.email}
                       </td>
-                      <td className="py-3 px-4 text-slate-300">{doctor.department || '—'}</td>
-                      <td className="text-center py-3 px-4 text-slate-300">{doctor.patientCount || 0}</td>
-                      <td className="text-center py-3 px-4 text-slate-300">{doctor.formCount || 0}</td>
+                      <td className="py-3 px-4 text-foreground">{doctor.department || '—'}</td>
+                      <td className="text-center py-3 px-4 text-foreground">{doctor.patientCount || 0}</td>
+                      <td className="text-center py-3 px-4 text-foreground">{doctor.formCount || 0}</td>
                       <td className="py-3 px-4">
                         <Badge
                           className={`${getStatusColor(
@@ -266,7 +266,7 @@ export default function DoctorsManagementPage() {
             </div>
           ) : (
             <div className="text-center py-8">
-              <p className="text-slate-400">No doctors found</p>
+              <p className="text-muted-foreground">No doctors found</p>
             </div>
           )}
         </CardContent>
@@ -275,7 +275,7 @@ export default function DoctorsManagementPage() {
       {/* Doctor Detail Modal */}
       {selectedDoctor && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <Card className="bg-slate-800 border-slate-700 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <Card className="bg-card border-border w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
@@ -286,7 +286,7 @@ export default function DoctorsManagementPage() {
                 </div>
                 <button
                   onClick={() => setSelectedDoctor(null)}
-                  className="text-slate-400 hover:text-white"
+                  className="text-muted-foreground hover:text-white"
                 >
                   ✕
                 </button>
@@ -298,13 +298,13 @@ export default function DoctorsManagementPage() {
               <div>
                 <h3 className="text-white font-semibold mb-3">Contact Information</h3>
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-slate-300">
-                    <Mail className="w-4 h-4 text-slate-500" />
+                  <div className="flex items-center gap-2 text-foreground">
+                    <Mail className="w-4 h-4 text-muted-foreground" />
                     <span>{selectedDoctor.email}</span>
                   </div>
                   {selectedDoctor.phone && (
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <Phone className="w-4 h-4 text-slate-500" />
+                    <div className="flex items-center gap-2 text-foreground">
+                      <Phone className="w-4 h-4 text-muted-foreground" />
                       <span>{selectedDoctor.phone}</span>
                     </div>
                   )}
@@ -315,16 +315,16 @@ export default function DoctorsManagementPage() {
               <div>
                 <h3 className="text-white font-semibold mb-3">Statistics</h3>
                 <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-slate-700/30 rounded-lg p-4">
-                    <p className="text-slate-400 text-sm">Patients Assigned</p>
+                  <div className="bg-muted/30 rounded-lg p-4">
+                    <p className="text-muted-foreground text-sm">Patients Assigned</p>
                     <p className="text-2xl font-bold text-white mt-2">{selectedDoctor.patientCount || 0}</p>
                   </div>
-                  <div className="bg-slate-700/30 rounded-lg p-4">
-                    <p className="text-slate-400 text-sm">Forms Submitted</p>
+                  <div className="bg-muted/30 rounded-lg p-4">
+                    <p className="text-muted-foreground text-sm">Forms Submitted</p>
                     <p className="text-2xl font-bold text-white mt-2">{selectedDoctor.formCount || 0}</p>
                   </div>
-                  <div className="bg-slate-700/30 rounded-lg p-4">
-                    <p className="text-slate-400 text-sm">Status</p>
+                  <div className="bg-muted/30 rounded-lg p-4">
+                    <p className="text-muted-foreground text-sm">Status</p>
                     <Badge className={`${getStatusColor(selectedDoctor.status)} mt-2 capitalize`}>
                       {selectedDoctor.status}
                     </Badge>
@@ -335,14 +335,14 @@ export default function DoctorsManagementPage() {
               {/* Account Information */}
               <div>
                 <h3 className="text-white font-semibold mb-3">Account Information</h3>
-                <div className="space-y-2 text-slate-300 text-sm">
+                <div className="space-y-2 text-foreground text-sm">
                   <div className="flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-slate-500" />
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
                     <span>Created: {format(selectedDoctor.createdAt, 'MMM d, yyyy')}</span>
                   </div>
                   {selectedDoctor.lastLogin && (
                     <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4 text-slate-500" />
+                      <Calendar className="w-4 h-4 text-muted-foreground" />
                       <span>Last Login: {format(selectedDoctor.lastLogin, 'MMM d, yyyy h:mm a')}</span>
                     </div>
                   )}
@@ -350,7 +350,7 @@ export default function DoctorsManagementPage() {
               </div>
 
               {/* Actions */}
-              <div className="flex gap-2 pt-4 border-t border-slate-700">
+              <div className="flex gap-2 pt-4 border-t border-border">
                 <Button variant="outline" className="flex-1" onClick={() => setSelectedDoctor(null)}>
                   Close
                 </Button>

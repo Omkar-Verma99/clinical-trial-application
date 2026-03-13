@@ -68,14 +68,14 @@ export default function AdminLoginPage() {
             </div>
           </div>
           <h1 className="text-3xl font-bold text-white mb-2">RWE Study Admin</h1>
-          <p className="text-slate-400">Secure Admin Portal</p>
+          <p className="text-muted-foreground">Secure Admin Portal</p>
         </div>
 
         {/* Login Card */}
-        <Card className="border-slate-700 bg-slate-800/50 backdrop-blur-sm shadow-2xl">
+        <Card className="border-border bg-card backdrop-blur-sm shadow-2xl">
           <CardHeader className="space-y-1 pb-6">
             <CardTitle className="text-2xl text-white">Admin Login</CardTitle>
-            <CardDescription className="text-slate-400">
+            <CardDescription className="text-muted-foreground">
               Enter your admin credentials to access the dashboard
             </CardDescription>
           </CardHeader>
@@ -84,11 +84,11 @@ export default function AdminLoginPage() {
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email Field */}
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-slate-200">
+                <Label htmlFor="email" className="text-foreground">
                   Email Address
                 </Label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+                  <Mail className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
@@ -96,18 +96,18 @@ export default function AdminLoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={isLoading}
-                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder-slate-400 focus:border-blue-500 focus:ring-blue-500"
+                    className="pl-10 bg-muted/40 border-border text-white placeholder-slate-400 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
               {/* Password Field */}
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-slate-200">
+                <Label htmlFor="password" className="text-foreground">
                   Password
                 </Label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-5 h-5 text-slate-500" />
+                  <Lock className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
                   <Input
                     id="password"
                     type="password"
@@ -115,7 +115,7 @@ export default function AdminLoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
-                    className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder-slate-400 focus:border-blue-500 focus:ring-blue-500"
+                    className="pl-10 bg-muted/40 border-border text-white placeholder-slate-400 focus:border-blue-500 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -146,8 +146,8 @@ export default function AdminLoginPage() {
             </form>
 
             {/* Footer Info */}
-            <div className="mt-6 pt-6 border-t border-slate-700">
-              <p className="text-center text-sm text-slate-400">
+            <div className="mt-6 pt-6 border-t border-border">
+              <p className="text-center text-sm text-muted-foreground">
                 Need help accessing your account?{' '}
                 <a href="#" className="text-blue-400 hover:text-blue-300 transition-colors">
                   Contact Support
@@ -166,8 +166,8 @@ export default function AdminLoginPage() {
 
         {/* Version Info */}
         <div className="text-center mt-6">
-          <p className="text-xs text-slate-500">RWE Study Management System v1.0</p>
-          <p className="text-xs text-slate-600 mt-1">© 2026 Kollectcare RWE Study</p>
+          <p className="text-xs text-muted-foreground">RWE Study Management System v1.0</p>
+          <p className="text-xs text-muted-foreground mt-1">© 2026 Kollectcare RWE Study</p>
         </div>
       </div>
     </div>

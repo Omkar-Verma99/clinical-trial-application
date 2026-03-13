@@ -18,7 +18,7 @@ const PERMISSION_GROUPS: Array<{ title: string; permissions: AdminPermission[] }
   },
   {
     title: 'Patient Data',
-    permissions: ['view_patients', 'edit_patient_records', 'delete_patient_records'],
+    permissions: ['view_patients', 'edit_patient_records', 'manage_section_locks', 'bulk_lock_sections', 'delete_patient_records'],
   },
   {
     title: 'Data Exports',
@@ -38,7 +38,7 @@ const PERMISSION_GROUPS: Array<{ title: string; permissions: AdminPermission[] }
   },
   {
     title: 'Governance',
-    permissions: ['view_audit_logs', 'manage_system_config', 'manage_automation', 'manage_admins'],
+    permissions: ['view_audit_logs', 'assign_bulk_lock_sections', 'manage_system_config', 'manage_automation', 'manage_admins'],
   },
 ];
 
@@ -48,6 +48,9 @@ const PERMISSION_LABELS: Partial<Record<AdminPermission, string>> = {
   view_doctors: 'View Doctors',
   view_patients: 'View Patients',
   edit_patient_records: 'Edit Patient Records',
+  manage_section_locks: 'Manage Section Locks',
+  bulk_lock_sections: 'Bulk Lock Sections',
+  assign_bulk_lock_sections: 'Assign Bulk Lock Capability',
   delete_patient_records: 'Delete Patient Records',
   export_data: 'Export Data',
   schedule_exports: 'Schedule Exports',
@@ -105,7 +108,7 @@ interface NewAdminForm {
 }
 
 export default function SettingsPage() {
-  const { adminUser } = useAdminAuth();
+  const { adminUser, hasPermission } = useAdminAuth();
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingAdmin, setEditingAdmin] = useState<EditingAdmin | null>(null);
@@ -135,6 +138,7 @@ export default function SettingsPage() {
     () => effectivePermissionGroups.flatMap((group) => group.permissions),
     [effectivePermissionGroups]
   );
+  const canAssignBulkLock = hasPermission('assign_bulk_lock_sections');
 
   useEffect(() => {
     if (adminUser?.role !== 'super_admin') {
@@ -250,6 +254,10 @@ export default function SettingsPage() {
     currentPermissions: string[],
     setter: (nextPermissions: string[]) => void
   ) => {
+    if (permission === 'bulk_lock_sections' && !canAssignBulkLock) {
+      return;
+    }
+
     if (currentRole === 'super_admin') {
       setter(getDefaultPermissionsForRole('super_admin'));
       return;
@@ -301,7 +309,7 @@ export default function SettingsPage() {
       <div className="space-y-6">
         <div>
           <h1 className="text-3xl font-bold text-white">Access Denied</h1>
-          <p className="text-slate-400 mt-2">Only Super Admins can manage system settings</p>
+          <p className="text-muted-foreground mt-2">Only Super Admins can manage system settings</p>
         </div>
       </div>
     );
@@ -312,7 +320,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-white">System Settings</h1>
-        <p className="text-slate-400 mt-2">Manage admin users and system configuration</p>
+        <p className="text-muted-foreground mt-2">Manage admin users and system configuration</p>
       </div>
 
       {/* Message Alert */}
@@ -334,10 +342,10 @@ export default function SettingsPage() {
       )}
 
       {/* Admin Users Management */}
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+      <div className="bg-card border border-border rounded-lg p-6">
         <h2 className="text-2xl font-bold text-white mb-6">Manage Admin Users</h2>
 
-        <div className="mb-8 rounded-lg border border-slate-700/50 bg-slate-900/40 p-5 space-y-4">
+        <div className="mb-8 rounded-lg border border-border bg-muted/40 p-5 space-y-4">
           <h3 className="text-lg font-semibold text-white">Create New Admin</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -345,30 +353,30 @@ export default function SettingsPage() {
               value={newAdmin.firstName}
               onChange={(e) => setNewAdmin((prev) => ({ ...prev, firstName: e.target.value }))}
               placeholder="First name"
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
             />
             <input
               value={newAdmin.lastName}
               onChange={(e) => setNewAdmin((prev) => ({ ...prev, lastName: e.target.value }))}
               placeholder="Last name"
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
             />
             <input
               value={newAdmin.email}
               onChange={(e) => setNewAdmin((prev) => ({ ...prev, email: e.target.value }))}
               placeholder="Email"
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
             />
             <input
               value={newAdmin.password}
               onChange={(e) => setNewAdmin((prev) => ({ ...prev, password: e.target.value }))}
               placeholder="Optional password (leave blank for auto-generated)"
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
             />
             <select
               value={newAdmin.role}
               onChange={(e) => applyRoleDefaultsForCreate(e.target.value as AdminRole)}
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
             >
               <option value="admin">Admin</option>
               <option value="super_admin">Super Admin</option>
@@ -378,7 +386,7 @@ export default function SettingsPage() {
               onChange={(e) =>
                 setNewAdmin((prev) => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))
               }
-              className="w-full rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-white"
+              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
             >
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
@@ -386,30 +394,30 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <p className="text-sm font-medium text-slate-300 mb-2">Access Permissions</p>
+            <p className="text-sm font-medium text-foreground mb-2">Access Permissions</p>
             <div className="space-y-4">
               {effectivePermissionGroups.map((group) => (
-                <div key={`create-group-${group.title}`} className="rounded border border-slate-700/60 bg-slate-800/40 p-3">
-                  <p className="text-xs uppercase tracking-wide text-slate-400 mb-2">{group.title}</p>
+                <div key={`create-group-${group.title}`} className="rounded border border-border bg-card/80 p-3">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{group.title}</p>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {group.permissions.map((permission) => {
                       const checked = newAdmin.permissions.includes(permission);
                       return (
                         <label
                           key={`create-${permission}`}
-                          className="flex items-center gap-2 rounded border border-slate-700/60 bg-slate-800/60 px-3 py-2"
+                          className="flex items-center gap-2 rounded border border-border bg-card px-3 py-2"
                         >
                           <input
                             type="checkbox"
                             checked={checked}
-                            disabled={newAdmin.role === 'super_admin'}
+                            disabled={newAdmin.role === 'super_admin' || (permission === 'bulk_lock_sections' && !canAssignBulkLock)}
                             onChange={() =>
                               togglePermission(permission, newAdmin.role, newAdmin.permissions, (nextPermissions) =>
                                 setNewAdmin((prev) => ({ ...prev, permissions: nextPermissions }))
                               )
                             }
                           />
-                          <span className="text-sm text-slate-200">{humanizePermission(permission)}</span>
+                          <span className="text-sm text-foreground">{humanizePermission(permission)}</span>
                         </label>
                       );
                     })}
@@ -435,38 +443,38 @@ export default function SettingsPage() {
         </div>
 
         {loading ? (
-          <p className="text-slate-400">Loading admin users...</p>
+          <p className="text-muted-foreground">Loading admin users...</p>
         ) : admins.length === 0 ? (
-          <p className="text-slate-400">No admin users found</p>
+          <p className="text-muted-foreground">No admin users found</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-slate-700/50 bg-slate-900/50">
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Name</th>
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Email</th>
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Role</th>
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Status</th>
-                  <th className="text-center px-6 py-3 text-sm font-semibold text-slate-300">Logins</th>
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-slate-300">Last Login</th>
-                  <th className="text-center px-6 py-3 text-sm font-semibold text-slate-300">Actions</th>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Name</th>
+                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Email</th>
+                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Role</th>
+                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Status</th>
+                  <th className="text-center px-6 py-3 text-sm font-semibold text-foreground">Logins</th>
+                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Last Login</th>
+                  <th className="text-center px-6 py-3 text-sm font-semibold text-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {admins.map((admin) => (
                   <tr
                     key={admin.id}
-                    className={`border-b border-slate-700/30 hover:bg-slate-700/20 transition ${
-                      editingAdmin?.id === admin.id ? 'bg-slate-700/30' : ''
+                    className={`border-b border-border/70 hover:bg-muted/20 transition ${
+                      editingAdmin?.id === admin.id ? 'bg-muted/30' : ''
                     }`}
                   >
                     <td className="px-6 py-4">
                       <div className="font-medium text-white">
                         {admin.firstName} {admin.lastName}
                       </div>
-                      <div className="text-xs text-slate-400">{admin.id.slice(0, 8)}</div>
+                      <div className="text-xs text-muted-foreground">{admin.id.slice(0, 8)}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-300">{admin.email}</td>
+                    <td className="px-6 py-4 text-sm text-foreground">{admin.email}</td>
                     <td className="px-6 py-4">
                       {editingAdmin?.id === admin.id ? (
                         <div className="space-y-2">
@@ -479,7 +487,7 @@ export default function SettingsPage() {
                                 permissions: getDefaultPermissionsForRole(e.target.value as AdminRole),
                               })
                             }
-                            className="px-3 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                            className="px-3 py-1 bg-muted border border-border rounded text-white text-sm"
                           >
                             <option value="admin">Admin</option>
                             <option value="super_admin">Super Admin</option>
@@ -487,15 +495,15 @@ export default function SettingsPage() {
 
                           <div className="space-y-2 max-h-56 overflow-auto pr-2">
                             {effectivePermissionGroups.map((group) => (
-                              <div key={`${admin.id}-group-${group.title}`} className="rounded border border-slate-700/50 bg-slate-800/40 p-2">
-                                <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-1">{group.title}</p>
+                              <div key={`${admin.id}-group-${group.title}`} className="rounded border border-border bg-card/80 p-2">
+                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{group.title}</p>
                                 <div className="grid grid-cols-1 gap-1">
                                   {group.permissions.map((permission) => (
-                                    <label key={`${admin.id}-${permission}`} className="flex items-center gap-2 text-xs text-slate-300">
+                                    <label key={`${admin.id}-${permission}`} className="flex items-center gap-2 text-xs text-foreground">
                                       <input
                                         type="checkbox"
                                         checked={editingAdmin.permissions.includes(permission)}
-                                        disabled={editingAdmin.role === 'super_admin'}
+                                        disabled={editingAdmin.role === 'super_admin' || (permission === 'bulk_lock_sections' && !canAssignBulkLock)}
                                         onChange={() =>
                                           togglePermission(
                                             permission,
@@ -534,7 +542,7 @@ export default function SettingsPage() {
                               status: e.target.value as 'active' | 'inactive',
                             })
                           }
-                          className="px-3 py-1 bg-slate-700 border border-slate-600 rounded text-white text-sm"
+                          className="px-3 py-1 bg-muted border border-border rounded text-white text-sm"
                         >
                           <option value="active">Active</option>
                           <option value="inactive">Inactive</option>
@@ -552,7 +560,7 @@ export default function SettingsPage() {
                     <td className="px-6 py-4 text-center text-sm font-medium text-white">
                       {admin.loginCount}
                     </td>
-                    <td className="px-6 py-4 text-sm text-slate-300">
+                    <td className="px-6 py-4 text-sm text-foreground">
                       {admin.lastLogin ? new Date(admin.lastLogin).toLocaleDateString() : '-'}
                     </td>
                     <td className="px-6 py-4 text-center">
@@ -566,7 +574,7 @@ export default function SettingsPage() {
                           </button>
                           <button
                             onClick={() => setEditingAdmin(null)}
-                            className="px-3 py-1 bg-slate-600 hover:bg-slate-700 text-white rounded text-xs font-medium"
+                            className="px-3 py-1 bg-muted hover:bg-muted/80 text-foreground rounded text-xs font-medium"
                           >
                             Cancel
                           </button>
@@ -576,7 +584,7 @@ export default function SettingsPage() {
                           <button
                             onClick={() => handleEditAdmin(admin)}
                             disabled={admin.id === adminUser?.id}
-                            className="p-2 hover:bg-slate-700/50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-2 hover:bg-muted/40 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Edit admin"
                           >
                             <Edit2 className="w-4 h-4 text-blue-400" />
@@ -584,7 +592,7 @@ export default function SettingsPage() {
                           <button
                             onClick={() => setShowDeleteConfirm(admin.id)}
                             disabled={admin.id === adminUser?.id}
-                            className="p-2 hover:bg-slate-700/50 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-2 hover:bg-muted/40 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Delete admin"
                           >
                             <Trash2 className="w-4 h-4 text-red-400" />
@@ -602,56 +610,56 @@ export default function SettingsPage() {
 
       {/* System Information */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
-          <p className="text-slate-400 text-sm">Total Admin Users</p>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <p className="text-muted-foreground text-sm">Total Admin Users</p>
           <p className="text-3xl font-bold text-white mt-2">{admins.length}</p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
-          <p className="text-slate-400 text-sm">Super Admins</p>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <p className="text-muted-foreground text-sm">Super Admins</p>
           <p className="text-3xl font-bold text-purple-400 mt-2">
             {admins.filter((a) => a.role === 'super_admin').length}
           </p>
         </div>
-        <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
-          <p className="text-slate-400 text-sm">Active Users</p>
+        <div className="bg-card border border-border rounded-lg p-6">
+          <p className="text-muted-foreground text-sm">Active Users</p>
           <p className="text-3xl font-bold text-green-400 mt-2">
             {admins.filter((a) => a.status === 'active').length}
           </p>
         </div>
       </div>
 
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+      <div className="bg-card border border-border rounded-lg p-6">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
             <h2 className="text-xl font-bold text-white">Permission Matrix</h2>
-            <p className="text-slate-400 text-sm mt-1">Audit access coverage across all admin users in one grid.</p>
+            <p className="text-muted-foreground text-sm mt-1">Audit access coverage across all admin users in one grid.</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-slate-400">Permissions</p>
+            <p className="text-xs text-muted-foreground">Permissions</p>
             <p className="text-lg font-semibold text-white">{matrixPermissions.length}</p>
           </div>
         </div>
 
         {admins.length === 0 ? (
-          <p className="text-slate-400">No admin users available for matrix view.</p>
+          <p className="text-muted-foreground">No admin users available for matrix view.</p>
         ) : (
-          <div className="overflow-x-auto border border-slate-700/40 rounded-lg">
+          <div className="overflow-x-auto border border-border/70 rounded-lg">
             <table className="min-w-full text-xs">
               <thead>
-                <tr className="bg-slate-900/60 border-b border-slate-700/50">
-                  <th className="sticky left-0 z-10 bg-slate-900/80 text-left px-3 py-2 text-slate-300 min-w-[240px]">Permission</th>
+                <tr className="bg-muted/60 border-b border-border">
+                  <th className="sticky left-0 z-10 bg-muted/80 text-left px-3 py-2 text-foreground min-w-[240px]">Permission</th>
                   {admins.map((admin) => (
-                    <th key={`matrix-header-${admin.id}`} className="text-center px-3 py-2 text-slate-300 min-w-[150px]">
+                    <th key={`matrix-header-${admin.id}`} className="text-center px-3 py-2 text-foreground min-w-[150px]">
                       <div className="font-semibold text-white">{admin.firstName} {admin.lastName}</div>
-                      <div className="text-[10px] text-slate-400">{admin.role}</div>
+                      <div className="text-[10px] text-muted-foreground">{admin.role}</div>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {matrixPermissions.map((permission) => (
-                  <tr key={`matrix-row-${permission}`} className="border-b border-slate-700/30 hover:bg-slate-700/10">
-                    <td className="sticky left-0 z-10 bg-slate-900/75 px-3 py-2 text-slate-200">{humanizePermission(permission)}</td>
+                  <tr key={`matrix-row-${permission}`} className="border-b border-border/70 hover:bg-muted/10">
+                    <td className="sticky left-0 z-10 bg-muted/70 px-3 py-2 text-foreground">{humanizePermission(permission)}</td>
                     {admins.map((admin) => {
                       const enabled = sanitizePermissions(admin.role, admin.permissions).includes(permission);
                       return (
@@ -660,7 +668,7 @@ export default function SettingsPage() {
                             className={`inline-flex items-center justify-center w-6 h-6 rounded-full font-bold ${
                               enabled
                                 ? 'bg-green-900/40 text-green-300 border border-green-700/60'
-                                : 'bg-slate-700/50 text-slate-400 border border-slate-600/60'
+                                : 'bg-muted/40 text-muted-foreground border border-border/60'
                             }`}
                             title={enabled ? 'Allowed' : 'Not allowed'}
                           >
@@ -680,13 +688,13 @@ export default function SettingsPage() {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 rounded-lg max-w-sm w-full border border-slate-700">
-            <div className="border-b border-slate-700 p-6">
+          <div className="bg-background rounded-lg max-w-sm w-full border border-border">
+            <div className="border-b border-border p-6">
               <h2 className="text-xl font-bold text-white">Confirm Delete</h2>
             </div>
 
             <div className="p-6">
-              <p className="text-slate-300 mb-6">
+              <p className="text-foreground mb-6">
                 Are you sure you want to delete this admin user? This action cannot be undone.
               </p>
 
@@ -699,7 +707,7 @@ export default function SettingsPage() {
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(null)}
-                  className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg font-medium transition"
+                  className="flex-1 px-4 py-2 bg-muted hover:bg-muted text-white rounded-lg font-medium transition"
                 >
                   Cancel
                 </button>

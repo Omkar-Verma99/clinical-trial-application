@@ -114,7 +114,7 @@ export default function ClinicalRangesPage() {
     return (
       <div className="space-y-4">
         <h1 className="text-3xl font-bold text-white">Access Denied</h1>
-        <p className="text-slate-400">You do not have permission to manage clinical validation ranges.</p>
+        <p className="text-muted-foreground">You do not have permission to manage clinical validation ranges.</p>
       </div>
     );
   }
@@ -123,7 +123,7 @@ export default function ClinicalRangesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-white">Clinical Ranges</h1>
-        <p className="text-slate-400 mt-2">
+        <p className="text-muted-foreground mt-2">
           Configure allowed value ranges for Baseline and Follow-up form validations.
         </p>
       </div>
@@ -141,24 +141,24 @@ export default function ClinicalRangesPage() {
         </div>
       )}
 
-      <div className="bg-slate-800/50 border border-slate-700/50 rounded-lg p-6">
+      <div className="bg-card border border-border rounded-lg p-6">
         {loading ? (
-          <p className="text-slate-400">Loading range settings...</p>
+          <p className="text-muted-foreground">Loading range settings...</p>
         ) : (
           <>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-700/50 bg-slate-900/50">
-                    <th className="text-left px-4 py-3 text-slate-300">Field</th>
-                    <th className="text-left px-4 py-3 text-slate-300">Min</th>
-                    <th className="text-left px-4 py-3 text-slate-300">Max</th>
-                    <th className="text-left px-4 py-3 text-slate-300">Unit</th>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-left px-4 py-3 text-foreground">Field</th>
+                    <th className="text-left px-4 py-3 text-foreground">Min</th>
+                    <th className="text-left px-4 py-3 text-foreground">Max</th>
+                    <th className="text-left px-4 py-3 text-foreground">Unit</th>
                   </tr>
                 </thead>
                 <tbody>
                   {RANGE_FIELDS.map((field) => (
-                    <tr key={field.key} className="border-b border-slate-700/30">
+                    <tr key={field.key} className="border-b border-border/70">
                       <td className="px-4 py-3 text-white font-medium">{field.label}</td>
                       <td className="px-4 py-3">
                         <input
@@ -166,7 +166,7 @@ export default function ClinicalRangesPage() {
                           step="0.01"
                           value={ranges[field.key].min}
                           onChange={(e) => updateRangeValue(field.key, 'min', e.target.value)}
-                          className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white"
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-white"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -175,10 +175,10 @@ export default function ClinicalRangesPage() {
                           step="0.01"
                           value={ranges[field.key].max}
                           onChange={(e) => updateRangeValue(field.key, 'max', e.target.value)}
-                          className="w-full rounded-lg border border-slate-600 bg-slate-900 px-3 py-2 text-white"
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-white"
                         />
                       </td>
-                      <td className="px-4 py-3 text-slate-300">{field.unit}</td>
+                      <td className="px-4 py-3 text-foreground">{field.unit}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -186,7 +186,7 @@ export default function ClinicalRangesPage() {
             </div>
 
             <div className="mt-5 flex items-center justify-between gap-4">
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-muted-foreground">
                 Last updated: {updatedAt ? new Date(updatedAt).toLocaleString() : 'Not configured yet'}
               </p>
               <button

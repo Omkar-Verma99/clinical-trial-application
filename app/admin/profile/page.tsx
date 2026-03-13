@@ -12,7 +12,7 @@ export default function AdminProfilePage() {
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold text-white">My Profile</h1>
-        <p className="text-slate-400">No admin profile loaded.</p>
+        <p className="text-muted-foreground">No admin profile loaded.</p>
       </div>
     );
   }
@@ -21,13 +21,13 @@ export default function AdminProfilePage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-white">My Profile</h1>
-        <p className="text-slate-400 mt-2">Account details and assigned access</p>
+        <p className="text-muted-foreground mt-2">Account details and assigned access</p>
       </div>
 
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-white">{adminUser.firstName} {adminUser.lastName}</CardTitle>
-          <CardDescription className="text-slate-400">{adminUser.email}</CardDescription>
+          <CardDescription className="text-muted-foreground">{adminUser.email}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
@@ -42,32 +42,32 @@ export default function AdminProfilePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-4">
-              <p className="text-slate-400 flex items-center gap-2"><Mail className="w-4 h-4" /> Email</p>
+            <div className="rounded-lg border border-border bg-muted/40 p-4">
+              <p className="text-muted-foreground flex items-center gap-2"><Mail className="w-4 h-4" /> Email</p>
               <p className="text-white mt-1">{adminUser.email}</p>
             </div>
-            <div className="rounded-lg border border-slate-700/50 bg-slate-900/40 p-4">
-              <p className="text-slate-400 flex items-center gap-2"><Calendar className="w-4 h-4" /> Last Login</p>
+            <div className="rounded-lg border border-border bg-muted/40 p-4">
+              <p className="text-muted-foreground flex items-center gap-2"><Calendar className="w-4 h-4" /> Last Login</p>
               <p className="text-white mt-1">{adminUser.lastLogin ? new Date(adminUser.lastLogin).toLocaleString() : 'N/A'}</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="bg-slate-800/50 border-slate-700/50">
+      <Card className="bg-card border-border">
         <CardHeader>
           <CardTitle className="text-white">Permissions</CardTitle>
-          <CardDescription className="text-slate-400">
+          <CardDescription className="text-muted-foreground">
             {permissions.length} permission(s) assigned
           </CardDescription>
         </CardHeader>
         <CardContent>
           {permissions.length === 0 ? (
-            <p className="text-slate-400">No permissions assigned.</p>
+            <p className="text-muted-foreground">No permissions assigned.</p>
           ) : (
             <div className="flex flex-wrap gap-2">
               {permissions.map((permission) => (
-                <Badge key={permission} variant="outline" className="border-slate-600 text-slate-200">
+                <Badge key={permission} variant="outline" className="border-border text-foreground">
                   {permission}
                 </Badge>
               ))}

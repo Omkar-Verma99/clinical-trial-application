@@ -19,13 +19,60 @@ service cloud.firestore {
     // OPTIMIZED: Single document read/write per patient
     // PERFORMANCE: 3-4x faster, 67% lower cost
     match /patients/{patientId} {
+      function sectionLocked(section) {
+        return resource.data.sectionLocks != null &&
+          resource.data.sectionLocks[section] != null &&
+          resource.data.sectionLocks[section].locked == true;
+      }
+
+      function patientInfoFieldsUnchanged() {
+        return request.resource.data.patientCode == resource.data.patientCode &&
+          request.resource.data.studySiteCode == resource.data.studySiteCode &&
+          request.resource.data.investigatorName == resource.data.investigatorName &&
+          request.resource.data.baselineVisitDate == resource.data.baselineVisitDate &&
+          request.resource.data.age == resource.data.age &&
+          request.resource.data.gender == resource.data.gender &&
+          request.resource.data.height == resource.data.height &&
+          request.resource.data.weight == resource.data.weight &&
+          request.resource.data.bmi == resource.data.bmi &&
+          request.resource.data.durationOfDiabetes == resource.data.durationOfDiabetes &&
+          request.resource.data.baselineGlycemicSeverity == resource.data.baselineGlycemicSeverity &&
+          request.resource.data.smokingStatus == resource.data.smokingStatus &&
+          request.resource.data.alcoholIntake == resource.data.alcoholIntake &&
+          request.resource.data.physicalActivityLevel == resource.data.physicalActivityLevel &&
+          request.resource.data.diabetesComplications == resource.data.diabetesComplications &&
+          request.resource.data.comorbidities == resource.data.comorbidities &&
+          request.resource.data.previousTreatmentType == resource.data.previousTreatmentType &&
+          request.resource.data.previousDrugClasses == resource.data.previousDrugClasses &&
+          request.resource.data.reasonForTripleFDC == resource.data.reasonForTripleFDC;
+      }
+
+      function followupEntryAt(data, index) {
+        return data.followups == null || data.followups.size() <= index ? null : data.followups[index];
+      }
+
+      function followupUnchanged(index) {
+        return followupEntryAt(request.resource.data, index) == followupEntryAt(resource.data, index);
+      }
+
+      function doctorLockGuard() {
+        return (!sectionLocked('patient_info') || patientInfoFieldsUnchanged()) &&
+          (!sectionLocked('baseline') || request.resource.data.baseline == resource.data.baseline) &&
+          (!sectionLocked('followup_1') || followupUnchanged(0)) &&
+          (!sectionLocked('followup_2') || followupUnchanged(1)) &&
+          (!sectionLocked('followup_3') || followupUnchanged(2));
+      }
+
       // Doctors can see their own patients; admins can see all
       allow read: if isDoctorOwner(resource.data) || isAdmin();
 
       // Doctors create their own patients; doctorId must match auth
       allow create: if request.resource.data.doctorId == request.auth.uid;
 
-      allow update: if isDoctorOwner(resource.data) && isDoctorOwner(request.resource.data);
+      allow update: if isAdmin() ||
+        (isDoctorOwner(resource.data) &&
+        isDoctorOwner(request.resource.data) &&
+        doctorLockGuard());
 
       allow delete: if isDoctorOwner(resource.data);
     }

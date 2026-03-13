@@ -33,9 +33,23 @@ interface FollowUpFormProps {
   allFollowUps?: FollowUpData[] // Track all existing visits
   followUpIndex?: number
   doctorIdOverride?: string
+  isSectionLocked?: boolean
+  lockMessage?: string
+  canOverrideLock?: boolean
 }
 
-export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData, onSuccess, baselineDate, allFollowUps = [], followUpIndex = 0, doctorIdOverride }: FollowUpFormProps) {
+export const FollowUpForm = memo(function FollowUpForm({
+  patientId,
+  existingData,
+  onSuccess,
+  baselineDate,
+  allFollowUps = [],
+  followUpIndex = 0,
+  doctorIdOverride,
+  isSectionLocked = false,
+  lockMessage = "Locked. You cannot edit this section.",
+  canOverrideLock = false,
+}: FollowUpFormProps) {
   const { toast } = useToast()
   const { user, doctor } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -266,6 +280,15 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (isSectionLocked && !canOverrideLock) {
+      toast({
+        variant: "destructive",
+        title: "Section locked",
+        description: lockMessage,
+      })
+      return
+    }
 
     // Prevent double-submission
     if (submitLockRef.current || loading) {
@@ -610,7 +633,13 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
         <CardDescription>Record end-of-study clinical measurements and outcomes</CardDescription>
       </CardHeader>
       <CardContent>
+        {isSectionLocked && !canOverrideLock && (
+          <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            {lockMessage}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-6">
+          <fieldset disabled={loading || (isSectionLocked && !canOverrideLock)} className="space-y-6">
           {/* SECTION H - Follow-up Visit Date */}
           <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <h3 className="font-semibold text-lg">Follow-up Visit</h3>
@@ -1660,6 +1689,7 @@ export const FollowUpForm = memo(function FollowUpForm({ patientId, existingData
               </div>
             </div>
           )}
+          </fieldset>
         </form>
 
         {/* Confirmation dialog for deleting adverse events */}

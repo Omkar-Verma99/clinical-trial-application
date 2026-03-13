@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { ArrowLeft } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -15,6 +15,8 @@ import type { Patient, BaselineData, FollowUpData, Doctor } from '@/lib/types';
 import { BaselineForm } from '@/components/baseline-form';
 import { FollowUpForm } from '@/components/followup-form';
 import { PatientFormPage } from '@/app/patients/add/page';
+import { useAdminAuth } from '@/contexts/admin-auth-context';
+import { followupSectionKey, isSectionLocked, SectionLockMap } from '@/lib/section-locks';
 
 function asDateString(value: unknown): string {
   if (!value) return 'N/A';
@@ -27,6 +29,7 @@ function asDateString(value: unknown): string {
 }
 
 export default function AdminPatientDetailPage() {
+  const { adminUser, hasPermission } = useAdminAuth();
   const params = useParams<{ id: string }>();
   const patientId = String(params?.id || '');
 
@@ -37,6 +40,7 @@ export default function AdminPatientDetailPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [exporting, setExporting] = useState(false);
   const [creatingFollowUp, setCreatingFollowUp] = useState(false);
+  const [lockBusySection, setLockBusySection] = useState<string | null>(null);
 
   useEffect(() => {
     if (!patientId) return;
@@ -94,6 +98,11 @@ export default function AdminPatientDetailPage() {
   const baseline = useMemo(() => ((patient?.baseline as BaselineData | null) || null), [patient]);
   const followups = useMemo(() => (Array.isArray(patient?.followups) ? (patient.followups as FollowUpData[]) : []), [patient]);
   const ownerDoctorId = String(patient?.doctorId || '');
+  const sectionLocks: SectionLockMap = useMemo(() => {
+    const raw = (patient as any)?.sectionLocks;
+    return raw && typeof raw === 'object' ? (raw as SectionLockMap) : {};
+  }, [patient]);
+  const canManageSectionLocks = hasPermission('manage_section_locks');
 
   const tabColumnCount = useMemo(
     () => 4 + followups.length + (creatingFollowUp ? 1 : 0),
@@ -131,10 +140,33 @@ export default function AdminPatientDetailPage() {
     setActiveTab('new-followup');
   };
 
+  const toggleSectionLock = useCallback(
+    async (section: string, nextLocked: boolean) => {
+      if (!patientId || !canManageSectionLocks || !adminUser) return;
+      setLockBusySection(section);
+      try {
+        const patientRef = doc(db, 'patients', patientId);
+        await updateDoc(patientRef, {
+          [`sectionLocks.${section}`]: {
+            locked: nextLocked,
+            lockedBy: adminUser.id,
+            lockedByName: `${adminUser.firstName} ${adminUser.lastName}`.trim(),
+            reason: nextLocked ? 'Locked by admin control' : '',
+            lockedAt: nextLocked ? new Date().toISOString() : null,
+            updatedAt: new Date().toISOString(),
+          },
+        });
+      } finally {
+        setLockBusySection(null);
+      }
+    },
+    [adminUser, canManageSectionLocks, patientId]
+  );
+
   if (loading) {
     return (
       <div className="p-6">
-        <p className="text-slate-300">Loading patient details...</p>
+        <p className="text-foreground">Loading patient details...</p>
       </div>
     );
   }
@@ -156,16 +188,16 @@ export default function AdminPatientDetailPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-white">Patient {patient.patientCode || patient.id}</h1>
-          <p className="text-slate-400 mt-1">Same workflow as doctor view with admin edit controls</p>
+          <p className="text-muted-foreground mt-1">Same workflow as doctor view with admin edit controls</p>
         </div>
-        <Link href="/admin/patients" className="inline-flex items-center px-4 py-2 rounded-lg border border-slate-700 text-slate-200 hover:bg-slate-800">
+        <Link href="/admin/patients" className="inline-flex items-center px-4 py-2 rounded-lg border border-border text-foreground hover:bg-card">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Link>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full gap-0 bg-slate-900 p-0" style={{ gridTemplateColumns: `repeat(${tabColumnCount}, minmax(0, 1fr))` }}>
+        <TabsList className="grid w-full gap-0 bg-background p-0" style={{ gridTemplateColumns: `repeat(${tabColumnCount}, minmax(0, 1fr))` }}>
           <TabsTrigger value="overview" className="rounded-none text-xs sm:text-sm">Overview</TabsTrigger>
           <TabsTrigger value="patient-info" className="rounded-none text-xs sm:text-sm">Patient Info</TabsTrigger>
           <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm">Baseline</TabsTrigger>
@@ -185,11 +217,29 @@ export default function AdminPatientDetailPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Section Lock Status</CardTitle>
+              <CardDescription>Current edit-lock status for this patient record.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
+                <div className="rounded border p-2">Patient Info: {isSectionLocked(sectionLocks, 'patient_info') ? 'Locked' : 'Unlocked'}</div>
+                <div className="rounded border p-2">Baseline: {isSectionLocked(sectionLocks, 'baseline') ? 'Locked' : 'Unlocked'}</div>
+                {followups.map((_, index) => (
+                  <div key={`lock-row-${index}`} className="rounded border p-2">
+                    Follow Up {index + 1}: {isSectionLocked(sectionLocks, followupSectionKey(index)) ? 'Locked' : 'Unlocked'}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="bg-slate-800/50 border-slate-700/50"><CardContent className="pt-4"><p className="text-slate-400 text-xs">Patient Code</p><p className="text-xl font-semibold text-white mt-1">{patient.patientCode || 'N/A'}</p></CardContent></Card>
-            <Card className="bg-slate-800/50 border-slate-700/50"><CardContent className="pt-4"><p className="text-slate-400 text-xs">Doctor</p><p className="text-xl font-semibold text-white mt-1">{doctorName}</p></CardContent></Card>
-            <Card className="bg-slate-800/50 border-slate-700/50"><CardContent className="pt-4"><p className="text-slate-400 text-xs">Enrollment</p><p className="text-xl font-semibold text-white mt-1">{asDateString((patient as Record<string, unknown>).createdAt)}</p></CardContent></Card>
-            <Card className="bg-slate-800/50 border-slate-700/50"><CardContent className="pt-4"><p className="text-slate-400 text-xs">Records</p><p className="text-xl font-semibold text-white mt-1">{(baseline ? 1 : 0) + followups.length}</p></CardContent></Card>
+            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Patient Code</p><p className="text-xl font-semibold text-white mt-1">{patient.patientCode || 'N/A'}</p></CardContent></Card>
+            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Doctor</p><p className="text-xl font-semibold text-white mt-1">{doctorName}</p></CardContent></Card>
+            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Enrollment</p><p className="text-xl font-semibold text-white mt-1">{asDateString((patient as Record<string, unknown>).createdAt)}</p></CardContent></Card>
+            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Records</p><p className="text-xl font-semibold text-white mt-1">{(baseline ? 1 : 0) + followups.length}</p></CardContent></Card>
           </div>
 
           <Card>
@@ -209,27 +259,67 @@ export default function AdminPatientDetailPage() {
         </TabsContent>
 
         <TabsContent value="patient-info">
+          {canManageSectionLocks && (
+            <div className="mb-4 flex justify-end">
+              <Button
+                type="button"
+                variant={isSectionLocked(sectionLocks, 'patient_info') ? 'outline' : 'default'}
+                disabled={lockBusySection === 'patient_info'}
+                onClick={() => toggleSectionLock('patient_info', !isSectionLocked(sectionLocks, 'patient_info'))}
+              >
+                {isSectionLocked(sectionLocks, 'patient_info') ? 'Unlock Patient Info' : 'Lock Patient Info'}
+              </Button>
+            </div>
+          )}
           <PatientFormPage
             presetEditPatientId={patient.id}
             forceEmbedded
             allowAnyDoctorEdit
+            isSectionLocked={isSectionLocked(sectionLocks, 'patient_info')}
+            canOverrideLock
             onSaved={() => setActiveTab('overview')}
           />
         </TabsContent>
 
         <TabsContent value="baseline">
+          {canManageSectionLocks && (
+            <div className="mb-4 flex justify-end">
+              <Button
+                type="button"
+                variant={isSectionLocked(sectionLocks, 'baseline') ? 'outline' : 'default'}
+                disabled={lockBusySection === 'baseline'}
+                onClick={() => toggleSectionLock('baseline', !isSectionLocked(sectionLocks, 'baseline'))}
+              >
+                {isSectionLocked(sectionLocks, 'baseline') ? 'Unlock Baseline' : 'Lock Baseline'}
+              </Button>
+            </div>
+          )}
           <BaselineForm
             patientId={patient.id}
             existingData={baseline}
             patientBaselineVisitDate={(patient as Record<string, any>).baselineVisitDate || ''}
             patientWeight={typeof (patient as Record<string, any>).weight === 'number' ? (patient as Record<string, any>).weight : null}
             doctorIdOverride={ownerDoctorId}
+            isSectionLocked={isSectionLocked(sectionLocks, 'baseline')}
+            canOverrideLock
             onSuccess={() => setActiveTab('overview')}
           />
         </TabsContent>
 
         {followups.map((followup, index) => (
           <TabsContent key={`visit-content-${index}`} value={`visit-${index}`}>
+            {canManageSectionLocks && (
+              <div className="mb-4 flex justify-end">
+                <Button
+                  type="button"
+                  variant={isSectionLocked(sectionLocks, followupSectionKey(index)) ? 'outline' : 'default'}
+                  disabled={lockBusySection === followupSectionKey(index)}
+                  onClick={() => toggleSectionLock(followupSectionKey(index), !isSectionLocked(sectionLocks, followupSectionKey(index)))}
+                >
+                  {isSectionLocked(sectionLocks, followupSectionKey(index)) ? `Unlock Follow Up ${index + 1}` : `Lock Follow Up ${index + 1}`}
+                </Button>
+              </div>
+            )}
             <FollowUpForm
               patientId={patient.id}
               existingData={followup}
@@ -237,6 +327,8 @@ export default function AdminPatientDetailPage() {
               allFollowUps={followups}
               followUpIndex={index}
               doctorIdOverride={ownerDoctorId}
+              isSectionLocked={isSectionLocked(sectionLocks, followupSectionKey(index))}
+              canOverrideLock
               onSuccess={() => setActiveTab('overview')}
             />
           </TabsContent>
@@ -251,6 +343,8 @@ export default function AdminPatientDetailPage() {
               allFollowUps={followups}
               followUpIndex={followups.length}
               doctorIdOverride={ownerDoctorId}
+              isSectionLocked={isSectionLocked(sectionLocks, followupSectionKey(followups.length))}
+              canOverrideLock
               onSuccess={() => {
                 setCreatingFollowUp(false);
                 setActiveTab('overview');
@@ -269,7 +363,7 @@ export default function AdminPatientDetailPage() {
             />
           ) : (
             <Card className="p-8 text-center">
-              <p className="text-slate-400">Both baseline and follow-up data are required for comparison.</p>
+              <p className="text-muted-foreground">Both baseline and follow-up data are required for comparison.</p>
             </Card>
           )}
         </TabsContent>
