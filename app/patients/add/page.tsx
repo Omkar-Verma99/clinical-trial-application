@@ -656,15 +656,12 @@ export function PatientFormPage({
           }
 
           // Keep baseline date/weight synced with Patient Info edits for consistency.
-          const existingPatientSnap = await getDoc(patientDocRef)
-          const existingPatientData = existingPatientSnap.exists() ? (existingPatientSnap.data() as any) : null
-          if (existingPatientData?.baseline && typeof existingPatientData.baseline === "object") {
-            updatePayload["baseline.baselineVisitDate"] = sanitizedFormData.baselineVisitDate
-            if (weightValue !== null) {
-              updatePayload["baseline.weight"] = weightValue
-            }
-            updatePayload["baseline.updatedAt"] = nowIso
+          // Avoid read-before-write here so transient read permission states don't block valid updates.
+          updatePayload["baseline.baselineVisitDate"] = sanitizedFormData.baselineVisitDate
+          if (weightValue !== null) {
+            updatePayload["baseline.weight"] = weightValue
           }
+          updatePayload["baseline.updatedAt"] = nowIso
 
           await updateDoc(patientDocRef, updatePayload)
 
