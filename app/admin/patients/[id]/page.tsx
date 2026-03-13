@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { doc, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
@@ -41,6 +41,7 @@ export default function AdminPatientDetailPage() {
   const [exporting, setExporting] = useState(false);
   const [creatingFollowUp, setCreatingFollowUp] = useState(false);
   const [lockBusySection, setLockBusySection] = useState<string | null>(null);
+  const loadedDoctorIdRef = useRef<string>('');
 
   useEffect(() => {
     if (!patientId) return;
@@ -62,26 +63,37 @@ export default function AdminPatientDetailPage() {
 
         const ownerDoctorId = String(patientData.doctorId || '');
         if (ownerDoctorId) {
-          const doctorSnap = await getDoc(doc(db, 'doctors', ownerDoctorId));
-          if (doctorSnap.exists()) {
-            const d = doctorSnap.data() as Record<string, any>;
-            const name = `${d.firstName || ''} ${d.lastName || ''}`.trim() || String(patientData.investigatorName || 'Unknown');
-            setDoctorName(name);
-            setDoctor({
-              id: doctorSnap.id,
-              name,
-              registrationNumber: String(d.registrationNumber || ''),
-              qualification: String(d.qualification || ''),
-              email: String(d.email || ''),
-              phone: String(d.phone || ''),
-              dateOfBirth: String(d.dateOfBirth || ''),
-              address: String(d.address || ''),
-              studySiteCode: String(d.studySiteCode || patientData.studySiteCode || ''),
-              createdAt: String(d.createdAt || ''),
-            });
-          } else {
-            setDoctorName(String(patientData.investigatorName || 'Unknown'));
+          if (loadedDoctorIdRef.current !== ownerDoctorId) {
+            loadedDoctorIdRef.current = ownerDoctorId;
+            const doctorSnap = await getDoc(doc(db, 'doctors', ownerDoctorId));
+            if (doctorSnap.exists()) {
+              const d = doctorSnap.data() as Record<string, any>;
+              const name =
+                String(d.name || '').trim() ||
+                `${d.firstName || ''} ${d.lastName || ''}`.trim() ||
+                String(patientData.investigatorName || 'Unknown');
+              setDoctorName(name);
+              setDoctor({
+                id: doctorSnap.id,
+                name,
+                registrationNumber: String(d.registrationNumber || ''),
+                qualification: String(d.qualification || ''),
+                email: String(d.email || ''),
+                phone: String(d.phone || ''),
+                dateOfBirth: String(d.dateOfBirth || ''),
+                address: String(d.address || ''),
+                studySiteCode: String(d.studySiteCode || patientData.studySiteCode || ''),
+                createdAt: String(d.createdAt || ''),
+              });
+            } else {
+              setDoctorName(String(patientData.investigatorName || 'Unknown'));
+              setDoctor(undefined);
+            }
           }
+        } else {
+          loadedDoctorIdRef.current = '';
+          setDoctorName(String(patientData.investigatorName || 'Unknown'));
+          setDoctor(undefined);
         }
 
         setLoading(false);
@@ -174,8 +186,8 @@ export default function AdminPatientDetailPage() {
   if (!patient) {
     return (
       <div className="space-y-4 p-6">
-        <h1 className="text-2xl font-bold text-white">Patient not found</h1>
-        <Link href="/admin/patients" className="inline-flex items-center text-blue-400 hover:text-blue-300">
+        <h1 className="text-2xl font-bold text-foreground">Patient not found</h1>
+        <Link href="/admin/patients" className="inline-flex items-center text-primary hover:text-primary/80">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back to Patients
         </Link>
@@ -187,7 +199,7 @@ export default function AdminPatientDetailPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-white">Patient {patient.patientCode || patient.id}</h1>
+          <h1 className="text-3xl font-bold text-foreground">Patient {patient.patientCode || patient.id}</h1>
           <p className="text-muted-foreground mt-1">Same workflow as doctor view with admin edit controls</p>
         </div>
         <Link href="/admin/patients" className="inline-flex items-center px-4 py-2 rounded-lg border border-border text-foreground hover:bg-card">
@@ -216,7 +228,7 @@ export default function AdminPatientDetailPage() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="overview" className="space-y-6">
+        <TabsContent value="overview" className="space-y-6" forceMount>
           <Card>
             <CardHeader>
               <CardTitle>Section Lock Status</CardTitle>
@@ -236,29 +248,18 @@ export default function AdminPatientDetailPage() {
           </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Patient Code</p><p className="text-xl font-semibold text-white mt-1">{patient.patientCode || 'N/A'}</p></CardContent></Card>
-            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Doctor</p><p className="text-xl font-semibold text-white mt-1">{doctorName}</p></CardContent></Card>
-            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Enrollment</p><p className="text-xl font-semibold text-white mt-1">{asDateString((patient as Record<string, unknown>).createdAt)}</p></CardContent></Card>
-            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Records</p><p className="text-xl font-semibold text-white mt-1">{(baseline ? 1 : 0) + followups.length}</p></CardContent></Card>
+            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Patient Code</p><p className="text-xl font-semibold text-foreground mt-1">{patient.patientCode || 'N/A'}</p></CardContent></Card>
+            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Doctor</p><p className="text-xl font-semibold text-foreground mt-1">{doctorName}</p></CardContent></Card>
+            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Enrollment</p><p className="text-xl font-semibold text-foreground mt-1">{asDateString((patient as Record<string, unknown>).createdAt)}</p></CardContent></Card>
+            <Card className="bg-card border-border"><CardContent className="pt-4"><p className="text-muted-foreground text-xs">Records</p><p className="text-xl font-semibold text-foreground mt-1">{(baseline ? 1 : 0) + followups.length}</p></CardContent></Card>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Export Patient Data</CardTitle>
-              <CardDescription>Download complete patient records in PDF, CSV, or Excel format.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-3">
-                <Button onClick={handleExportPDF} disabled={exporting}>Export PDF</Button>
-                <Button variant="outline" onClick={handleExportCSV} disabled={exporting}>Export CSV</Button>
-                <Button variant="outline" onClick={handleExportExcel} disabled={exporting}>Export Excel</Button>
-                <Button variant="secondary" onClick={openNewFollowup} disabled={!baseline}>New Follow Up</Button>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="flex justify-end">
+            <Button variant="secondary" onClick={openNewFollowup} disabled={!baseline}>New Follow Up</Button>
+          </div>
         </TabsContent>
 
-        <TabsContent value="patient-info">
+        <TabsContent value="patient-info" forceMount>
           {canManageSectionLocks && (
             <div className="mb-4 flex justify-end">
               <Button
@@ -281,7 +282,7 @@ export default function AdminPatientDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="baseline">
+        <TabsContent value="baseline" forceMount>
           {canManageSectionLocks && (
             <div className="mb-4 flex justify-end">
               <Button
@@ -307,7 +308,7 @@ export default function AdminPatientDetailPage() {
         </TabsContent>
 
         {followups.map((followup, index) => (
-          <TabsContent key={`visit-content-${index}`} value={`visit-${index}`}>
+          <TabsContent key={`visit-content-${index}`} value={`visit-${index}`} forceMount>
             {canManageSectionLocks && (
               <div className="mb-4 flex justify-end">
                 <Button
@@ -335,7 +336,7 @@ export default function AdminPatientDetailPage() {
         ))}
 
         {creatingFollowUp && (
-          <TabsContent value="new-followup">
+          <TabsContent value="new-followup" forceMount>
             <FollowUpForm
               patientId={patient.id}
               existingData={null}
@@ -353,7 +354,21 @@ export default function AdminPatientDetailPage() {
           </TabsContent>
         )}
 
-        <TabsContent value="comparison" className="space-y-6">
+        <TabsContent value="comparison" className="space-y-6" forceMount>
+          <Card>
+            <CardHeader>
+              <CardTitle>Export Patient Data</CardTitle>
+              <CardDescription>Download complete patient records in PDF, CSV, or Excel format.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={handleExportPDF} disabled={exporting}>Export PDF</Button>
+                <Button variant="outline" onClick={handleExportCSV} disabled={exporting}>Export CSV</Button>
+                <Button variant="outline" onClick={handleExportExcel} disabled={exporting}>Export Excel</Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {baseline && followups.length > 0 ? (
             <ComparisonView
               baseline={baseline}

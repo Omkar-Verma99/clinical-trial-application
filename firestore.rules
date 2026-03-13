@@ -19,10 +19,16 @@ service cloud.firestore {
     // OPTIMIZED: Single document read/write per patient
     // PERFORMANCE: 3-4x faster, 67% lower cost
     match /patients/{patientId} {
+      function normalizedSection(section) {
+        return section == 'patient_info' ? 'patient-info' : section;
+      }
+
       function sectionLocked(section) {
         return resource.data.sectionLocks != null &&
-          resource.data.sectionLocks[section] != null &&
-          resource.data.sectionLocks[section].locked == true;
+          (
+            (resource.data.sectionLocks[section] != null && resource.data.sectionLocks[section].locked == true) ||
+            (resource.data.sectionLocks[normalizedSection(section)] != null && resource.data.sectionLocks[normalizedSection(section)].locked == true)
+          );
       }
 
       function changedKeys() {
@@ -47,8 +53,20 @@ service cloud.firestore {
         return changedKeys().hasAny(['baseline']);
       }
 
+      function baselineChangedKeys() {
+        return (request.resource.data.baseline == null ? {} : request.resource.data.baseline)
+          .diff(resource.data.baseline == null ? {} : resource.data.baseline)
+          .affectedKeys();
+      }
+
+      function baselinePatientInfoSyncOnly() {
+        // Allow patient-info sync fields to flow into baseline even when baseline is locked.
+        return changedKeys().hasOnly(['baseline', 'baselineVisitDate', 'updatedAt']) &&
+          baselineChangedKeys().hasOnly(['baselineVisitDate', 'weight', 'updatedAt']);
+      }
+
       function baselineLockedGuard() {
-        return !sectionLocked('baseline') || !baselineFieldsTouched();
+        return !sectionLocked('baseline') || !baselineFieldsTouched() || baselinePatientInfoSyncOnly();
       }
 
       function immutableGovernanceGuard() {
@@ -80,7 +98,7 @@ service cloud.firestore {
 
       allow update: if isAdmin() ||
         (isDoctorOwner(resource.data) &&
-        isDoctorOwner(request.resource.data) &&
+        request.resource.data.doctorId == resource.data.doctorId &&
         immutableGovernanceGuard() &&
         doctorLockGuard());
 

@@ -106,12 +106,12 @@ export default function AdminDashboard() {
       try {
         setIsLoading(true);
 
-        // Fetch patients count
-        const patientsSnapshot = await getDocs(collection(db, 'patients'));
-        const totalPatients = patientsSnapshot.size;
+        const [patientsSnapshot, doctorsSnapshot] = await Promise.all([
+          getDocs(collection(db, 'patients')),
+          getDocs(collection(db, 'doctors')),
+        ]);
 
-        // Fetch doctors count
-        const doctorsSnapshot = await getDocs(collection(db, 'doctors'));
+        const totalPatients = patientsSnapshot.size;
         const activeDoctors = doctorsSnapshot.docs.filter(
           (doc) => doc.data().status === 'active'
         ).length;
@@ -244,7 +244,10 @@ export default function AdminDashboard() {
         const doctorPerfMap = new Map<string, DoctorPerformance>();
         doctorsSnapshot.docs.forEach((doctorDoc) => {
           doctorPerfMap.set(doctorDoc.id, {
-            name: `${doctorDoc.data().firstName || ''} ${doctorDoc.data().lastName || ''}`.trim() || 'Unknown',
+            name:
+              String(doctorDoc.data().name || '').trim() ||
+              `${doctorDoc.data().firstName || ''} ${doctorDoc.data().lastName || ''}`.trim() ||
+              'Unknown',
             patients: 0,
             forms: 0,
             completion: 100,
@@ -316,7 +319,7 @@ export default function AdminDashboard() {
         <div className="flex items-start justify-between">
           <div>
             <p className="text-muted-foreground text-sm font-medium">{label}</p>
-            <p className="text-3xl font-bold text-white mt-2">
+            <p className="text-3xl font-bold text-foreground mt-2">
               {value}
               {suffix && <span className="text-lg text-muted-foreground ml-1">{suffix}</span>}
             </p>
@@ -353,7 +356,7 @@ export default function AdminDashboard() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground mt-2">Welcome to the RWE Study Admin Panel</p>
       </div>
 
@@ -395,17 +398,17 @@ export default function AdminDashboard() {
         {/* Enrollment Trend */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-white">Enrollment Trend</CardTitle>
+            <CardTitle className="text-foreground">Enrollment Trend</CardTitle>
             <CardDescription>Last 30 days enrollment and completion</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={enrollmentTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="date" stroke="#94a3b8" />
-                <YAxis stroke="#94a3b8" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
+                <XAxis dataKey="date" stroke="#64748b" />
+                <YAxis stroke="#64748b" />
                 <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569' }}
+                  contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }}
                   cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
                 />
                 <Legend />
@@ -425,7 +428,7 @@ export default function AdminDashboard() {
         {/* Form Status Distribution */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="text-white">Form Status Distribution</CardTitle>
+            <CardTitle className="text-foreground">Form Status Distribution</CardTitle>
             <CardDescription>Status breakdown of all forms</CardDescription>
           </CardHeader>
           <CardContent>
@@ -448,9 +451,7 @@ export default function AdminDashboard() {
                   <Cell fill="#10b981" />
                   <Cell fill="#f59e0b" />
                 </Pie>
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #475569' }}
-                />
+                <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>
@@ -460,7 +461,7 @@ export default function AdminDashboard() {
       {/* Doctor Performance */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-white">Top Performing Doctors</CardTitle>
+          <CardTitle className="text-foreground">Top Performing Doctors</CardTitle>
           <CardDescription>Doctor performance metrics and statistics</CardDescription>
         </CardHeader>
         <CardContent>
@@ -480,7 +481,7 @@ export default function AdminDashboard() {
                     key={idx}
                     className="border-b border-border hover:bg-muted/30 transition-colors"
                   >
-                    <td className="py-3 px-4 text-white font-medium">{doctor.name}</td>
+                    <td className="py-3 px-4 text-foreground font-medium">{doctor.name}</td>
                     <td className="text-center py-3 px-4 text-foreground">{doctor.patients}</td>
                     <td className="text-center py-3 px-4 text-foreground">{doctor.forms}</td>
                     <td className="text-center py-3 px-4">
@@ -505,7 +506,7 @@ export default function AdminDashboard() {
       {/* Recent Activities */}
       <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle className="text-white">Recent Activities</CardTitle>
+          <CardTitle className="text-foreground">Recent Activities</CardTitle>
           <CardDescription>Latest actions and events in the system</CardDescription>
         </CardHeader>
         <CardContent>
@@ -516,11 +517,11 @@ export default function AdminDashboard() {
                   key={activity.id}
                   className="flex items-start gap-4 p-3 bg-muted/30 rounded-lg hover:bg-muted/40 transition-colors"
                 >
-                  <div className="mt-1 p-2 bg-blue-500/20 rounded-lg">
-                    <Activity className="w-4 h-4 text-blue-400" />
+                  <div className="mt-1 p-2 bg-sky-500/15 rounded-lg">
+                    <Activity className="w-4 h-4 text-sky-700" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium text-sm">{activity.description}</p>
+                    <p className="text-foreground font-medium text-sm">{activity.description}</p>
                     <p className="text-muted-foreground text-xs mt-1">
                       {format(activity.timestamp, 'MMM d, yyyy h:mm a')}
                     </p>
@@ -541,7 +542,7 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-card/80 border border-border rounded-lg p-6">
         <div>
           <p className="text-muted-foreground text-sm">New Patients This Week</p>
-          <p className="text-2xl font-bold text-white mt-1">{stats.newPatientsThisWeek}</p>
+          <p className="text-2xl font-bold text-foreground mt-1">{stats.newPatientsThisWeek}</p>
         </div>
         <div>
           <p className="text-muted-foreground text-sm">Pending Review</p>

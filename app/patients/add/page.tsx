@@ -655,19 +655,10 @@ export function PatientFormPage({
             delete updatePayload.baseline
           }
 
-          // Keep baseline fields synced with Patient Info edits only when baseline is not locked.
+          // Keep baseline date/weight synced with Patient Info edits for consistency.
           const existingPatientSnap = await getDoc(patientDocRef)
           const existingPatientData = existingPatientSnap.exists() ? (existingPatientSnap.data() as any) : null
-          const baselineLocked =
-            existingPatientData?.sectionLocks &&
-            existingPatientData.sectionLocks.baseline &&
-            existingPatientData.sectionLocks.baseline.locked === true
-
-          if (
-            !baselineLocked &&
-            existingPatientData?.baseline &&
-            typeof existingPatientData.baseline === "object"
-          ) {
+          if (existingPatientData?.baseline && typeof existingPatientData.baseline === "object") {
             updatePayload["baseline.baselineVisitDate"] = sanitizedFormData.baselineVisitDate
             if (weightValue !== null) {
               updatePayload["baseline.weight"] = weightValue
@@ -724,15 +715,22 @@ export function PatientFormPage({
           await router.push("/dashboard")
         }
       } catch (firebaseError) {
+        const firebaseCode =
+          typeof firebaseError === "object" && firebaseError && "code" in firebaseError
+            ? String((firebaseError as any).code)
+            : "unknown"
         logError(firebaseError as Error, {
           action: isEditMode ? "updatePatient" : "addPatient",
+          firebaseCode,
+          patientId: editPatientId || undefined,
+          userId: user?.uid,
           severity: "high"
         })
         const errMsg = firebaseError instanceof Error ? firebaseError.message : "Failed to save patient to database."
         toast({
           variant: "destructive",
           title: "Error saving patient",
-          description: errMsg,
+          description: firebaseCode !== "unknown" ? `${errMsg} (${firebaseCode})` : errMsg,
         })
         setLoading(false)
         submitLockRef.current = false

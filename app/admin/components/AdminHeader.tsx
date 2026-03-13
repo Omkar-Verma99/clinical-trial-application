@@ -16,6 +16,10 @@ import { LogOut, Settings, User, Bell } from 'lucide-react';
 export default function AdminHeader() {
   const { adminUser, logout } = useAdminAuth();
   const router = useRouter();
+  const firstName = (adminUser?.firstName || '').trim();
+  const lastName = (adminUser?.lastName || '').trim();
+  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.trim() || 'AD';
+  const fullName = `${firstName} ${lastName}`.trim() || 'Admin User';
 
   const handleLogout = async () => {
     await logout();
@@ -67,7 +71,7 @@ export default function AdminHeader() {
                 className="text-muted-foreground hover:text-foreground hover:bg-muted"
               >
                 <div className="w-8 h-8 bg-gradient-to-br from-primary to-secondary rounded-full flex items-center justify-center text-white text-xs font-bold">
-                  {adminUser?.firstName[0]}{adminUser?.lastName[0]}
+                  {initials}
                 </div>
               </Button>
             </DropdownMenuTrigger>
@@ -76,7 +80,7 @@ export default function AdminHeader() {
               <DropdownMenuLabel className="text-foreground">
                 <div>
                   <p className="font-semibold text-sm">
-                    {adminUser?.firstName} {adminUser?.lastName}
+                    {fullName}
                   </p>
                   <p className="text-xs text-muted-foreground">{adminUser?.email}</p>
                   <p className="text-xs text-primary mt-1">

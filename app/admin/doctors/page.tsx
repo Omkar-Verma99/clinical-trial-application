@@ -21,6 +21,7 @@ interface Doctor {
   id: string;
   firstName: string;
   lastName: string;
+  displayName: string;
   email: string;
   phone?: string;
   department?: string;
@@ -105,6 +106,10 @@ export default function DoctorsManagementPage() {
             id: docSnap.id,
             firstName: docData.firstName || '',
             lastName: docData.lastName || '',
+            displayName:
+              String(docData.name || '').trim() ||
+              `${docData.firstName || ''} ${docData.lastName || ''}`.trim() ||
+              'Unknown',
             email: docData.email || '',
             phone: docData.phone,
             department: docData.department,
@@ -140,7 +145,7 @@ export default function DoctorsManagementPage() {
     // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter((doc) =>
-        `${doc.firstName} ${doc.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        doc.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         doc.email.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -158,7 +163,7 @@ export default function DoctorsManagementPage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-bold text-white">Doctor Management</h1>
+        <h1 className="text-3xl font-bold text-foreground">Doctor Management</h1>
         <p className="text-muted-foreground mt-2">Manage and monitor all doctors in the system</p>
       </div>
 
@@ -172,7 +177,7 @@ export default function DoctorsManagementPage() {
               placeholder="Search by name or email..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-muted/40 border-border text-white placeholder-slate-400"
+              className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground"
             />
           </div>
         </div>
@@ -180,7 +185,7 @@ export default function DoctorsManagementPage() {
         <div className="w-full md:w-48">
           <label className="text-sm text-foreground mb-2 block">Filter by Status</label>
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="bg-muted/40 border-border text-white">
+            <SelectTrigger className="bg-background border-border text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-muted border-border">
@@ -197,7 +202,7 @@ export default function DoctorsManagementPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-white">All Doctors ({filteredDoctors.length})</CardTitle>
+              <CardTitle className="text-foreground">All Doctors ({filteredDoctors.length})</CardTitle>
               <CardDescription>Complete list of doctors in the system</CardDescription>
             </div>
           </div>
@@ -230,8 +235,8 @@ export default function DoctorsManagementPage() {
                       key={doctor.id}
                       className="border-b border-border hover:bg-muted/30 transition-colors"
                     >
-                      <td className="py-3 px-4 text-white font-medium">
-                        {doctor.firstName} {doctor.lastName}
+                      <td className="py-3 px-4 text-foreground font-medium">
+                        {doctor.displayName}
                       </td>
                       <td className="py-3 px-4 text-foreground flex items-center gap-2">
                         <Mail className="w-4 h-4 text-muted-foreground" />
@@ -253,7 +258,7 @@ export default function DoctorsManagementPage() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="text-blue-400 hover:bg-blue-500/20"
+                          className="text-primary hover:bg-primary/10"
                           onClick={() => setSelectedDoctor(doctor)}
                         >
                           <Eye className="w-4 h-4" />
@@ -279,14 +284,14 @@ export default function DoctorsManagementPage() {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
-                  <CardTitle className="text-white text-2xl">
-                    {selectedDoctor.firstName} {selectedDoctor.lastName}
+                  <CardTitle className="text-foreground text-2xl">
+                    {selectedDoctor.displayName}
                   </CardTitle>
                   <CardDescription>{selectedDoctor.department || 'No Department'}</CardDescription>
                 </div>
                 <button
                   onClick={() => setSelectedDoctor(null)}
-                  className="text-muted-foreground hover:text-white"
+                  className="text-muted-foreground hover:text-foreground"
                 >
                   ✕
                 </button>
@@ -296,7 +301,7 @@ export default function DoctorsManagementPage() {
             <CardContent className="space-y-6">
               {/* Contact Information */}
               <div>
-                <h3 className="text-white font-semibold mb-3">Contact Information</h3>
+                <h3 className="text-foreground font-semibold mb-3">Contact Information</h3>
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 text-foreground">
                     <Mail className="w-4 h-4 text-muted-foreground" />
@@ -313,15 +318,15 @@ export default function DoctorsManagementPage() {
 
               {/* Statistics */}
               <div>
-                <h3 className="text-white font-semibold mb-3">Statistics</h3>
+                <h3 className="text-foreground font-semibold mb-3">Statistics</h3>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="bg-muted/30 rounded-lg p-4">
                     <p className="text-muted-foreground text-sm">Patients Assigned</p>
-                    <p className="text-2xl font-bold text-white mt-2">{selectedDoctor.patientCount || 0}</p>
+                    <p className="text-2xl font-bold text-foreground mt-2">{selectedDoctor.patientCount || 0}</p>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-4">
                     <p className="text-muted-foreground text-sm">Forms Submitted</p>
-                    <p className="text-2xl font-bold text-white mt-2">{selectedDoctor.formCount || 0}</p>
+                    <p className="text-2xl font-bold text-foreground mt-2">{selectedDoctor.formCount || 0}</p>
                   </div>
                   <div className="bg-muted/30 rounded-lg p-4">
                     <p className="text-muted-foreground text-sm">Status</p>
@@ -334,7 +339,7 @@ export default function DoctorsManagementPage() {
 
               {/* Account Information */}
               <div>
-                <h3 className="text-white font-semibold mb-3">Account Information</h3>
+                <h3 className="text-foreground font-semibold mb-3">Account Information</h3>
                 <div className="space-y-2 text-foreground text-sm">
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-muted-foreground" />

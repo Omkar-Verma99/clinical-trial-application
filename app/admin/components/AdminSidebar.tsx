@@ -97,6 +97,7 @@ export default function AdminSidebar() {
   const router = useRouter();
   const { adminUser, logout, hasPermission } = useAdminAuth();
   const [isOpen, setIsOpen] = useState(true);
+  const fullName = `${adminUser?.firstName || ''} ${adminUser?.lastName || ''}`.trim() || 'Admin User';
 
   const handleLogout = async () => {
     await logout();
@@ -187,7 +188,7 @@ export default function AdminSidebar() {
           <div className="rounded-lg p-3 border border-border bg-background">
             <p className="text-xs text-muted-foreground">Logged in as</p>
             <p className="text-sm font-semibold text-foreground truncate">
-              {adminUser?.firstName} {adminUser?.lastName}
+              {fullName}
             </p>
             <p className="text-xs text-primary mt-1">
               {adminUser?.role === 'super_admin' ? 'Super Admin' : 'Admin'}

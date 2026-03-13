@@ -4,7 +4,6 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { AdminUser } from '@/lib/admin-auth';
 import { getDefaultPermissionsForRole } from '@/lib/admin-permissions';
 import { auth } from '@/lib/firebase';
-import { usePathname } from 'next/navigation';
 import {
   setPersistence,
   browserLocalPersistence,
@@ -51,79 +50,82 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [permissions, setPermissions] = useState<string[]>([]);
-  const pathname = usePathname();
 
   // Check session on mount
   useEffect(() => {
     const checkSession = async () => {
       try {
+        if (typeof window === 'undefined') {
+          return;
+        }
+
+        const currentPath = window.location.pathname;
+
         // Avoid admin session bootstrap on non-admin routes.
-        if (!pathname?.startsWith('/admin') || pathname === '/admin/login') {
+        if (!currentPath.startsWith('/admin') || currentPath === '/admin/login') {
           setAdminUser(null);
           setPermissions([]);
           return;
         }
 
-        if (typeof window !== 'undefined') {
-          const sessionRaw = localStorage.getItem('adminAuth');
-          const session = sessionRaw ? JSON.parse(sessionRaw) : null;
+        const sessionRaw = localStorage.getItem('adminAuth');
+        const session = sessionRaw ? JSON.parse(sessionRaw) : null;
 
-          // Restore Firebase client auth from secure server session when available.
-          const bootstrapResponse = await fetch('/api/admin/session', { method: 'GET' });
-          if (bootstrapResponse.ok) {
-            const bootstrapData = await bootstrapResponse.json();
-            if (bootstrapData?.success && bootstrapData?.customToken && auth) {
-              await setPersistence(auth, browserLocalPersistence);
-              await signInWithCustomToken(auth, String(bootstrapData.customToken));
-            }
-
-            if (bootstrapData?.success && bootstrapData?.user) {
-              const serverUser = buildAdminUserFromSession({
-                adminId: bootstrapData.user.id,
-                email: bootstrapData.user.email,
-                role: bootstrapData.user.role,
-                firstName: bootstrapData.user.firstName,
-                lastName: bootstrapData.user.lastName,
-                status: bootstrapData.user.status,
-                permissions: bootstrapData.user.permissions,
-                loginCount: bootstrapData.user.loginCount,
-                lastLogin: bootstrapData.user.lastLogin,
-                createdAt: bootstrapData.user.createdAt,
-              });
-
-              if (serverUser) {
-                localStorage.setItem('adminAuth', JSON.stringify({
-                  adminId: serverUser.id,
-                  email: serverUser.email,
-                  role: serverUser.role,
-                  firstName: serverUser.firstName,
-                  lastName: serverUser.lastName,
-                  status: serverUser.status,
-                  permissions: serverUser.permissions,
-                  loginCount: serverUser.loginCount,
-                  lastLogin: serverUser.lastLogin.toISOString(),
-                  createdAt: serverUser.createdAt.toISOString(),
-                  loginTime: new Date().toISOString(),
-                }));
-
-                setAdminUser(serverUser);
-                setPermissions(serverUser.permissions);
-                return;
-              }
-            }
-          } else {
-            // Prevent stale localStorage-only admin sessions when secure server session is invalid.
-            localStorage.removeItem('adminAuth');
-            setAdminUser(null);
-            setPermissions([]);
-            return;
+        // Restore Firebase client auth from secure server session when available.
+        const bootstrapResponse = await fetch('/api/admin/session', { method: 'GET' });
+        if (bootstrapResponse.ok) {
+          const bootstrapData = await bootstrapResponse.json();
+          if (bootstrapData?.success && bootstrapData?.customToken && auth) {
+            await setPersistence(auth, browserLocalPersistence);
+            await signInWithCustomToken(auth, String(bootstrapData.customToken));
           }
 
-          const user = buildAdminUserFromSession(session);
-          if (user) {
-            setAdminUser(user);
-            setPermissions(user.permissions);
+          if (bootstrapData?.success && bootstrapData?.user) {
+            const serverUser = buildAdminUserFromSession({
+              adminId: bootstrapData.user.id,
+              email: bootstrapData.user.email,
+              role: bootstrapData.user.role,
+              firstName: bootstrapData.user.firstName,
+              lastName: bootstrapData.user.lastName,
+              status: bootstrapData.user.status,
+              permissions: bootstrapData.user.permissions,
+              loginCount: bootstrapData.user.loginCount,
+              lastLogin: bootstrapData.user.lastLogin,
+              createdAt: bootstrapData.user.createdAt,
+            });
+
+            if (serverUser) {
+              localStorage.setItem('adminAuth', JSON.stringify({
+                adminId: serverUser.id,
+                email: serverUser.email,
+                role: serverUser.role,
+                firstName: serverUser.firstName,
+                lastName: serverUser.lastName,
+                status: serverUser.status,
+                permissions: serverUser.permissions,
+                loginCount: serverUser.loginCount,
+                lastLogin: serverUser.lastLogin.toISOString(),
+                createdAt: serverUser.createdAt.toISOString(),
+                loginTime: new Date().toISOString(),
+              }));
+
+              setAdminUser(serverUser);
+              setPermissions(serverUser.permissions);
+              return;
+            }
           }
+        } else {
+          // Prevent stale localStorage-only admin sessions when secure server session is invalid.
+          localStorage.removeItem('adminAuth');
+          setAdminUser(null);
+          setPermissions([]);
+          return;
+        }
+
+        const user = buildAdminUserFromSession(session);
+        if (user) {
+          setAdminUser(user);
+          setPermissions(user.permissions);
         }
       } catch (error) {
         console.error('Session check error:', error);
@@ -133,7 +135,7 @@ export function AdminAuthProvider({ children }: { children: ReactNode }) {
     };
 
     checkSession();
-  }, [pathname]);
+  }, []);
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     setIsLoading(true);

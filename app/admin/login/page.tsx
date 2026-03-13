@@ -52,11 +52,11 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-background to-emerald-50/60 flex items-center justify-center p-4">
       {/* Background decorative elements */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-400 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
+        <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-400 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
       </div>
 
       <div className="w-full max-w-md relative z-10">
@@ -67,14 +67,14 @@ export default function AdminLoginPage() {
               <Lock className="w-6 h-6 text-white" />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">RWE Study Admin</h1>
+          <h1 className="text-3xl font-bold text-foreground mb-2">RWE Study Admin</h1>
           <p className="text-muted-foreground">Secure Admin Portal</p>
         </div>
 
         {/* Login Card */}
         <Card className="border-border bg-card backdrop-blur-sm shadow-2xl">
           <CardHeader className="space-y-1 pb-6">
-            <CardTitle className="text-2xl text-white">Admin Login</CardTitle>
+            <CardTitle className="text-2xl text-foreground">Admin Login</CardTitle>
             <CardDescription className="text-muted-foreground">
               Enter your admin credentials to access the dashboard
             </CardDescription>
@@ -96,7 +96,7 @@ export default function AdminLoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     disabled={isLoading}
-                    className="pl-10 bg-muted/40 border-border text-white placeholder-slate-400 focus:border-blue-500 focus:ring-blue-500"
+                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
               </div>
@@ -115,14 +115,14 @@ export default function AdminLoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     disabled={isLoading}
-                    className="pl-10 bg-muted/40 border-border text-white placeholder-slate-400 focus:border-blue-500 focus:ring-blue-500"
+                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
               </div>
 
               {/* Error Alert */}
               {error && (
-                <Alert className="bg-red-500/10 border-red-500/50 text-red-200">
+                <Alert className="bg-destructive/10 border-destructive/40 text-destructive">
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
@@ -132,7 +132,7 @@ export default function AdminLoginPage() {
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold h-10 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-10 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
@@ -149,15 +149,15 @@ export default function AdminLoginPage() {
             <div className="mt-6 pt-6 border-t border-border">
               <p className="text-center text-sm text-muted-foreground">
                 Need help accessing your account?{' '}
-                <a href="#" className="text-blue-400 hover:text-blue-300 transition-colors">
+                <a href="#" className="text-primary hover:text-primary/80 transition-colors">
                   Contact Support
                 </a>
               </p>
             </div>
 
             {/* Security Notice */}
-            <div className="mt-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
-              <p className="text-xs text-blue-300 text-center">
+            <div className="mt-4 p-3 bg-sky-500/10 border border-sky-500/30 rounded-lg">
+              <p className="text-xs text-sky-700 text-center">
                 🔒 This is a secure admin-only area. All activities are logged and monitored.
               </p>
             </div>

@@ -309,14 +309,26 @@ export const BaselineForm = memo(function BaselineForm({
           console.log('✓ Form saved to Firebase')
         }
       } catch (error) {
+        const firebaseCode =
+          typeof error === "object" && error && "code" in error
+            ? String((error as any).code)
+            : "unknown"
         logError(error as Error, {
           action: "saveBaselineData",
+          firebaseCode,
+          patientId,
+          userId: user?.uid,
           severity: "high"
         })
         toast({
           variant: "destructive",
           title: "Error saving data",
-          description: error instanceof Error ? error.message : "Please try again.",
+          description:
+            error instanceof Error
+              ? firebaseCode !== "unknown"
+                ? `${error.message} (${firebaseCode})`
+                : error.message
+              : "Please try again.",
         })
         return
       }

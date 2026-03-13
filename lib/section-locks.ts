@@ -20,7 +20,14 @@ export function getSectionLock(
   section: LockableSection
 ): SectionLock | null {
   if (!sectionLocks) return null
-  return sectionLocks[section] || null
+  if (sectionLocks[section]) return sectionLocks[section] || null
+
+  // Backward compatibility for earlier key naming used in some records.
+  if (section === 'patient_info') {
+    return sectionLocks['patient-info'] || null
+  }
+
+  return null
 }
 
 export function isSectionLocked(
