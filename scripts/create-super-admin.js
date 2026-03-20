@@ -49,9 +49,10 @@ async function main() {
   const email = String(args.email || '').trim().toLowerCase()
   const firstName = String(args.first || '').trim()
   const lastName = String(args.last || '').trim()
+  const passwordArg = String(args.password || '').trim()
 
   if (!email || !firstName || !lastName) {
-    throw new Error('Usage: node scripts/create-super-admin.js --email <email> --first <firstName> --last <lastName>')
+    throw new Error('Usage: node scripts/create-super-admin.js --email <email> --first <firstName> --last <lastName> [--password <password>]')
   }
 
   const root = path.resolve(__dirname, '..')
@@ -73,7 +74,7 @@ async function main() {
     const existing = await auth.getUserByEmail(email)
     uid = existing.uid
   } catch {
-    const password = makePassword()
+    const password = passwordArg || makePassword()
     const createdUser = await auth.createUser({
       email,
       password,
@@ -113,6 +114,7 @@ async function main() {
   await auth.updateUser(uid, {
     displayName: `${firstName} ${lastName}`,
     disabled: false,
+    ...(passwordArg ? { password: passwordArg } : {}),
   })
 
   console.log(`SUPER_ADMIN_READY uid=${uid} email=${email} created=${created}`)

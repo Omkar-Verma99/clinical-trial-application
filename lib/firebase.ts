@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app"
-import { getAuth } from "firebase/auth"
+import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
 import { getAnalytics, isSupported as isAnalyticsSupported } from "firebase/analytics"
 import { firebaseConfig } from "./firebase-config"
@@ -33,6 +33,12 @@ if (typeof window !== "undefined") {
     try {
       firebaseApp = !getApps().length ? initializeApp(firebaseConfig) : getApp()
       auth = getAuth(firebaseApp)
+      
+      // Enable persistent login session
+      setPersistence(auth, browserLocalPersistence).catch(err => {
+        console.warn("Auth persistence setup failed:", err)
+      })
+
       db = getFirestore(firebaseApp)
 
       // Initialize Analytics only when explicitly enabled.

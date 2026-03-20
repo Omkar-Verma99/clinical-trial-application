@@ -73,44 +73,43 @@ export const BaselineForm = memo(function BaselineForm({
   })
 
   useEffect(() => {
-    if (!patientId || !db) return
+    if (!existingData) return
 
-    const prefillFromPatient = async () => {
-      try {
-        const patientRef = doc(db, "patients", patientId)
-        const patientSnap = await getDoc(patientRef)
-        if (!patientSnap.exists()) return
-
-        const patientData = patientSnap.data() as any
-        const baselineVisitDate = patientData?.baselineVisitDate || ""
-        const baselineWeight =
-          typeof patientData?.weight === "number" && Number.isFinite(patientData.weight)
-            ? patientData.weight.toString()
-            : ""
-
-        setFormData((prev) => ({
-          ...prev,
-          baselineVisitDate: baselineVisitDate || prev.baselineVisitDate,
-          weight: baselineWeight || prev.weight,
-          treatmentInitiationDate: prev.treatmentInitiationDate || baselineVisitDate || prev.treatmentInitiationDate,
-        }))
-      } catch {
-        // Ignore prefill failures and continue with manual entry.
-      }
-    }
-
-    void prefillFromPatient()
-  }, [patientId])
-
-  useEffect(() => {
     setFormData((prev) => ({
       ...prev,
-      baselineVisitDate: patientBaselineVisitDate || prev.baselineVisitDate,
-      weight:
-        typeof patientWeight === "number" && Number.isFinite(patientWeight)
-          ? patientWeight.toString()
-          : prev.weight,
+      baselineVisitDate: existingData.baselineVisitDate || prev.baselineVisitDate,
+      hba1c: existingData.hba1c?.toString() || "",
+      fpg: existingData.fpg?.toString() || "",
+      ppg: existingData.ppg?.toString() || "",
+      weight: existingData.weight?.toString() || "",
+      bloodPressureSystolic: existingData.bloodPressureSystolic?.toString() || "",
+      bloodPressureDiastolic: existingData.bloodPressureDiastolic?.toString() || "",
+      heartRate: (existingData as any).heartRate?.toString() || "",
+      serumCreatinine: existingData.serumCreatinine?.toString() || "",
+      egfr: existingData.egfr?.toString() || "",
+      urinalysisType: existingData.urinalysis?.includes("Abnormal") ? "Abnormal" : (existingData.urinalysis || ""),
+      urinalysisSpecify: (existingData as any).urinalysisSpecify || "",
+      dosePrescribed: existingData.dosePrescribed || "",
+      treatmentInitiationDate: (existingData as any).treatmentInitiationDate || "",
     }))
+
+    setCounseling({
+      dietAndLifestyle: (existingData as any).counseling?.dietAndLifestyle ?? existingData.dietAdvice ?? false,
+      hypoglycemiaAwareness: (existingData as any).counseling?.hypoglycemiaAwareness ?? false,
+      utiGenitialInfectionAwareness: (existingData as any).counseling?.utiGenitialInfectionAwareness ?? false,
+      hydrationAdvice: (existingData as any).counseling?.hydrationAdvice ?? false,
+    })
+  }, [existingData])
+
+  useEffect(() => {
+    // PREFILL logic moved to props-driven approach
+    if (patientBaselineVisitDate || patientWeight) {
+      setFormData((prev) => ({
+        ...prev,
+        baselineVisitDate: patientBaselineVisitDate || prev.baselineVisitDate,
+        weight: typeof patientWeight === "number" ? patientWeight.toString() : prev.weight,
+      }))
+    }
   }, [patientBaselineVisitDate, patientWeight])
 
   useEffect(() => {

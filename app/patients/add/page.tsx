@@ -18,6 +18,7 @@ import { useToast } from "@/hooks/use-toast"
 import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
 import Link from "next/link"
+import type { Patient } from "@/lib/types"
 
 const isDevelopmentEnv = () => typeof window !== 'undefined' && window.location.hostname === 'localhost'
 const PATIENT_CODE_REGEX = /^\d{3}-[A-Z]{3}$/
@@ -171,7 +172,7 @@ export function PatientFormPage({
     return ""
   }
 
-  const hydrateFormFromPatientData = (patientData: any) => {
+  const hydrateFormFromPatientData = (patientData: Patient) => {
     setFormData((prev) => ({
       ...prev,
       patientCode: patientData.patientCode || "",
@@ -211,10 +212,10 @@ export function PatientFormPage({
       setComorbidities((prev) => ({
         ...prev,
         ...patientData.comorbidities,
-        other: Array.isArray(patientData.comorbidities.other)
+        other: Array.isArray(patientData.comorbidities?.other)
           ? patientData.comorbidities.other.join(", ")
-          : patientData.comorbidities.other || "",
-        ckdEgfrCategory: patientData.comorbidities.ckdEgfrCategory || "",
+          : (patientData.comorbidities?.other as any) || "",
+        ckdEgfrCategory: patientData.comorbidities?.ckdEgfrCategory || "",
       }))
     }
 
@@ -224,9 +225,9 @@ export function PatientFormPage({
       setPreviousDrugClasses((prev) => ({
         ...prev,
         ...patientData.previousDrugClasses,
-        other: Array.isArray(patientData.previousDrugClasses.other)
+        other: Array.isArray(patientData.previousDrugClasses?.other)
           ? patientData.previousDrugClasses.other.join(", ")
-          : patientData.previousDrugClasses.other || "",
+          : (patientData.previousDrugClasses?.other as any) || "",
       }))
     }
 
@@ -234,9 +235,9 @@ export function PatientFormPage({
       setReasonForTripleFDC((prev) => ({
         ...prev,
         ...patientData.reasonForTripleFDC,
-        other: Array.isArray(patientData.reasonForTripleFDC.other)
+        other: Array.isArray(patientData.reasonForTripleFDC?.other)
           ? patientData.reasonForTripleFDC.other.join(", ")
-          : patientData.reasonForTripleFDC.other || "",
+          : (patientData.reasonForTripleFDC?.other as any) || "",
       }))
     }
   }

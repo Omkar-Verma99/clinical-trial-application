@@ -9,6 +9,8 @@ import {
   createUserWithEmailAndPassword,
   signOut,
   sendEmailVerification,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
 } from "firebase/auth"
 import { doc, getDoc, setDoc } from "firebase/firestore"
 import { auth, db } from "@/lib/firebase"
@@ -22,6 +24,7 @@ interface AuthContextType {
   doctorDataError: string | null
   retryDoctorDataFetch: () => Promise<void>
   login: (email: string, password: string) => Promise<void>
+  reVerifyOnline: (email: string, password: string) => Promise<void>
   signup: (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => Promise<void>
   logout: () => Promise<void>
 }
@@ -33,6 +36,7 @@ const AuthContext = createContext<AuthContextType>({
   doctorDataError: null,
   retryDoctorDataFetch: async () => {},
   login: async () => {},
+  reVerifyOnline: async () => {},
   signup: async () => {},
   logout: async () => {},
 })
@@ -192,6 +196,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await syncRoleClaim(userCredential.user)
     logInfo("User logged in successfully", { email: normalizedEmail })
   }, [setDoctorSessionCookies, syncRoleClaim])
+
+  const reVerifyOnline = useCallback(async (email: string, password: string) => {
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      throw new Error("No internet connection. Please check your network.")
+    }
+    if (!auth || !auth.currentUser) {
+      throw new Error("You are not logged in. Please log in again.")
+    }
+
+    const normalizedEmail = email.trim().toLowerCase()
+    const credential = EmailAuthProvider.credential(normalizedEmail, password)
+    await reauthenticateWithCredential(auth.currentUser, credential)
+  }, [])
 
   const signup = useCallback(async (email: string, password: string, doctorData: Omit<Doctor, "id" | "createdAt">) => {
     const createAppError = (code: string, message: string) => {
@@ -373,10 +390,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       doctorDataError,
       retryDoctorDataFetch,
       login,
+      reVerifyOnline,
       signup,
       logout,
     }),
-    [user, doctor, loading, doctorDataError, retryDoctorDataFetch, login, signup, logout]
+    [user, doctor, loading, doctorDataError, retryDoctorDataFetch, login, reVerifyOnline, signup, logout]
   )
 
   return (

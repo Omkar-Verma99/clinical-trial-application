@@ -1,11 +1,14 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { getDocs, collection } from 'firebase/firestore';
-import { getFirestore } from 'firebase/firestore';
+import { useMemo, useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import { getDocs, collection, getFirestore } from 'firebase/firestore';
+import { useQuery } from '@tanstack/react-query';
+import { Users, FileText, CheckCircle2, BarChart3, Activity, AlertCircle } from 'lucide-react';
+import type { Patient, Doctor } from '@/lib/types';
+
 import {
-  LineChart,
-  Line,
+  ResponsiveContainer,
   BarChart,
   Bar,
   XAxis,
@@ -13,271 +16,233 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
 } from 'recharts';
-import { TrendingUp, Users, FileText, CheckCircle2 } from 'lucide-react';
 
 export default function AnalyticsPage() {
-  const [loading, setLoading] = useState(true);
-  const [metrics, setMetrics] = useState({
-    totalPatients: 0,
-    totalDoctors: 0,
-    totalForms: 0,
-    activePatients: 0,
-  });
-  const [enrollmentTrend, setEnrollmentTrend] = useState<any[]>([]);
-  const [doctorProductivity, setDoctorProductivity] = useState<any[]>([]);
-
   const db = getFirestore();
+  const [isChartReady, setIsChartReady] = useState(false);
+
+  const { data: analyticsData, isLoading: loading, error } = useQuery({
+    queryKey: ['admin-analytics'],
+    queryFn: async () => {
+      const patientsSnap = await getDocs(collection(db, 'patients'));
+      const patients = patientsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Patient[];
+      const doctorsSnap = await getDocs(collection(db, 'doctors'));
+      const doctors = doctorsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Doctor[];
+      return { patients, doctors };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 
   useEffect(() => {
-    fetchAnalytics();
-  }, []);
-
-  const fetchAnalytics = async () => {
-    try {
-      setLoading(true);
-
-      // Fetch patients
-      const patientsSnap = await getDocs(collection(db, 'patients'));
-      const patients = patientsSnap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Derive forms from unified patient records (baseline + followups).
-      const forms = patients.flatMap((patient: any) => {
-        const baselineForms = patient?.baseline ? [{ doctorId: patient?.baseline?.doctorId || patient?.doctorId }] : [];
-        const followupForms = Array.isArray(patient?.followups)
-          ? patient.followups.map((followup: any) => ({ doctorId: followup?.doctorId || patient?.doctorId }))
-          : [];
-        return [...baselineForms, ...followupForms];
-      });
-
-      // Fetch doctors
-      const doctorsSnap = await getDocs(collection(db, 'doctors'));
-      const doctors = doctorsSnap.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-
-      // Calculate enrollment trend (by week)
-      const enrollmentByWeek: { [key: string]: number } = {};
-      const now = new Date();
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(now);
-        date.setDate(date.getDate() - i);
-        const week = `Week ${Math.ceil(date.getDate() / 7)}`;
-        enrollmentByWeek[week] = 0;
-      }
-
-      patients.forEach((p: any) => {
-        if (p.enrollmentDate) {
-          const date = typeof p.enrollmentDate === 'object' && p.enrollmentDate.toDate
-            ? p.enrollmentDate.toDate()
-            : new Date(p.enrollmentDate);
-          const week = `Week ${Math.ceil(date.getDate() / 7)}`;
-          enrollmentByWeek[week] = (enrollmentByWeek[week] || 0) + 1;
-        }
-      });
-
-      const enrollmentData = Object.entries(enrollmentByWeek).map(([week, count]) => ({
-        week,
-        patients: count,
-      }));
-
-      // Calculate doctor productivity
-      const doctorStats: { [key: string]: { name: string; forms: number; patients: number } } = {};
-      
-      doctors.forEach((doctor: any) => {
-        doctorStats[doctor.id] = {
-          name: doctor.firstName ? `${doctor.firstName} ${doctor.lastName}` : 'Unknown',
-          forms: 0,
-          patients: 0,
-        };
-      });
-
-      forms.forEach((form: any) => {
-        if (form.doctorId && doctorStats[form.doctorId]) {
-          doctorStats[form.doctorId].forms++;
-        }
-      });
-
-      patients.forEach((patient: any) => {
-        if (patient.doctorId && doctorStats[patient.doctorId]) {
-          doctorStats[patient.doctorId].patients++;
-        }
-      });
-
-      const doctorProductivityData = Object.values(doctorStats)
-        .sort((a, b) => b.forms - a.forms)
-        .slice(0, 8)
-        .map((doc) => ({
-          name: doc.name,
-          forms: doc.forms,
-          patients: doc.patients,
-        }));
-
-      setMetrics({
-        totalPatients: patients.length,
-        totalDoctors: doctors.length,
-        totalForms: forms.length,
-        activePatients: patients.filter((p: any) => p.status === 'active').length,
-      });
-
-      setEnrollmentTrend(enrollmentData);
-      setDoctorProductivity(doctorProductivityData);
-    } catch (error) {
-      console.error('Error fetching analytics:', error);
-    } finally {
-      setLoading(false);
+    if (!loading && !error) {
+      setTimeout(() => setIsChartReady(true), 150);
     }
-  };
+  }, [loading, error]);
+
+  const processedData = useMemo(() => {
+    if (!analyticsData) return null;
+    const { patients, doctors } = analyticsData;
+
+    let totalPatients = 0;
+    let pendingBaseline = 0;
+    let pendingFollowup = 0;
+    let completed = 0;
+
+    patients.forEach((p: any) => {
+      totalPatients++;
+      const hasBaseline = !!(p.baseline && typeof p.baseline === 'object');
+      const followups = Array.isArray(p.followups) ? p.followups : [];
+      const hasFollowup = followups.length > 0;
+
+      if (!hasBaseline) {
+        pendingBaseline++;
+      } else if (!hasFollowup) {
+        pendingFollowup++;
+      } else {
+        completed++;
+      }
+    });
+
+    const enrollmentByWeek: { [key: string]: number } = {};
+    const now = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const date = new Date(now);
+      date.setDate(date.getDate() - i * 7); // per week
+      const week = `Week -${i}`;
+      enrollmentByWeek[week] = 0;
+    }
+
+    patients.forEach((p: any) => {
+      const dateVal = p.createdAt || p.enrollmentDate;
+      if (dateVal) {
+         let dateObj;
+         if (dateVal instanceof Date) dateObj = dateVal;
+         else if (typeof dateVal.toDate === 'function') dateObj = dateVal.toDate();
+         else dateObj = new Date(dateVal);
+         
+         if (Object.prototype.toString.call(dateObj) === '[object Date]' && !isNaN(dateObj.getTime())) {
+             const diffTime = now.getTime() - dateObj.getTime();
+             const diffWeeks = Math.floor(diffTime / (1000 * 60 * 60 * 24 * 7));
+             if (diffWeeks >= 0 && diffWeeks <= 6) {
+                 enrollmentByWeek[`Week -${diffWeeks}`] = (enrollmentByWeek[`Week -${diffWeeks}`] || 0) + 1;
+             }
+         }
+      }
+    });
+
+    const enrollmentTrend = Object.entries(enrollmentByWeek)
+       .map(([week, count]) => ({ week: week === 'Week -0' ? 'This Week' : week, patients: count }))
+       .reverse();
+
+    const doctorStats: { [key: string]: { name: string; completed: number; pendingBaseline: number; pendingFollowup: number; total: number } } = {};
+    doctors.forEach((doctor: any) => {
+      doctorStats[doctor.id] = { name: String(doctor.name || '').trim() || 'Unknown', completed: 0, pendingBaseline: 0, pendingFollowup: 0, total: 0 };
+    });
+
+    patients.forEach((p: any) => {
+      const docId = p.doctorId || p.assignedDoctorId;
+      if (docId && doctorStats[docId]) {
+        doctorStats[docId].total += 1;
+        const hasBaseline = !!(p.baseline && typeof p.baseline === 'object');
+        const followups = Array.isArray(p.followups) ? p.followups : [];
+        const hasFollowup = followups.length > 0;
+
+        if (!hasBaseline) {
+           doctorStats[docId].pendingBaseline += 1;
+        } else if (!hasFollowup) {
+           doctorStats[docId].pendingFollowup += 1;
+        } else {
+           doctorStats[docId].completed += 1;
+        }
+      }
+    });
+
+    const topDoctors = Object.values(doctorStats)
+       .filter(d => d.total > 0)
+       .sort((a, b) => b.total - a.total)
+       .slice(0, 5);
+
+    return {
+      totalPatients,
+      pendingBaseline,
+      pendingFollowup,
+      completed,
+      enrollmentTrend,
+      topDoctors
+    };
+  }, [analyticsData]);
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-96">
-        <p className="text-muted-foreground">Loading analytics...</p>
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+        <h3 className="text-gray-500 font-medium">Loading Analytics...</h3>
       </div>
     );
   }
 
+  if (error || !processedData) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4 text-red-500">
+        <AlertCircle className="w-12 h-12" />
+        <h3 className="text-lg font-semibold">Failed to Load Analytics</h3>
+      </div>
+    );
+  }
+
+  const { totalPatients, pendingBaseline, pendingFollowup, completed, enrollmentTrend, topDoctors } = processedData;
+
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white">Advanced Analytics</h1>
-          <p className="text-muted-foreground mt-2">Comprehensive analysis of RWE study data</p>
-      </div>
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-gradient-to-br from-blue-900/30 to-slate-900 border border-blue-700/30 rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">Total Patients</p>
-              <p className="text-4xl font-bold text-blue-400 mt-2">{metrics.totalPatients}</p>
-            </div>
-            <Users className="w-12 h-12 text-blue-500 opacity-20" />
+    <div className="space-y-6 pb-8">
+      {/* Header Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="rounded-xl bg-blue-600 p-5 text-white shadow-md">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-3xl font-bold">{totalPatients}</span>
+            <Users className="w-6 h-6 opacity-80" />
           </div>
+          <p className="text-white/90 text-sm font-medium">Total Patients</p>
         </div>
-
-        <div className="bg-gradient-to-br from-green-900/30 to-slate-900 border border-green-700/30 rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">Active Patients</p>
-              <p className="text-4xl font-bold text-green-400 mt-2">{metrics.activePatients}</p>
-            </div>
-            <CheckCircle2 className="w-12 h-12 text-green-500 opacity-20" />
+        <div className="rounded-xl bg-emerald-600 p-5 text-white shadow-md">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-3xl font-bold">{completed}</span>
+            <CheckCircle2 className="w-6 h-6 opacity-80" />
           </div>
+          <p className="text-white/90 text-sm font-medium">Completed</p>
         </div>
-
-        <div className="bg-gradient-to-br from-purple-900/30 to-slate-900 border border-purple-700/30 rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">Total Doctors</p>
-              <p className="text-4xl font-bold text-purple-400 mt-2">{metrics.totalDoctors}</p>
-            </div>
-            <Users className="w-12 h-12 text-purple-500 opacity-20" />
+        <div className="rounded-xl bg-amber-600 p-5 text-white shadow-md">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-3xl font-bold">{pendingBaseline}</span>
+            <Activity className="w-6 h-6 opacity-80" />
           </div>
+          <p className="text-white/90 text-sm font-medium">Baseline Pending</p>
         </div>
-
-        <div className="bg-gradient-to-br from-orange-900/30 to-slate-900 border border-orange-700/30 rounded-lg p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-muted-foreground text-sm">Total Forms</p>
-              <p className="text-4xl font-bold text-orange-400 mt-2">{metrics.totalForms}</p>
-            </div>
-            <FileText className="w-12 h-12 text-orange-500 opacity-20" />
+        <div className="rounded-xl bg-violet-600 p-5 text-white shadow-md">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-3xl font-bold">{pendingFollowup}</span>
+            <AlertCircle className="w-6 h-6 opacity-80" />
           </div>
+          <p className="text-white/90 text-sm font-medium">Followup Pending</p>
         </div>
       </div>
 
-      {/* Charts Row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Enrollment Trend */}
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
-            <TrendingUp className="w-5 h-5" />
-            7-Week Enrollment Trend
-          </h3>
-          {enrollmentTrend.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={enrollmentTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis dataKey="week" stroke="#94a3b8" style={{ fontSize: '12px' }} />
-                <YAxis stroke="#94a3b8" />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1e293b',
-                    border: '1px solid #475569',
-                    borderRadius: '8px',
-                  }}
-                  labelStyle={{ color: '#fff' }}
-                />
-                <Legend />
-                <Line
-                  type="monotone"
-                  dataKey="patients"
-                  stroke="#3b82f6"
-                  strokeWidth={2}
-                  dot={{ fill: '#3b82f6', r: 4 }}
-                  name="New Enrollments"
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted-foreground text-center py-8">No enrollment data available</p>
-          )}
+        <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-blue-500" />
+              Enrollment Trend (Past 7 Weeks)
+            </h3>
+          </div>
+          <div className="p-4 flex-1">
+            {isChartReady && enrollmentTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={enrollmentTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis dataKey="week" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip wrapperStyle={{ outline: 'none' }} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                  <Bar dataKey="patients" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} name="New Enrollments" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+                No data yet
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Doctor Productivity */}
-        <div className="bg-card border border-border rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-white mb-4">Top Doctors by Productivity</h3>
-          {doctorProductivity.length > 0 ? (
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={doctorProductivity} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                <XAxis type="number" stroke="#94a3b8" />
-                <YAxis dataKey="name" type="category" stroke="#94a3b8" width={120} style={{ fontSize: '12px' }} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: '#1e293b',
-                    border: '1px solid #475569',
-                    borderRadius: '8px',
-                  }}
-                  labelStyle={{ color: '#fff' }}
-                />
-                <Legend />
-                <Bar dataKey="forms" fill="#8b5cf6" name="Forms Submitted" />
-                <Bar dataKey="patients" fill="#10b981" name="Patients Assigned" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted-foreground text-center py-8">No doctor data available</p>
-          )}
-        </div>
-      </div>
-
-      {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-card border border-border rounded-lg p-6">
-          <p className="text-muted-foreground text-sm">Avg Forms per Doctor</p>
-          <p className="text-3xl font-bold text-blue-400 mt-2">
-            {metrics.totalDoctors > 0 ? Math.round(metrics.totalForms / metrics.totalDoctors) : 0}
-          </p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-6">
-          <p className="text-muted-foreground text-sm">Avg Patients per Doctor</p>
-          <p className="text-3xl font-bold text-green-400 mt-2">
-            {metrics.totalDoctors > 0 ? Math.round(metrics.totalPatients / metrics.totalDoctors) : 0}
-          </p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-6">
-          <p className="text-muted-foreground text-sm">Active Rate</p>
-          <p className="text-3xl font-bold text-purple-400 mt-2">
-            {metrics.totalPatients > 0 ? Math.round((metrics.activePatients / metrics.totalPatients) * 100) : 0}%
-          </p>
+        {/* Doctor Performance */}
+        <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+               <Activity className="w-4 h-4 text-emerald-500" />
+               Doctor Performance Breakdown
+            </h3>
+          </div>
+          <div className="p-4 flex-1">
+            {isChartReady && topDoctors.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={topDoctors} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                  <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip cursor={{ fill: '#f9fafb' }} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} />
+                  <Bar dataKey="completed" name="Completed" stackId="a" fill="#10b981" />
+                  <Bar dataKey="pendingBaseline" name="Pending BL" stackId="a" fill="#eab308" />
+                  <Bar dataKey="pendingFollowup" name="Pending FU" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center text-gray-400 text-sm">
+                No data yet
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

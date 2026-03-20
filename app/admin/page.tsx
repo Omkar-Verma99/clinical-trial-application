@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
+import dynamic from 'next/dynamic';
+import { collection, getDocs, query, orderBy, limit } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import {
   Users,
   UserCheck,
@@ -12,61 +11,48 @@ import {
   TrendingUp,
   Activity,
   Calendar,
-  Clock,
   CheckCircle2,
   AlertCircle,
+  BarChart3,
 } from 'lucide-react';
+import { format } from 'date-fns';
+import { useAdminAuth } from '@/contexts/admin-auth-context';
+
 import {
-  LineChart,
-  Line,
+  ResponsiveContainer,
   BarChart,
   Bar,
-  PieChart,
-  Pie,
-  Cell,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
-  ComposedChart,
 } from 'recharts';
-import { format } from 'date-fns';
-import { useAdminAuth } from '@/contexts/admin-auth-context';
 
 interface DashboardStats {
   totalPatients: number;
   activeDoctors: number;
   completedPatients: number;
-  inProgressForms: number;
   completionRate: number;
-  pendingReview: number;
   newPatientsThisWeek: number;
-  avgFormCompletionTime: number;
+  pendingBaselines: number;
+  pendingFollowups: number;
 }
 
 interface RecentActivity {
   id: string;
-  type: 'form_submitted' | 'patient_enrolled' | 'doctor_action';
+  type: string;
   description: string;
   timestamp: Date;
-  patient?: string;
   doctor?: string;
-}
-
-interface FormStats {
-  formType: string;
-  completed: number;
-  incomplete: number;
-  inProgress: number;
 }
 
 interface DoctorPerformance {
   name: string;
   patients: number;
-  forms: number;
-  completion: number;
+  completed: number;
+  pendingBaseline: number;
+  pendingFollowup: number;
 }
 
 function asDate(value: unknown): Date | null {
@@ -88,18 +74,17 @@ export default function AdminDashboard() {
     totalPatients: 0,
     activeDoctors: 0,
     completedPatients: 0,
-    inProgressForms: 0,
     completionRate: 0,
-    pendingReview: 0,
     newPatientsThisWeek: 0,
-    avgFormCompletionTime: 0,
+    pendingBaselines: 0,
+    pendingFollowups: 0,
   });
 
   const [activities, setActivities] = useState<RecentActivity[]>([]);
-  const [formStats, setFormStats] = useState<FormStats[]>([]);
   const [doctorPerformance, setDoctorPerformance] = useState<DoctorPerformance[]>([]);
   const [enrollmentTrend, setEnrollmentTrend] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isChartReady, setIsChartReady] = useState(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -116,7 +101,6 @@ export default function AdminDashboard() {
           (doc) => doc.data().status === 'active'
         ).length;
 
-        // Derive patient completion states from unified patient records.
         const patientRows = patientsSnapshot.docs.map((patientDoc) => {
           const patientData = patientDoc.data() as Record<string, any>;
           const hasBaseline = !!(patientData.baseline && typeof patientData.baseline === 'object');
@@ -136,421 +120,285 @@ export default function AdminDashboard() {
         });
 
         const completedPatients = patientRows.filter((row) => row.isCompleted).length;
-        const inProgressForms = 0;
+        const pendingBaselines = patientRows.filter((row) => !row.hasBaseline).length;
+        const pendingFollowups = patientRows.filter((row) => row.hasBaseline && !row.hasFollowup).length;
+        const completionRate = totalPatients > 0 ? Math.round((completedPatients / totalPatients) * 100) : 0;
 
-        const completionRate =
-          totalPatients > 0 ? Math.round((completedPatients / totalPatients) * 100) : 0;
-
-        // Calculate new patients this week
         const oneWeekAgo = new Date();
         oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        const newPatientsThisWeek = patientRows.filter((row) => row.createdAt && row.createdAt > oneWeekAgo).length;
 
-        const newPatientsThisWeek = patientRows.filter((row) => {
-          const enrollmentDate = row.createdAt;
-          return enrollmentDate && enrollmentDate > oneWeekAgo;
-        }).length;
-
-        // Update stats
         setStats({
           totalPatients,
           activeDoctors,
           completedPatients,
-          inProgressForms,
           completionRate,
-          pendingReview: inProgressForms,
           newPatientsThisWeek,
-          avgFormCompletionTime: 8.5, // Example data
+          pendingBaselines,
+          pendingFollowups,
         });
 
-        // Fetch recent activities only for super admins.
         if (adminUser?.role === 'super_admin') {
           try {
             const auditLogsSnapshot = await getDocs(
               query(collection(db, 'auditLogs'), orderBy('timestamp', 'desc'), limit(10))
             );
-
             const recentActivities: RecentActivity[] = auditLogsSnapshot.docs.map((doc) => ({
               id: doc.id,
-              type: doc.data().action as any,
-              description: `${doc.data().action.replace(/_/g, ' ').toUpperCase()}`,
+              type: doc.data().action as string,
+              description: `${String(doc.data().action).replace(/_/g, ' ').toUpperCase()} by ${doc.data().details?.adminName || 'Admin'}`,
               timestamp: asDate(doc.data().timestamp) || new Date(),
-              doctor: doc.data().doctorId,
+              doctor: doc.data().details?.adminName || 'Admin',
             }));
-
             setActivities(recentActivities);
-          } catch (auditError) {
-            console.error('Error fetching dashboard audit logs:', auditError);
+          } catch {
             setActivities([]);
           }
         } else {
           setActivities([]);
         }
 
-        // Calculate form statistics by type
-        const formData = patientRows.flatMap((row) => {
-          const forms: Array<Record<string, any>> = [];
-          if (row.baseline && typeof row.baseline === 'object') {
-            forms.push({ formType: 'baseline', completionStatus: 'complete' });
-          }
-          row.followups.forEach((followup: any) => {
-            forms.push({
-              formType: `followup_week_${followup?.visitNumber || 'unknown'}`,
-              completionStatus: 'complete',
-            });
-          });
-          return forms;
-        });
-
-        const formStatsByType: Record<string, FormStats> = {};
-        formData.forEach((form) => {
-          const type = form.formType || 'unknown';
-          if (!formStatsByType[type]) {
-            formStatsByType[type] = { formType: type, completed: 0, incomplete: 0, inProgress: 0 };
-          }
-
-          formStatsByType[type].completed++;
-        });
-
-        setFormStats(Object.values(formStatsByType));
-
-        // Build real enrollment trend data for last 30 days.
         const trendMap = new Map<string, { enrolled: number; completed: number }>();
-        for (let i = 30; i >= 0; i--) {
+        for (let i = 14; i >= 0; i--) {
           const date = new Date();
           date.setDate(date.getDate() - i);
-          trendMap.set(format(date, 'yyyy-MM-dd'), { enrolled: 0, completed: 0 });
+          trendMap.set(format(date, 'MMM d'), { enrolled: 0, completed: 0 });
         }
 
         patientRows.forEach((row) => {
           if (!row.createdAt) return;
-          const key = format(row.createdAt, 'yyyy-MM-dd');
+          const key = format(row.createdAt, 'MMM d');
           const bucket = trendMap.get(key);
           if (!bucket) return;
           bucket.enrolled += 1;
-          if (row.isCompleted) {
-            bucket.completed += 1;
-          }
+          if (row.isCompleted) bucket.completed += 1;
           trendMap.set(key, bucket);
         });
 
-        const trendData = Array.from(trendMap.entries()).map(([key, value]) => ({
-          date: format(new Date(key), 'MMM d'),
-          enrolled: value.enrolled,
-          completed: value.completed,
-        }));
-        setEnrollmentTrend(trendData);
+        setEnrollmentTrend(Array.from(trendMap.entries()).map(([date, data]) => ({
+          date,
+          Enrolled: data.enrolled,
+          Completed: data.completed,
+        })));
 
-        // Build doctor performance from real patient + form data.
         const doctorPerfMap = new Map<string, DoctorPerformance>();
         doctorsSnapshot.docs.forEach((doctorDoc) => {
           doctorPerfMap.set(doctorDoc.id, {
-            name:
-              String(doctorDoc.data().name || '').trim() ||
-              `${doctorDoc.data().firstName || ''} ${doctorDoc.data().lastName || ''}`.trim() ||
-              'Unknown',
+            name: String(doctorDoc.data().name || '').trim() || 'Unknown',
             patients: 0,
-            forms: 0,
-            completion: 100,
+            completed: 0,
+            pendingBaseline: 0,
+            pendingFollowup: 0,
           });
         });
 
         patientRows.forEach((row) => {
-          const ownerDoctorId = row.doctorId;
-          if (ownerDoctorId && doctorPerfMap.has(ownerDoctorId)) {
-            const current = doctorPerfMap.get(ownerDoctorId)!;
+          const ownerId = row.doctorId;
+          if (ownerId && doctorPerfMap.has(ownerId)) {
+            const current = doctorPerfMap.get(ownerId)!;
             current.patients += 1;
-            doctorPerfMap.set(ownerDoctorId, current);
-          }
-
-          if (row.baseline && typeof row.baseline === 'object') {
-            const baselineDoctorId = String((row.baseline as any)?.doctorId || ownerDoctorId);
-            if (baselineDoctorId && doctorPerfMap.has(baselineDoctorId)) {
-              const current = doctorPerfMap.get(baselineDoctorId)!;
-              current.forms += 1;
-              doctorPerfMap.set(baselineDoctorId, current);
+            if (!row.hasBaseline) {
+              current.pendingBaseline += 1;
+            } else if (!row.hasFollowup) {
+              current.pendingFollowup += 1;
+            } else {
+              current.completed += 1;
             }
+            doctorPerfMap.set(ownerId, current);
           }
-
-          row.followups.forEach((followup: any) => {
-            const followupDoctorId = String(followup?.doctorId || ownerDoctorId);
-            if (followupDoctorId && doctorPerfMap.has(followupDoctorId)) {
-              const current = doctorPerfMap.get(followupDoctorId)!;
-              current.forms += 1;
-              doctorPerfMap.set(followupDoctorId, current);
-            }
-          });
         });
 
         const doctorPerf = Array.from(doctorPerfMap.values())
-          .map((entry) => ({
-            ...entry,
-            completion: entry.forms > 0 ? 100 : 0,
-          }))
-          .sort((a, b) => b.forms - a.forms)
+          .filter(d => d.patients > 0)
+          .sort((a, b) => b.patients - a.patients)
           .slice(0, 5);
         setDoctorPerformance(doctorPerf);
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
         setIsLoading(false);
+        setTimeout(() => setIsChartReady(true), 150);
       }
     };
 
     fetchDashboardData();
   }, [adminUser?.role]);
 
-  const StatCard = ({
-    icon: Icon,
-    label,
-    value,
-    suffix,
-    color,
-    trend,
-  }: {
-    icon: any;
-    label: string;
-    value: number | string;
-    suffix?: string;
-    color: string;
-    trend?: number;
-  }) => (
-    <Card className="bg-card border-border hover:border-border/50 transition-colors">
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-muted-foreground text-sm font-medium">{label}</p>
-            <p className="text-3xl font-bold text-foreground mt-2">
-              {value}
-              {suffix && <span className="text-lg text-muted-foreground ml-1">{suffix}</span>}
-            </p>
-            {trend !== undefined && (
-              <div className="flex items-center gap-1 mt-2">
-                <TrendingUp className={`w-4 h-4 ${trend > 0 ? 'text-green-400' : 'text-red-400'}`} />
-                <span className={`text-sm ${trend > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {trend > 0 ? '+' : ''}{trend}%
-                </span>
-              </div>
-            )}
-          </div>
-          <div className={`p-3 rounded-lg ${color}`}>
-            <Icon className="w-6 h-6 text-white" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-32 bg-card rounded-lg animate-pulse"></div>
-          ))}
-        </div>
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+        <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        <div className="text-gray-500 font-medium">Loading Dashboard...</div>
       </div>
     );
   }
 
+  const metricCards = [
+    { icon: Users, label: 'Total Patients', value: stats.totalPatients, bg: 'bg-blue-600' },
+    { icon: UserCheck, label: 'Active Doctors', value: stats.activeDoctors, bg: 'bg-emerald-600' },
+    { icon: FileText, label: 'Completed Patients', value: stats.completedPatients, bg: 'bg-violet-600' },
+    { icon: CheckCircle2, label: 'Completion Rate', value: `${stats.completionRate}%`, bg: 'bg-orange-600' },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground mt-2">Welcome to the RWE Study Admin Panel</p>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+        <p className="text-gray-500 dark:text-gray-400 mt-1">
+          Welcome back, {adminUser?.firstName || 'Admin'}
+        </p>
       </div>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={Users}
-          label="Total Patients"
-          value={stats.totalPatients}
-          color="bg-blue-500/20"
-          trend={5}
-        />
-        <StatCard
-          icon={UserCheck}
-          label="Active Doctors"
-          value={stats.activeDoctors}
-          color="bg-green-500/20"
-          trend={2}
-        />
-        <StatCard
-          icon={FileText}
-          label="Completed Patients"
-          value={stats.completedPatients}
-          color="bg-purple-500/20"
-          trend={8}
-        />
-        <StatCard
-          icon={CheckCircle2}
-          label="Completion Rate"
-          value={stats.completionRate}
-          suffix="%"
-          color="bg-orange-500/20"
-          trend={3}
-        />
-      </div>
-
-      {/* Charts Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Enrollment Trend */}
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Enrollment Trend</CardTitle>
-            <CardDescription>Last 30 days enrollment and completion</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={enrollmentTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#cbd5e1" />
-                <XAxis dataKey="date" stroke="#64748b" />
-                <YAxis stroke="#64748b" />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }}
-                  cursor={{ fill: 'rgba(59, 130, 246, 0.1)' }}
-                />
-                <Legend />
-                <Bar dataKey="enrolled" fill="#3b82f6" name="Enrolled" />
-                <Line
-                  type="monotone"
-                  dataKey="completed"
-                  stroke="#10b981"
-                  name="Completed"
-                  strokeWidth={2}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        {/* Form Status Distribution */}
-        <Card className="bg-card border-border">
-          <CardHeader>
-            <CardTitle className="text-foreground">Form Status Distribution</CardTitle>
-            <CardDescription>Status breakdown of all forms</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={[
-                    { name: 'Completed Patients', value: stats.completedPatients, fill: '#10b981' },
-                    { name: 'Not Completed', value: Math.max(stats.totalPatients - stats.completedPatients, 0), fill: '#f59e0b' },
-                  ]}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, value, percent }) =>
-                    `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
-                  }
-                  outerRadius={80}
-                  dataKey="value"
-                >
-                  <Cell fill="#10b981" />
-                  <Cell fill="#f59e0b" />
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #cbd5e1' }} />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Doctor Performance */}
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-foreground">Top Performing Doctors</CardTitle>
-          <CardDescription>Doctor performance metrics and statistics</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 text-muted-foreground font-semibold">Doctor Name</th>
-                  <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Patients</th>
-                  <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Forms Submitted</th>
-                  <th className="text-center py-3 px-4 text-muted-foreground font-semibold">Completion %</th>
-                </tr>
-              </thead>
-              <tbody>
-                {doctorPerformance.map((doctor, idx) => (
-                  <tr
-                    key={idx}
-                    className="border-b border-border hover:bg-muted/30 transition-colors"
-                  >
-                    <td className="py-3 px-4 text-foreground font-medium">{doctor.name}</td>
-                    <td className="text-center py-3 px-4 text-foreground">{doctor.patients}</td>
-                    <td className="text-center py-3 px-4 text-foreground">{doctor.forms}</td>
-                    <td className="text-center py-3 px-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <div className="w-24 bg-muted rounded-full h-2 overflow-hidden">
-                          <div
-                            className="bg-gradient-to-r from-green-500 to-green-400 h-full"
-                            style={{ width: `${doctor.completion}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-green-400 font-semibold text-sm">{doctor.completion}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {metricCards.map((card) => (
+          <div key={card.label} className={`rounded-xl ${card.bg} p-5 text-white shadow-md hover:shadow-lg transition-shadow`}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-3xl font-bold">{card.value}</span>
+              <card.icon className="w-6 h-6 opacity-80" />
+            </div>
+            <p className="text-white/90 text-sm font-medium">{card.label}</p>
           </div>
-        </CardContent>
-      </Card>
+        ))}
+      </div>
 
-      {/* Recent Activities */}
-      <Card className="bg-card border-border">
-        <CardHeader>
-          <CardTitle className="text-foreground">Recent Activities</CardTitle>
-          <CardDescription>Latest actions and events in the system</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {activities.length > 0 ? (
-              activities.map((activity) => (
-                <div
-                  key={activity.id}
-                  className="flex items-start gap-4 p-3 bg-muted/30 rounded-lg hover:bg-muted/40 transition-colors"
-                >
-                  <div className="mt-1 p-2 bg-sky-500/15 rounded-lg">
-                    <Activity className="w-4 h-4 text-sky-700" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Chart */}
+        <div className="lg:col-span-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-blue-500" />
+              Enrollment Trend (Past 14 Days)
+            </h3>
+          </div>
+          <div className="p-4 flex-1">
+            {isChartReady && enrollmentTrend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={enrollmentTrend} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis dataKey="date" stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#9ca3af" fontSize={11} tickLine={false} axisLine={false} />
+                  <Tooltip wrapperStyle={{ outline: 'none' }} cursor={{ fill: 'rgba(0,0,0,0.05)' }} />
+                  <Legend iconType="circle" />
+                  <Bar dataKey="Enrolled" fill="#3b82f6" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Bar dataKey="Completed" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center">
+                {!isChartReady ? (
+                  <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <p className="text-gray-400 text-sm">No data yet</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Top Doctors */}
+        <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden flex flex-col">
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-emerald-500" />
+              Top Doctors
+            </h3>
+          </div>
+          <div className="p-0 overflow-auto flex-1 h-[280px]">
+            {doctorPerformance.length === 0 ? (
+               <div className="p-8 text-center text-gray-400 text-sm">No doctor stats available</div>
+            ) : (
+               isChartReady ? (
+                 <ResponsiveContainer width="100%" height={240}>
+                   <BarChart data={doctorPerformance} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                     <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} />
+                     <YAxis tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} allowDecimals={false} />
+                     <Tooltip 
+                       cursor={{ fill: '#f3f4f6' }} 
+                       contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} 
+                     />
+                     <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                     <Bar dataKey="completed" name="Completed" stackId="a" fill="#10b981" />
+                     <Bar dataKey="pendingBaseline" name="Pending Baseline" stackId="a" fill="#eab308" />
+                     <Bar dataKey="pendingFollowup" name="Pending Followup" stackId="a" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                   </BarChart>
+                 </ResponsiveContainer>
+               ) : (
+                 <div className="h-[240px] flex items-center justify-center bg-gray-50 dark:bg-gray-800 animate-pulse rounded-xl"></div>
+               )
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Stats & Activities */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 space-y-4">
+          <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm p-5">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400">New Patients This Week</p>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">{stats.newPatientsThisWeek}</p>
+              </div>
+              <div className="w-12 h-12 bg-blue-50 dark:bg-blue-900/40 rounded-full flex items-center justify-center">
+                <Users className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm p-5">
+            <div className="flex justify-between items-center h-full">
+              <div className="w-full">
+                <p className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Pending Actions</p>
+                <div className="flex items-center gap-6 mt-1">
+                  <div>
+                    <p className="text-2xl font-bold text-amber-600 dark:text-amber-500">
+                      {stats.pendingBaselines}
+                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mt-0.5">Baselines</p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-foreground font-medium text-sm">{activity.description}</p>
-                    <p className="text-muted-foreground text-xs mt-1">
-                      {format(activity.timestamp, 'MMM d, yyyy h:mm a')}
+                  <div className="h-8 w-px bg-gray-200 dark:bg-gray-700"></div>
+                  <div>
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-500">
+                      {stats.pendingFollowups}
+                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-gray-400 mt-0.5">Followups</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-2 rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+            <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <Activity className="w-4 h-4 text-violet-500" />
+              Recent Audit Activity
+            </h3>
+          </div>
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {activities.length > 0 ? (
+              activities.slice(0, 5).map((activity) => (
+                <div key={activity.id} className="px-5 py-3 hover:bg-gray-50 dark:hover:bg-gray-750 flex items-start gap-3">
+                  <div className="mt-0.5"><Activity className="w-4 h-4 text-gray-400" /></div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{activity.description}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
+                      <Calendar className="w-3 h-3" /> {format(activity.timestamp, 'MMM d, h:mm a')}
                     </p>
                   </div>
-                  <Badge variant="outline" className="bg-muted/40 text-foreground border-border">
+                  <div className="text-xs px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded-md text-gray-600 dark:text-gray-300">
                     {activity.type.replace(/_/g, ' ')}
-                  </Badge>
+                  </div>
                 </div>
               ))
             ) : (
-              <p className="text-muted-foreground text-sm py-4">No activities yet</p>
+              <div className="p-8 text-center text-gray-500 text-sm">No recent activities found.</div>
             )}
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Quick Stats Footer */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-card/80 border border-border rounded-lg p-6">
-        <div>
-          <p className="text-muted-foreground text-sm">New Patients This Week</p>
-          <p className="text-2xl font-bold text-foreground mt-1">{stats.newPatientsThisWeek}</p>
-        </div>
-        <div>
-          <p className="text-muted-foreground text-sm">Pending Review</p>
-          <p className="text-2xl font-bold text-orange-400 mt-1">{stats.pendingReview}</p>
-        </div>
-        <div>
-          <p className="text-muted-foreground text-sm">Avg Completion Time</p>
-          <p className="text-2xl font-bold text-purple-400 mt-1">{stats.avgFormCompletionTime} days</p>
         </div>
       </div>
     </div>

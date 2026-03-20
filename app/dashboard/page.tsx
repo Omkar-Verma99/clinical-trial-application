@@ -8,12 +8,21 @@ import { collection, query, where, onSnapshot, limit as fbLimit } from "firebase
 import { db } from "@/lib/firebase"
 import type { Patient } from "@/lib/types"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 
 interface PatientWithStatus extends Patient {
+  id: string
   hasBaseline: boolean
   hasFollowUp: boolean
 }
@@ -254,6 +263,8 @@ export default function DashboardPage() {
   const [loadingPatients, setLoadingPatients] = useState(true)
   const [pagination, setPagination] = useState({ offset: 0, limit: 30, hasMore: false })
   const [paginationLoading, setPaginationLoading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
   const patientCodeSorter = useMemo(
     () => new Intl.Collator("en", { sensitivity: "base", numeric: true }),
     []
@@ -306,15 +317,12 @@ export default function DashboardPage() {
       q,
       (snapshot) => {
         const patientsData: PatientWithStatus[] = snapshot.docs.map((patientDoc) => {
-          const patientData = patientDoc.data() as Omit<Patient, 'id'> & {
-            baseline?: unknown
-            followups?: unknown[]
-          }
+          const data = patientDoc.data() as Patient
           return {
-            ...patientData,
+            ...data,
             id: patientDoc.id,
-            hasBaseline: !!patientData.baseline,
-            hasFollowUp: !!(patientData.followups && patientData.followups.length > 0),
+            hasBaseline: !!data.baseline,
+            hasFollowUp: !!(data.followups && data.followups.length > 0),
           } as PatientWithStatus
         })
 
@@ -368,10 +376,33 @@ export default function DashboardPage() {
     router.push(`/patients/${patient.id}`)
   }, [router])
 
-  // Memoize patient list rendering
+  const filteredPatients = useMemo(() => {
+    let filtered = patients
+    
+    if (searchTerm) {
+      filtered = filtered.filter(p => 
+        p.patientCode.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    }
+    
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(p => {
+        if (statusFilter === 'baseline') return !p.hasBaseline
+        if (statusFilter === 'followup') return p.hasBaseline && !p.hasFollowUp
+        if (statusFilter === 'completed') return p.hasFollowUp
+        return true
+      })
+    }
+    
+    // Sort by createdAt descending
+    return [...filtered].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    )
+  }, [patients, searchTerm, statusFilter])
+
   const currentPagePatients = useMemo(() => {
-    return patients.slice(pagination.offset, pagination.offset + pagination.limit)
-  }, [patients, pagination.offset, pagination.limit])
+    return filteredPatients.slice(pagination.offset, pagination.offset + pagination.limit)
+  }, [filteredPatients, pagination.offset, pagination.limit])
 
   // Update hasMore when data or pagination changes
   useEffect(() => {
@@ -490,6 +521,28 @@ export default function DashboardPage() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="flex flex-col md:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <Input
+              placeholder="Search by Patient Code..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full bg-white dark:bg-slate-950"
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full md:w-[200px] bg-white dark:bg-slate-950">
+              <SelectValue placeholder="Status Filter" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="baseline">Baseline Pending</SelectItem>
+              <SelectItem value="followup">Follow-up Pending</SelectItem>
+              <SelectItem value="completed">Completed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
         {loadingPatients ? (
           <div className="flex items-center justify-center py-12">

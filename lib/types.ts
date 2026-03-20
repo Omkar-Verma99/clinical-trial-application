@@ -1,3 +1,5 @@
+import { SectionLockMap } from "./section-locks"
+
 // DOCTOR - Study Investigator
 export interface Doctor {
   id: string
@@ -83,6 +85,11 @@ export interface Patient {
   // Legacy fields (for backward compatibility)
   previousTherapy?: string[]
   
+  // Data Sections
+  baseline?: BaselineData
+  followups?: FollowUpData[]
+  sectionLocks?: SectionLockMap
+
   createdAt: string
 }
 

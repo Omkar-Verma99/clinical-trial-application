@@ -306,77 +306,74 @@ export default function SettingsPage() {
 
   if (adminUser?.role !== 'super_admin') {
     return (
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold text-white">Access Denied</h1>
-          <p className="text-muted-foreground mt-2">Only Super Admins can manage system settings</p>
-        </div>
+      <div className="space-y-4">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">Access Denied</h1>
+        <p className="text-gray-600 dark:text-gray-400">Only Super Admins can manage system settings</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white">System Settings</h1>
-        <p className="text-muted-foreground mt-2">Manage admin users and system configuration</p>
+      <div className="mb-8">
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 dark:from-white dark:via-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2">
+          System Settings
+        </h1>
+        <p className="text-gray-600 dark:text-gray-400">Manage admin users and system configuration</p>
       </div>
 
       {/* Message Alert */}
       {message && (
-        <div
-          className={`p-4 rounded-lg flex items-center gap-3 ${
-            message.type === 'success'
-              ? 'bg-green-900/30 border border-green-700/50 text-green-300'
-              : 'bg-red-900/30 border border-red-700/50 text-red-300'
-          }`}
-        >
-          {message.type === 'success' ? (
-            <CheckCircle className="w-5 h-5" />
-          ) : (
-            <AlertCircle className="w-5 h-5" />
-          )}
-          {message.text}
+        <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+          message.type === 'success'
+            ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+        }`}>
+          {message.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+          <p className="font-medium">{message.text}</p>
         </div>
       )}
 
       {/* Admin Users Management */}
-      <div className="bg-card border border-border rounded-lg p-6">
-        <h2 className="text-2xl font-bold text-white mb-6">Manage Admin Users</h2>
+      <div className="rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-750 dark:to-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Manage Admin Users</h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Add, configure and manage admin user accounts</p>
+        </div>
 
-        <div className="mb-8 rounded-lg border border-border bg-muted/40 p-5 space-y-4">
-          <h3 className="text-lg font-semibold text-white">Create New Admin</h3>
+        <div className="mb-8 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750 m-6 p-6 space-y-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Create New Admin</h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <input
               value={newAdmin.firstName}
               onChange={(e) => setNewAdmin((prev) => ({ ...prev, firstName: e.target.value }))}
               placeholder="First name"
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             />
             <input
               value={newAdmin.lastName}
               onChange={(e) => setNewAdmin((prev) => ({ ...prev, lastName: e.target.value }))}
               placeholder="Last name"
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             />
             <input
               value={newAdmin.email}
               onChange={(e) => setNewAdmin((prev) => ({ ...prev, email: e.target.value }))}
               placeholder="Email"
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             />
             <input
               value={newAdmin.password}
               onChange={(e) => setNewAdmin((prev) => ({ ...prev, password: e.target.value }))}
               placeholder="Optional password (leave blank for auto-generated)"
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-gray-900 dark:text-white placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             />
             <select
               value={newAdmin.role}
               onChange={(e) => applyRoleDefaultsForCreate(e.target.value as AdminRole)}
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             >
               <option value="admin">Admin</option>
               <option value="super_admin">Super Admin</option>
@@ -386,7 +383,7 @@ export default function SettingsPage() {
               onChange={(e) =>
                 setNewAdmin((prev) => ({ ...prev, status: e.target.value as 'active' | 'inactive' }))
               }
-              className="w-full rounded-lg border border-border bg-card px-3 py-2 text-white"
+              className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
             >
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
@@ -397,15 +394,17 @@ export default function SettingsPage() {
             <p className="text-sm font-medium text-foreground mb-2">Access Permissions</p>
             <div className="space-y-4">
               {effectivePermissionGroups.map((group) => (
-                <div key={`create-group-${group.title}`} className="rounded border border-border bg-card/80 p-3">
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground mb-2">{group.title}</p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div key={`create-group-${group.title}`} className="rounded-lg border border-border bg-background/50 p-4">
+                  <p className="text-xs uppercase tracking-wider font-bold text-muted-foreground mb-3">{group.title}</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {group.permissions.map((permission) => {
                       const checked = newAdmin.permissions.includes(permission);
                       return (
                         <label
                           key={`create-${permission}`}
-                          className="flex items-center gap-2 rounded border border-border bg-card px-3 py-2"
+                          className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-all ${
+                            checked ? 'bg-primary/5 border-primary/40 shadow-sm' : 'bg-background border-border hover:border-border/80'
+                          }`}
                         >
                           <input
                             type="checkbox"
@@ -416,8 +415,9 @@ export default function SettingsPage() {
                                 setNewAdmin((prev) => ({ ...prev, permissions: nextPermissions }))
                               )
                             }
+                            className="w-4 h-4 rounded border-border text-primary focus:ring-primary/30"
                           />
-                          <span className="text-sm text-foreground">{humanizePermission(permission)}</span>
+                          <span className="text-sm font-medium text-foreground">{humanizePermission(permission)}</span>
                         </label>
                       );
                     })}
@@ -427,57 +427,63 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 pt-2">
             <button
               onClick={handleCreateAdmin}
-              className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700"
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300"
             >
-              Create Admin
+              Create Admin User
             </button>
             {generatedPassword && (
-              <p className="text-sm text-amber-300">
-                Temporary password: <span className="font-mono">{generatedPassword}</span>
+              <p className="text-sm text-amber-600 dark:text-amber-400 font-medium">
+                Temporary password: <span className="font-mono bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 px-2 py-1 rounded-lg">{generatedPassword}</span>
               </p>
             )}
           </div>
         </div>
 
         {loading ? (
-          <p className="text-muted-foreground">Loading admin users...</p>
+          <div className="flex flex-col items-center justify-center py-12">
+            <div className="relative mb-4">
+              <div className="w-12 h-12 border-4 border-blue-200 rounded-full"></div>
+              <div className="w-12 h-12 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0"></div>
+            </div>
+            <p className="text-gray-500 dark:text-gray-400">Loading admin users...</p>
+          </div>
         ) : admins.length === 0 ? (
-          <p className="text-muted-foreground">No admin users found</p>
+          <p className="text-gray-500 dark:text-gray-400 text-center py-8">No admin users found</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Name</th>
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Email</th>
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Role</th>
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Status</th>
-                  <th className="text-center px-6 py-3 text-sm font-semibold text-foreground">Logins</th>
-                  <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Last Login</th>
-                  <th className="text-center px-6 py-3 text-sm font-semibold text-foreground">Actions</th>
+                  <th className="text-left px-6 py-3 font-semibold text-foreground">Admin Name</th>
+                  <th className="text-left px-6 py-3 font-semibold text-foreground">Email</th>
+                  <th className="text-left px-6 py-3 font-semibold text-foreground">Role & Access</th>
+                  <th className="text-left px-6 py-3 font-semibold text-foreground">Status</th>
+                  <th className="text-center px-6 py-3 font-semibold text-foreground">Logins</th>
+                  <th className="text-left px-6 py-3 font-semibold text-foreground">Last Activity</th>
+                  <th className="text-center px-6 py-3 font-semibold text-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {admins.map((admin) => (
                   <tr
                     key={admin.id}
-                    className={`border-b border-border/70 hover:bg-muted/20 transition ${
-                      editingAdmin?.id === admin.id ? 'bg-muted/30' : ''
+                    className={`border-b border-border/70 hover:bg-muted/20 transition-colors ${
+                      editingAdmin?.id === admin.id ? 'bg-primary/5' : ''
                     }`}
                   >
                     <td className="px-6 py-4">
-                      <div className="font-medium text-white">
+                      <div className="font-medium text-foreground">
                         {admin.firstName} {admin.lastName}
                       </div>
-                      <div className="text-xs text-muted-foreground">{admin.id.slice(0, 8)}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{admin.id.slice(0, 8)}</div>
                     </td>
-                    <td className="px-6 py-4 text-sm text-foreground">{admin.email}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{admin.email}</td>
                     <td className="px-6 py-4">
                       {editingAdmin?.id === admin.id ? (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           <select
                             value={editingAdmin.role}
                             onChange={(e) =>
@@ -487,19 +493,19 @@ export default function SettingsPage() {
                                 permissions: getDefaultPermissionsForRole(e.target.value as AdminRole),
                               })
                             }
-                            className="px-3 py-1 bg-muted border border-border rounded text-white text-sm"
+                            className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground text-sm focus:ring-2 focus:ring-primary/30 outline-none"
                           >
                             <option value="admin">Admin</option>
                             <option value="super_admin">Super Admin</option>
                           </select>
 
-                          <div className="space-y-2 max-h-56 overflow-auto pr-2">
+                          <div className="space-y-2 max-h-56 overflow-y-auto pr-2 custom-scrollbar border border-border rounded-lg p-2 bg-background/50">
                             {effectivePermissionGroups.map((group) => (
-                              <div key={`${admin.id}-group-${group.title}`} className="rounded border border-border bg-card/80 p-2">
-                                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">{group.title}</p>
-                                <div className="grid grid-cols-1 gap-1">
+                              <div key={`${admin.id}-group-${group.title}`} className="mb-3 last:mb-0">
+                                <p className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground mb-1.5 px-1">{group.title}</p>
+                                <div className="space-y-1">
                                   {group.permissions.map((permission) => (
-                                    <label key={`${admin.id}-${permission}`} className="flex items-center gap-2 text-xs text-foreground">
+                                    <label key={`${admin.id}-${permission}`} className="flex items-center gap-2 px-2 py-1 hover:bg-muted/30 rounded text-xs text-foreground cursor-pointer">
                                       <input
                                         type="checkbox"
                                         checked={editingAdmin.permissions.includes(permission)}
@@ -513,6 +519,7 @@ export default function SettingsPage() {
                                               setEditingAdmin({ ...editingAdmin, permissions: nextPermissions })
                                           )
                                         }
+                                        className="w-3.5 h-3.5 rounded border-border text-primary focus:ring-primary/30"
                                       />
                                       {humanizePermission(permission)}
                                     </label>
@@ -523,10 +530,10 @@ export default function SettingsPage() {
                           </div>
                         </div>
                       ) : (
-                        <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                           admin.role === 'super_admin'
-                            ? 'bg-purple-900/30 text-purple-300'
-                            : 'bg-blue-900/30 text-blue-300'
+                            ? 'bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/30'
+                            : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30'
                         }`}>
                           {admin.role === 'super_admin' ? '🔑 Super Admin' : '👤 Admin'}
                         </span>
@@ -542,39 +549,40 @@ export default function SettingsPage() {
                               status: e.target.value as 'active' | 'inactive',
                             })
                           }
-                          className="px-3 py-1 bg-muted border border-border rounded text-white text-sm"
+                          className="w-full px-3 py-2 bg-background border border-border rounded-lg text-foreground text-sm focus:ring-2 focus:ring-primary/30 outline-none"
                         >
                           <option value="active">Active</option>
                           <option value="inactive">Inactive</option>
                         </select>
                       ) : (
-                        <span className={`inline-block px-3 py-1 rounded text-xs font-medium ${
+                        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                           admin.status === 'active'
-                            ? 'bg-green-900/30 text-green-300'
-                            : 'bg-red-900/30 text-red-300'
+                            ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/30'
+                            : 'bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30'
                         }`}>
-                          {admin.status === 'active' ? '●Active' : '●Inactive'}
+                          <span className={`w-1.5 h-1.5 rounded-full ${admin.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                          {admin.status === 'active' ? 'Active' : 'Inactive'}
                         </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center text-sm font-medium text-white">
+                    <td className="px-6 py-4 text-center text-sm font-medium text-foreground">
                       {admin.loginCount}
                     </td>
-                    <td className="px-6 py-4 text-sm text-foreground">
-                      {admin.lastLogin ? new Date(admin.lastLogin).toLocaleDateString() : '-'}
+                    <td className="px-6 py-4 text-sm text-muted-foreground">
+                      {admin.lastLogin ? new Date(admin.lastLogin).toLocaleDateString() : 'Never'}
                     </td>
                     <td className="px-6 py-4 text-center">
                       {editingAdmin?.id === admin.id ? (
                         <div className="flex gap-2 justify-center">
                           <button
                             onClick={handleSaveEdit}
-                            className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium"
+                            className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
                           >
                             Save
                           </button>
                           <button
                             onClick={() => setEditingAdmin(null)}
-                            className="px-3 py-1 bg-muted hover:bg-muted/80 text-foreground rounded text-xs font-medium"
+                            className="px-4 py-1.5 bg-muted hover:bg-muted/80 text-foreground rounded-lg text-xs font-bold transition-all"
                           >
                             Cancel
                           </button>
@@ -584,18 +592,18 @@ export default function SettingsPage() {
                           <button
                             onClick={() => handleEditAdmin(admin)}
                             disabled={admin.id === adminUser?.id}
-                            className="p-2 hover:bg-muted/40 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-2 hover:bg-primary/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
                             title="Edit admin"
                           >
-                            <Edit2 className="w-4 h-4 text-blue-400" />
+                            <Edit2 className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
                           </button>
                           <button
                             onClick={() => setShowDeleteConfirm(admin.id)}
                             disabled={admin.id === adminUser?.id}
-                            className="p-2 hover:bg-muted/40 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="p-2 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed group"
                             title="Delete admin"
                           >
-                            <Trash2 className="w-4 h-4 text-red-400" />
+                            <Trash2 className="w-4 h-4 text-red-500 group-hover:text-red-600" />
                           </button>
                         </div>
                       )}
@@ -610,69 +618,74 @@ export default function SettingsPage() {
 
       {/* System Information */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-card border border-border rounded-lg p-6">
-          <p className="text-muted-foreground text-sm">Total Admin Users</p>
-          <p className="text-3xl font-bold text-white mt-2">{admins.length}</p>
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <p className="text-blue-100 text-sm font-medium mb-2">Total Admin Users</p>
+            <p className="text-4xl font-bold">{admins.length}</p>
+          </div>
         </div>
-        <div className="bg-card border border-border rounded-lg p-6">
-          <p className="text-muted-foreground text-sm">Super Admins</p>
-          <p className="text-3xl font-bold text-purple-400 mt-2">
-            {admins.filter((a) => a.role === 'super_admin').length}
-          </p>
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <p className="text-violet-100 text-sm font-medium mb-2">Super Admins</p>
+            <p className="text-4xl font-bold">{admins.filter((a) => a.role === 'super_admin').length}</p>
+          </div>
         </div>
-        <div className="bg-card border border-border rounded-lg p-6">
-          <p className="text-muted-foreground text-sm">Active Users</p>
-          <p className="text-3xl font-bold text-green-400 mt-2">
-            {admins.filter((a) => a.status === 'active').length}
-          </p>
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <p className="text-emerald-100 text-sm font-medium mb-2">Active Users</p>
+            <p className="text-4xl font-bold">{admins.filter((a) => a.status === 'active').length}</p>
+          </div>
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-lg p-6">
-        <div className="flex items-start justify-between gap-4 mb-4">
+      <div className="rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg p-6">
+        <div className="flex items-start justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-xl font-bold text-white">Permission Matrix</h2>
-            <p className="text-muted-foreground text-sm mt-1">Audit access coverage across all admin users in one grid.</p>
+            <h2 className="text-xl font-bold text-foreground">Permission Matrix</h2>
+            <p className="text-muted-foreground text-sm mt-1">Audit access coverage across all admin users in one comprehensive grid.</p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Permissions</p>
-            <p className="text-lg font-semibold text-white">{matrixPermissions.length}</p>
+          <div className="text-right bg-muted/30 px-4 py-2 rounded-lg border border-border">
+            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Configured Rules</p>
+            <p className="text-xl font-bold text-foreground">{matrixPermissions.length}</p>
           </div>
         </div>
 
         {admins.length === 0 ? (
-          <p className="text-muted-foreground">No admin users available for matrix view.</p>
+          <p className="text-muted-foreground text-center py-8">No admin users available for matrix view.</p>
         ) : (
-          <div className="overflow-x-auto border border-border/70 rounded-lg">
+          <div className="overflow-x-auto border border-border rounded-xl shadow-inner">
             <table className="min-w-full text-xs">
               <thead>
-                <tr className="bg-muted/60 border-b border-border">
-                  <th className="sticky left-0 z-10 bg-muted/80 text-left px-3 py-2 text-foreground min-w-[240px]">Permission</th>
+                <tr className="bg-muted/80 border-b border-border">
+                  <th className="sticky left-0 z-10 bg-muted px-4 py-3 text-left text-foreground font-bold min-w-[280px]">Access Permission Rule</th>
                   {admins.map((admin) => (
-                    <th key={`matrix-header-${admin.id}`} className="text-center px-3 py-2 text-foreground min-w-[150px]">
-                      <div className="font-semibold text-white">{admin.firstName} {admin.lastName}</div>
-                      <div className="text-[10px] text-muted-foreground">{admin.role}</div>
+                    <th key={`matrix-header-${admin.id}`} className="text-center px-4 py-3 text-foreground min-w-[160px] border-l border-border/50">
+                      <div className="font-bold text-foreground truncate max-w-[140px] mx-auto">{admin.firstName} {admin.lastName}</div>
+                      <div className={`text-[10px] uppercase font-bold mt-1 ${admin.role === 'super_admin' ? 'text-purple-600 dark:text-purple-400' : 'text-blue-600 dark:text-blue-400'}`}>{admin.role}</div>
                     </th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {matrixPermissions.map((permission) => (
-                  <tr key={`matrix-row-${permission}`} className="border-b border-border/70 hover:bg-muted/10">
-                    <td className="sticky left-0 z-10 bg-muted/70 px-3 py-2 text-foreground">{humanizePermission(permission)}</td>
+                  <tr key={`matrix-row-${permission}`} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
+                    <td className="sticky left-0 z-10 bg-muted/50 px-4 py-3 text-foreground font-medium border-r border-border/50">{humanizePermission(permission)}</td>
                     {admins.map((admin) => {
                       const enabled = sanitizePermissions(admin.role, admin.permissions).includes(permission);
                       return (
-                        <td key={`matrix-cell-${permission}-${admin.id}`} className="text-center px-3 py-2">
+                        <td key={`matrix-cell-${permission}-${admin.id}`} className="text-center px-4 py-3 border-l border-border/50">
                           <span
-                            className={`inline-flex items-center justify-center w-6 h-6 rounded-full font-bold ${
+                            className={`inline-flex items-center justify-center w-7 h-7 rounded-lg font-bold transition-all ${
                               enabled
-                                ? 'bg-green-900/40 text-green-300 border border-green-700/60'
-                                : 'bg-muted/40 text-muted-foreground border border-border/60'
+                                ? 'bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/40 shadow-sm'
+                                : 'bg-muted/40 text-muted-foreground border border-border/40 opacity-40'
                             }`}
-                            title={enabled ? 'Allowed' : 'Not allowed'}
+                            title={enabled ? 'Permission Granted' : 'Access Denied'}
                           >
-                            {enabled ? 'Y' : 'N'}
+                            {enabled ? '✓' : '—'}
                           </span>
                         </td>
                       );
@@ -687,27 +700,30 @@ export default function SettingsPage() {
 
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-lg max-w-sm w-full border border-border">
-            <div className="border-b border-border p-6">
-              <h2 className="text-xl font-bold text-white">Confirm Delete</h2>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-xl max-w-sm w-full border border-border shadow-2xl">
+            <div className="border-b border-border p-6 bg-red-500/5">
+              <h2 className="text-xl font-bold text-red-600 dark:text-red-400 flex items-center gap-2">
+                <AlertCircle className="w-6 h-6" />
+                Confirm Deletion
+              </h2>
             </div>
 
             <div className="p-6">
-              <p className="text-foreground mb-6">
-                Are you sure you want to delete this admin user? This action cannot be undone.
+              <p className="text-foreground leading-relaxed mb-8">
+                Are you sure you want to delete this admin user? All their activity history will be anonymized and this action <span className="font-bold text-red-600 underline">cannot be undone</span>.
               </p>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => handleDeleteAdmin(showDeleteConfirm)}
-                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition"
+                  className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold transition-all shadow-md active:scale-95"
                 >
-                  Delete
+                  Confirm Delete
                 </button>
                 <button
                   onClick={() => setShowDeleteConfirm(null)}
-                  className="flex-1 px-4 py-2 bg-muted hover:bg-muted text-white rounded-lg font-medium transition"
+                  className="flex-1 px-4 py-2 bg-muted hover:bg-muted/80 text-foreground rounded-lg font-bold transition-all"
                 >
                   Cancel
                 </button>

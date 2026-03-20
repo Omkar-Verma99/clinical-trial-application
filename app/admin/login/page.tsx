@@ -2,17 +2,14 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { useAdminAuth } from '@/contexts/admin-auth-context';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { AlertCircle, Loader2, Lock, Mail } from 'lucide-react';
+import { AlertCircle, Lock, Mail, Eye, EyeOff } from 'lucide-react';
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAdminAuth();
@@ -21,28 +18,19 @@ export default function AdminLoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    if (!email || !password) {
+      setError('Please enter both email and password');
+      return;
+    }
+
     setIsLoading(true);
-
     try {
-      // Validate inputs
-      if (!email || !password) {
-        setError('Please enter both email and password');
-        setIsLoading(false);
-        return;
-      }
-
-      if (!email.includes('@')) {
-        setError('Please enter a valid email address');
-        setIsLoading(false);
-        return;
-      }
-
       const result = await login(email, password);
-
       if (result.success) {
         router.push('/admin');
       } else {
-        setError(result.error || 'Login failed. Please try again.');
+        setError(result.error || 'Login failed.');
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred');
@@ -52,124 +40,85 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-sky-50 via-background to-emerald-50/60 flex items-center justify-center p-4">
-      {/* Background decorative elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-sky-400 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-400 rounded-full mix-blend-multiply filter blur-3xl opacity-10 animate-pulse"></div>
-      </div>
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-[400px] bg-white rounded-xl shadow-md border border-gray-100 p-8">
+        <div className="flex flex-col items-center mb-8">
+          <Image
+            src="/favicon-192x192.png"
+            alt="KollectCare Logo"
+            width={64}
+            height={64}
+            className="mb-4"
+          />
+          <h1 className="text-2xl font-bold text-gray-900">KollectCare</h1>
+          <p className="text-sm font-medium text-gray-500 mt-1">Admin Portal</p>
+        </div>
 
-      <div className="w-full max-w-md relative z-10">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-              <Lock className="w-6 h-6 text-white" />
+        {error && (
+          <div className="mb-6 flex items-start gap-2 p-3 bg-red-50 text-red-700 text-sm rounded-lg border border-red-100">
+            <AlertCircle className="w-5 h-5 flex-shrink-0" />
+            <p className="pt-0.5">{error}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Email</label>
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isLoading}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
+                placeholder="admin@kollectcare.com"
+              />
             </div>
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">RWE Study Admin</h1>
-          <p className="text-muted-foreground">Secure Admin Portal</p>
-        </div>
 
-        {/* Login Card */}
-        <Card className="border-border bg-card backdrop-blur-sm shadow-2xl">
-          <CardHeader className="space-y-1 pb-6">
-            <CardTitle className="text-2xl text-foreground">Admin Login</CardTitle>
-            <CardDescription className="text-muted-foreground">
-              Enter your admin credentials to access the dashboard
-            </CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Email Field */}
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-foreground">
-                  Email Address
-                </Label>
-                <div className="relative">
-                  <Mail className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="admin@hospital.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    disabled={isLoading}
-                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                </div>
-              </div>
-
-              {/* Password Field */}
-              <div className="space-y-2">
-                <Label htmlFor="password" className="text-foreground">
-                  Password
-                </Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    disabled={isLoading}
-                    className="pl-10 bg-background border-border text-foreground placeholder:text-muted-foreground"
-                  />
-                </div>
-              </div>
-
-              {/* Error Alert */}
-              {error && (
-                <Alert className="bg-destructive/10 border-destructive/40 text-destructive">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
-
-              {/* Submit Button */}
-              <Button
-                type="submit"
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
-                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-10 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-colors"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
               >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Signing in...
-                  </>
-                ) : (
-                  'Sign In'
-                )}
-              </Button>
-            </form>
-
-            {/* Footer Info */}
-            <div className="mt-6 pt-6 border-t border-border">
-              <p className="text-center text-sm text-muted-foreground">
-                Need help accessing your account?{' '}
-                <a href="#" className="text-primary hover:text-primary/80 transition-colors">
-                  Contact Support
-                </a>
-              </p>
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
             </div>
+          </div>
 
-            {/* Security Notice */}
-            <div className="mt-4 p-3 bg-sky-500/10 border border-sky-500/30 rounded-lg">
-              <p className="text-xs text-sky-700 text-center">
-                🔒 This is a secure admin-only area. All activities are logged and monitored.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Version Info */}
-        <div className="text-center mt-6">
-          <p className="text-xs text-muted-foreground">RWE Study Management System v1.0</p>
-          <p className="text-xs text-muted-foreground mt-1">© 2026 Kollectcare RWE Study</p>
-        </div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full mt-2 py-2.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 disabled:bg-blue-400 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+          >
+            {isLoading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Signing In...
+              </>
+            ) : (
+              'Sign In'
+            )}
+          </button>
+        </form>
       </div>
+      
+      <p className="mt-8 text-xs text-center text-gray-400">
+        © {new Date().getFullYear()} KollectCare. All rights reserved.
+      </p>
     </div>
   );
 }

@@ -1,24 +1,23 @@
 'use client'
 
 import React from 'react'
-import {
-	Document,
-	Page,
-	Text,
-	View,
-	Svg,
-	Rect,
-	Circle,
-	Path,
-	Image,
-	pdf,
-	StyleSheet,
-} from '@react-pdf/renderer'
 import type { Patient, BaselineData, FollowUpData, Doctor } from './types'
 import {
 	downloadQuestionAnswerDynamicCsv,
 	downloadQuestionAnswerDynamicExcel,
 } from './flat-export'
+
+let Document: any
+let Page: any
+let Text: any
+let View: any
+let Svg: any
+let Rect: any
+let Circle: any
+let Path: any
+let Image: any
+let pdf: any
+let StyleSheet: any
 
 // ============================================================================
 // HELPER FUNCTION: LOAD IMAGE AS BASE64
@@ -59,7 +58,7 @@ const COLORS = {
 // ============================================================================
 // PDF STYLES - COMPACT & PROFESSIONAL
 // ============================================================================
-const styles = StyleSheet.create({
+const styleDefs = {
 	page: {
 		padding: 25,
 		paddingTop: 20,
@@ -284,7 +283,26 @@ const styles = StyleSheet.create({
 	aeColSerious: { width: '12%' },
 	aeColAction: { width: '23%' },
 	aeColOutcome: { width: '14%', borderRightWidth: 0 },
-})
+}
+
+let styles: any
+
+async function ensurePdfRenderer(): Promise<void> {
+	if (pdf && styles) return
+	const mod = await import('@react-pdf/renderer')
+	Document = mod.Document
+	Page = mod.Page
+	Text = mod.Text
+	View = mod.View
+	Svg = mod.Svg
+	Rect = mod.Rect
+	Circle = mod.Circle
+	Path = mod.Path
+	Image = mod.Image
+	pdf = mod.pdf
+	StyleSheet = mod.StyleSheet
+	styles = StyleSheet.create(styleDefs)
+}
 
 // ============================================================================
 // CHECKMARK ICON - WITH GREEN COLOR WHEN CHECKED
@@ -807,7 +825,7 @@ export async function downloadPatientPDF(
 	doctor?: Doctor
 ) {
 	try {
-		// Load logo image as base64
+		await ensurePdfRenderer()
 		const logoBase64 = await loadImageAsBase64('/logo.jpg')
 
 		const pdfDocument = (

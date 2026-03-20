@@ -222,8 +222,10 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin';
       
-      // Only cloud functions can write audit logs
-      allow create, write, update, delete: if false;
+      // Allow admins to record their activities
+      allow create: if isAdmin();
+      
+      allow write, update, delete: if false;
     }
 
     // ===== EXPORTS COLLECTION =====
@@ -233,8 +235,11 @@ service cloud.firestore {
       allow read: if (resource.data.adminId == request.auth.uid && isAdmin()) ||
         (isAdmin() && get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'super_admin');
       
-      // Only cloud functions can create/modify exports
-      allow create, write, update, delete: if false;
+      // Allow admins to record exports
+      allow create: if isAdmin();
+      allow update: if isAdmin() && resource.data.adminId == request.auth.uid;
+
+      allow delete: if false;
     }
 
     // ===== ADMIN PANEL COLLECTION =====

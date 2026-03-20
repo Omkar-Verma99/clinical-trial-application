@@ -7,21 +7,33 @@ import {
   DEFAULT_CLINICAL_VALIDATION_RANGES,
   normalizeClinicalValidationRanges,
 } from '@/lib/clinical-ranges';
-import { CheckCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle, Save, Activity } from 'lucide-react';
 
 type RangeFieldKey = keyof ClinicalValidationRanges;
 
-const RANGE_FIELDS: Array<{ key: RangeFieldKey; label: string; unit: string }> = [
-  { key: 'hba1c', label: 'HbA1c', unit: '%' },
-  { key: 'fpg', label: 'FPG', unit: 'mg/dL' },
-  { key: 'ppg', label: 'PPG', unit: 'mg/dL' },
-  { key: 'weight', label: 'Weight', unit: 'kg' },
-  { key: 'bpSystolic', label: 'BP Systolic', unit: 'mmHg' },
-  { key: 'bpDiastolic', label: 'BP Diastolic', unit: 'mmHg' },
-  { key: 'heartRate', label: 'Heart Rate', unit: 'bpm' },
-  { key: 'serumCreatinine', label: 'Serum Creatinine', unit: 'mg/dL' },
-  { key: 'egfr', label: 'eGFR', unit: 'mL/min/1.73m2' },
+const RANGE_FIELDS: Array<{ key: RangeFieldKey; label: string; unit: string; color: string }> = [
+  { key: 'hba1c', label: 'HbA1c', unit: '%', color: 'blue' },
+  { key: 'fpg', label: 'FPG', unit: 'mg/dL', color: 'emerald' },
+  { key: 'ppg', label: 'PPG', unit: 'mg/dL', color: 'violet' },
+  { key: 'weight', label: 'Weight', unit: 'kg', color: 'orange' },
+  { key: 'bpSystolic', label: 'BP Systolic', unit: 'mmHg', color: 'red' },
+  { key: 'bpDiastolic', label: 'BP Diastolic', unit: 'mmHg', color: 'pink' },
+  { key: 'heartRate', label: 'Heart Rate', unit: 'bpm', color: 'amber' },
+  { key: 'serumCreatinine', label: 'Serum Creatinine', unit: 'mg/dL', color: 'teal' },
+  { key: 'egfr', label: 'eGFR', unit: 'mL/min/1.73m²', color: 'indigo' },
 ];
+
+const COLOR_MAP: Record<string, { bg: string; text: string; border: string }> = {
+  blue:    { bg: 'bg-blue-50 dark:bg-blue-900/20', text: 'text-blue-700 dark:text-blue-300', border: 'border-blue-200 dark:border-blue-800' },
+  emerald: { bg: 'bg-emerald-50 dark:bg-emerald-900/20', text: 'text-emerald-700 dark:text-emerald-300', border: 'border-emerald-200 dark:border-emerald-800' },
+  violet:  { bg: 'bg-violet-50 dark:bg-violet-900/20', text: 'text-violet-700 dark:text-violet-300', border: 'border-violet-200 dark:border-violet-800' },
+  orange:  { bg: 'bg-orange-50 dark:bg-orange-900/20', text: 'text-orange-700 dark:text-orange-300', border: 'border-orange-200 dark:border-orange-800' },
+  red:     { bg: 'bg-red-50 dark:bg-red-900/20', text: 'text-red-700 dark:text-red-300', border: 'border-red-200 dark:border-red-800' },
+  pink:    { bg: 'bg-pink-50 dark:bg-pink-900/20', text: 'text-pink-700 dark:text-pink-300', border: 'border-pink-200 dark:border-pink-800' },
+  amber:   { bg: 'bg-amber-50 dark:bg-amber-900/20', text: 'text-amber-700 dark:text-amber-300', border: 'border-amber-200 dark:border-amber-800' },
+  teal:    { bg: 'bg-teal-50 dark:bg-teal-900/20', text: 'text-teal-700 dark:text-teal-300', border: 'border-teal-200 dark:border-teal-800' },
+  indigo:  { bg: 'bg-indigo-50 dark:bg-indigo-900/20', text: 'text-indigo-700 dark:text-indigo-300', border: 'border-indigo-200 dark:border-indigo-800' },
+};
 
 function toNumber(value: string, fallback: number): number {
   const parsed = Number(value);
@@ -38,17 +50,12 @@ export default function ClinicalRangesPage() {
 
   useEffect(() => {
     if (!hasPermission('manage_system_config')) return;
-
     const load = async () => {
       try {
         setLoading(true);
         const response = await fetch('/api/admin/config/clinical-ranges', { cache: 'no-store' });
         const data = await response.json();
-
-        if (!response.ok || !data.success) {
-          throw new Error(data.error || 'Failed to load ranges');
-        }
-
+        if (!response.ok || !data.success) throw new Error(data.error || 'Failed to load ranges');
         setRanges(normalizeClinicalValidationRanges(data.ranges));
         setUpdatedAt(data.updatedAt || null);
       } catch (error) {
@@ -59,33 +66,24 @@ export default function ClinicalRangesPage() {
         setLoading(false);
       }
     };
-
     load();
   }, [hasPermission]);
 
   const updateRangeValue = (key: RangeFieldKey, side: 'min' | 'max', rawValue: string) => {
     setRanges((prev) => ({
       ...prev,
-      [key]: {
-        ...prev[key],
-        [side]: toNumber(rawValue, prev[key][side]),
-      },
+      [key]: { ...prev[key], [side]: toNumber(rawValue, prev[key][side]) },
     }));
   };
 
   const handleSave = async () => {
     setMessage(null);
-
     for (const field of RANGE_FIELDS) {
       if (ranges[field.key].min > ranges[field.key].max) {
-        setMessage({
-          type: 'error',
-          text: `${field.label}: min cannot be greater than max.`,
-        });
+        setMessage({ type: 'error', text: `${field.label}: min cannot be greater than max.` });
         return;
       }
     }
-
     try {
       setSaving(true);
       const response = await fetch('/api/admin/config/clinical-ranges', {
@@ -94,16 +92,11 @@ export default function ClinicalRangesPage() {
         body: JSON.stringify({ ranges }),
       });
       const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to save ranges');
-      }
-
+      if (!response.ok || !data.success) throw new Error(data.error || 'Failed to save ranges');
       setRanges(normalizeClinicalValidationRanges(data.ranges));
       setUpdatedAt(new Date().toISOString());
       setMessage({ type: 'success', text: 'Clinical validation ranges updated successfully.' });
     } catch (error: any) {
-      console.error('Failed to save ranges:', error);
       setMessage({ type: 'error', text: error?.message || 'Failed to save ranges.' });
     } finally {
       setSaving(false);
@@ -113,93 +106,125 @@ export default function ClinicalRangesPage() {
   if (!hasPermission('manage_system_config')) {
     return (
       <div className="space-y-4">
-        <h1 className="text-3xl font-bold text-white">Access Denied</h1>
-        <p className="text-muted-foreground">You do not have permission to manage clinical validation ranges.</p>
+        <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">Access Denied</h1>
+        <p className="text-gray-600 dark:text-gray-400">You do not have permission to manage clinical validation ranges.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-white">Clinical Ranges</h1>
-        <p className="text-muted-foreground mt-2">
-          Configure allowed value ranges for Baseline and Follow-up form validations.
-        </p>
+    <div className="space-y-6 pb-8">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 dark:from-white dark:via-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2">
+            Clinical Ranges
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
+            <Activity className="w-4 h-4" />
+            Configure allowed value ranges for Baseline and Follow-up form validations
+          </p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving || loading}
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Save className="w-4 h-4" />
+          {saving ? 'Saving...' : 'Save Ranges'}
+        </button>
       </div>
 
+      {/* Message Alert */}
       {message && (
-        <div
-          className={`p-4 rounded-lg flex items-center gap-3 ${
-            message.type === 'success'
-              ? 'bg-green-900/30 border border-green-700/50 text-green-300'
-              : 'bg-red-900/30 border border-red-700/50 text-red-300'
-          }`}
-        >
-          {message.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-          {message.text}
+        <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+          message.type === 'success'
+            ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300'
+            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+        }`}>
+          {message.type === 'success' ? <CheckCircle className="w-5 h-5 flex-shrink-0" /> : <AlertCircle className="w-5 h-5 flex-shrink-0" />}
+          <p className="font-medium">{message.text}</p>
         </div>
       )}
 
-      <div className="bg-card border border-border rounded-lg p-6">
-        {loading ? (
-          <p className="text-muted-foreground">Loading range settings...</p>
-        ) : (
-          <>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/50">
-                    <th className="text-left px-4 py-3 text-foreground">Field</th>
-                    <th className="text-left px-4 py-3 text-foreground">Min</th>
-                    <th className="text-left px-4 py-3 text-foreground">Max</th>
-                    <th className="text-left px-4 py-3 text-foreground">Unit</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {RANGE_FIELDS.map((field) => (
-                    <tr key={field.key} className="border-b border-border/70">
-                      <td className="px-4 py-3 text-white font-medium">{field.label}</td>
-                      <td className="px-4 py-3">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={ranges[field.key].min}
-                          onChange={(e) => updateRangeValue(field.key, 'min', e.target.value)}
-                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-white"
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={ranges[field.key].max}
-                          onChange={(e) => updateRangeValue(field.key, 'max', e.target.value)}
-                          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-white"
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-foreground">{field.unit}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="mt-5 flex items-center justify-between gap-4">
-              <p className="text-xs text-muted-foreground">
-                Last updated: {updatedAt ? new Date(updatedAt).toLocaleString() : 'Not configured yet'}
-              </p>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+      {/* Range Cards Grid */}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-6">
+          <div className="relative">
+            <div className="w-16 h-16 border-4 border-blue-200 rounded-full"></div>
+            <div className="w-16 h-16 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0"></div>
+          </div>
+          <p className="text-gray-500 dark:text-gray-400">Loading clinical range settings...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {RANGE_FIELDS.map((field, index) => {
+            const colors = COLOR_MAP[field.color] || COLOR_MAP.blue;
+            return (
+              <div
+                key={field.key}
+                className="rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300"
+                style={{ animation: `fadeIn 0.4s ease-out ${index * 0.06}s forwards`, opacity: 0 }}
               >
-                {saving ? 'Saving...' : 'Save Ranges'}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
+                <div className={`${colors.bg} border-b ${colors.border} p-4`}>
+                  <div className="flex items-center justify-between">
+                    <h3 className={`text-base font-semibold ${colors.text}`}>{field.label}</h3>
+                    <span className={`px-2.5 py-1 text-xs font-medium rounded-full border ${colors.bg} ${colors.text} ${colors.border}`}>
+                      {field.unit}
+                    </span>
+                  </div>
+                </div>
+                <div className="p-5 grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Min</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={ranges[field.key].min}
+                      onChange={(e) => updateRangeValue(field.key, 'min', e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-gray-900 dark:text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Max</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={ranges[field.key].max}
+                      onChange={(e) => updateRangeValue(field.key, 'max', e.target.value)}
+                      className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 px-3 py-2.5 text-gray-900 dark:text-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    />
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Footer */}
+      {!loading && (
+        <div className="flex items-center justify-between rounded-xl bg-gray-50 dark:bg-gray-750 border border-gray-200 dark:border-gray-700 p-4">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            Last updated: <span className="font-medium text-gray-700 dark:text-gray-300">{updatedAt ? new Date(updatedAt).toLocaleString() : 'Not configured yet'}</span>
+          </p>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-semibold shadow-md hover:shadow-lg transition-all duration-300 disabled:opacity-50"
+          >
+            <Save className="w-4 h-4" />
+            {saving ? 'Saving...' : 'Save Ranges'}
+          </button>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }

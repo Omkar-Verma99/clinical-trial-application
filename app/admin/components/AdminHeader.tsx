@@ -35,7 +35,7 @@ export default function AdminHeader() {
   };
 
   return (
-    <header className="border-b border-border bg-white sticky top-0 z-40">
+    <header className="border-b border-border bg-card sticky top-0 z-40">
       <div className="flex items-center justify-between h-16 px-6">
         {/* Logo / Title */}
         <div className="flex items-center gap-3">
@@ -76,7 +76,7 @@ export default function AdminHeader() {
               </Button>
             </DropdownMenuTrigger>
 
-            <DropdownMenuContent align="end" className="w-56 bg-white border-border">
+            <DropdownMenuContent align="end" className="w-56 bg-card border-border">
               <DropdownMenuLabel className="text-foreground">
                 <div>
                   <p className="font-semibold text-sm">

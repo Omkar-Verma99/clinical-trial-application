@@ -258,6 +258,20 @@ export async function POST(request: Request) {
       ? sanitizePermissions(resolvedRole, adminData.permissions)
       : getDefaultPermissionsForRole(resolvedRole)
 
+    // Log the successful login action to Audit Logs
+    try {
+      await adminDb.collection('auditLogs').doc(`log_login_${Date.now()}_${adminDocId}`).set({
+        adminId: adminDocId,
+        action: 'admin_login',
+        resourceType: 'system',
+        details: { adminName: `${adminData.firstName || ''} ${adminData.lastName || ''}`.trim() || adminData.email },
+        timestamp: FieldValue.serverTimestamp(),
+        ipAddress: request.headers.get('x-forwarded-for') || 'unknown',
+      })
+    } catch (auditError) {
+      console.error('Failed to write audit log for login:', auditError)
+    }
+
     return Response.json({
       success: true,
       user: {

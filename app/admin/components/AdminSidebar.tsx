@@ -96,7 +96,22 @@ export default function AdminSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { adminUser, logout, hasPermission } = useAdminAuth();
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('admin_sidebar_open');
+      return saved !== null ? JSON.parse(saved) : true;
+    }
+    return true;
+  });
+
+  const toggleSidebar = () => {
+    const nextState = !isOpen;
+    setIsOpen(nextState);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('admin_sidebar_open', JSON.stringify(nextState));
+    }
+  };
+
   const fullName = `${adminUser?.firstName || ''} ${adminUser?.lastName || ''}`.trim() || 'Admin User';
 
   const handleLogout = async () => {
@@ -110,14 +125,14 @@ export default function AdminSidebar() {
     <div
       className={`${
         isOpen ? 'w-64' : 'w-20'
-      } bg-white border-r border-border transition-all duration-300 flex flex-col`}
+      } bg-card border-r border-border transition-all duration-300 flex flex-col`}
     >
       {/* Header */}
-      <div className="p-4 border-b border-border bg-white">
+      <div className="p-4 border-b border-border bg-card">
         <div className="flex items-center justify-between">
           {isOpen && <span className="font-bold text-foreground text-lg">Admin</span>}
           <button
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={toggleSidebar}
             className="p-1 hover:bg-muted rounded-lg transition-colors text-muted-foreground"
           >
             <Menu className="w-5 h-5" />

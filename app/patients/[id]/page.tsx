@@ -41,17 +41,18 @@ export default function PatientDetailPage({ params }: Props) {
   const router = useRouter()
   const [patientId, setPatientId] = useState<string>("")
   const [patient, setPatient] = useState<Patient | null>(null)
-  const [baseline, setBaseline] = useState<BaselineData | null>(null)
-  const [followUps, setFollowUps] = useState<FollowUpData[]>([])
-  // Ensure at least one follow-up tab exists after baseline
+  const [creatingFollowUp, setCreatingFollowUp] = useState(false)
+
+  // OPTIMIZED: Derive baseline and followUps from the patient object
+  const baseline = useMemo(() => patient?.baseline || null, [patient])
+  const followUps = useMemo(() => patient?.followups || [], [patient])
+
   const followUpsWithDefault = useMemo(() => {
     if (baseline && followUps.length === 0) {
-      // Create a placeholder for the first follow-up
       return [{} as FollowUpData]
     }
     return followUps
   }, [baseline, followUps])
-  const [creatingFollowUp, setCreatingFollowUp] = useState(false)
 
   const getPatientCodeInitials = (code?: string) => {
     const patientCodeText = String(code || "").trim().toUpperCase()
@@ -150,38 +151,17 @@ export default function PatientDetailPage({ params }: Props) {
       patientRef,
       (snap) => {
         if (snap.exists()) {
-          const patientData = snap.data() as Patient & { baseline?: BaselineData; followups?: FollowUpData[] }
+          const patientData = { ...snap.data(), id: snap.id } as Patient
           
           // OPTIMIZED: Only update if data actually changed - prevents unnecessary re-renders
           setPatient(prevPatient => {
-            const newPatientData = { ...patientData, id: snap.id } as Patient
-            if (prevPatient && JSON.stringify(prevPatient) === JSON.stringify(newPatientData)) {
+            if (prevPatient && JSON.stringify(prevPatient) === JSON.stringify(patientData)) {
               return prevPatient
             }
-            return newPatientData
+            return patientData
           })
-          
-          // Extract baseline and followups from unified patient document
-          const latestBaseline = patientData.baseline ?? null
-          setBaseline(prevBaseline => {
-            if (prevBaseline && latestBaseline && JSON.stringify(prevBaseline) === JSON.stringify(latestBaseline)) {
-              return prevBaseline
-            }
-            return latestBaseline
-          })
-
-          const latestFollowUps = Array.isArray(patientData.followups) ? (patientData.followups as FollowUpData[]) : []
-          setFollowUps(prevFollowUps => {
-            if (JSON.stringify(prevFollowUps) === JSON.stringify(latestFollowUps)) {
-              return prevFollowUps
-            }
-            return latestFollowUps
-          })
-          // Dynamic visit tabs are now created from followUps array
         } else {
           setPatient(null)
-          setBaseline(null)
-          setFollowUps([])
         }
         setLoading(false)
       },

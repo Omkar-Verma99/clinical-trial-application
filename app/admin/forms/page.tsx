@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getDocs, collection } from 'firebase/firestore';
 import { getFirestore } from 'firebase/firestore';
-import { Eye, Search, AlertCircle } from 'lucide-react';
+import { Eye, Search, FileText, CheckCircle2, Clock, BarChart3, X } from 'lucide-react';
 
 interface FormResponse {
   id: string;
@@ -18,10 +18,6 @@ interface FormResponse {
   data: Record<string, any>;
 }
 
-interface FormDetailModal {
-  form: FormResponse;
-}
-
 export default function FormResponsesPage() {
   const [forms, setForms] = useState<FormResponse[]>([]);
   const [filteredForms, setFilteredForms] = useState<FormResponse[]>([]);
@@ -29,18 +25,25 @@ export default function FormResponsesPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [formTypeFilter, setFormTypeFilter] = useState('all');
-  const [selectedForm, setSelectedForm] = useState<FormDetailModal | null>(null);
-  const [showModal, setShowModal] = useState(false);
+  const [selectedForm, setSelectedForm] = useState<FormResponse | null>(null);
   const [formTypes, setFormTypes] = useState<string[]>([]);
-
   const db = getFirestore();
 
-  useEffect(() => {
-    fetchForms();
-  }, []);
+  useEffect(() => { fetchForms(); }, []);
 
   useEffect(() => {
-    filterForms();
+    let filtered = forms;
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (form) =>
+          form.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          form.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          form.formType.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    if (statusFilter !== 'all') filtered = filtered.filter((form) => statusFilter === 'completed' ? form.isCompleted : !form.isCompleted);
+    if (formTypeFilter !== 'all') filtered = filtered.filter((form) => form.formType === formTypeFilter);
+    setFilteredForms(filtered);
   }, [forms, searchTerm, statusFilter, formTypeFilter]);
 
   const fetchForms = async () => {
@@ -53,26 +56,24 @@ export default function FormResponsesPage() {
 
       const patientNameById = new Map<string, string>();
       patientsSnapshot.docs.forEach((patientDoc) => {
-        const patientData = patientDoc.data() as Record<string, any>;
-        const fullName = `${patientData.firstName || ''} ${patientData.lastName || ''}`.trim();
-        patientNameById.set(patientDoc.id, fullName || 'Unknown');
+        const d = patientDoc.data() as Record<string, any>;
+        patientNameById.set(patientDoc.id, `${d.firstName || ''} ${d.lastName || ''}`.trim() || 'Unknown');
       });
 
       const doctorNameById = new Map<string, string>();
       doctorsSnapshot.docs.forEach((doctorDoc) => {
-        const doctorData = doctorDoc.data() as Record<string, any>;
-        const fullName = `${doctorData.firstName || ''} ${doctorData.lastName || ''}`.trim();
-        doctorNameById.set(doctorDoc.id, fullName || 'Unknown');
+        const d = doctorDoc.data() as Record<string, any>;
+        doctorNameById.set(doctorDoc.id, `${d.firstName || ''} ${d.lastName || ''}`.trim() || d.name || 'Unknown');
       });
 
       const formsData = patientsSnapshot.docs.flatMap((patientDoc) => {
-        const patientData = patientDoc.data() as Record<string, any>;
+        const p = patientDoc.data() as Record<string, any>;
         const patientId = patientDoc.id;
-        const patientName = patientNameById.get(patientId) || patientData.patientCode || 'Unknown';
+        const patientName = patientNameById.get(patientId) || p.patientCode || 'Unknown';
         const baselineForms: FormResponse[] = [];
 
-        if (patientData.baseline && typeof patientData.baseline === 'object') {
-          const baselineDoctorId = String(patientData.baseline?.doctorId || patientData.doctorId || '');
+        if (p.baseline && typeof p.baseline === 'object') {
+          const baselineDoctorId = String(p.baseline?.doctorId || p.doctorId || '');
           baselineForms.push({
             id: `${patientId}-baseline`,
             formType: 'baseline',
@@ -82,18 +83,14 @@ export default function FormResponsesPage() {
             doctorName: doctorNameById.get(baselineDoctorId) || 'Unknown',
             isCompleted: true,
             completionPercentage: 100,
-            submittedAt: patientData.baseline?.updatedAt
-              ? new Date(patientData.baseline.updatedAt)
-              : patientData.baseline?.createdAt
-              ? new Date(patientData.baseline.createdAt)
-              : new Date(),
-            data: patientData.baseline,
+            submittedAt: p.baseline?.updatedAt ? new Date(p.baseline.updatedAt) : p.baseline?.createdAt ? new Date(p.baseline.createdAt) : new Date(),
+            data: p.baseline,
           });
         }
 
-        const followups = Array.isArray(patientData.followups) ? patientData.followups : [];
+        const followups = Array.isArray(p.followups) ? p.followups : [];
         const followupForms: FormResponse[] = followups.map((followup: any, index: number) => {
-          const followupDoctorId = String(followup?.doctorId || patientData.doctorId || '');
+          const followupDoctorId = String(followup?.doctorId || p.doctorId || '');
           return {
             id: `${patientId}-followup-${index + 1}`,
             formType: `followup_week_${followup?.visitNumber || index + 1}`,
@@ -103,13 +100,7 @@ export default function FormResponsesPage() {
             doctorName: doctorNameById.get(followupDoctorId) || 'Unknown',
             isCompleted: true,
             completionPercentage: 100,
-            submittedAt: followup?.updatedAt
-              ? new Date(followup.updatedAt)
-              : followup?.createdAt
-              ? new Date(followup.createdAt)
-              : followup?.visitDate
-              ? new Date(followup.visitDate)
-              : new Date(),
+            submittedAt: followup?.updatedAt ? new Date(followup.updatedAt) : followup?.createdAt ? new Date(followup.createdAt) : followup?.visitDate ? new Date(followup.visitDate) : new Date(),
             data: followup || {},
           };
         });
@@ -118,10 +109,7 @@ export default function FormResponsesPage() {
       });
 
       setForms(formsData);
-
-      // Extract unique form types
-      const types = [...new Set(formsData.map((f) => f.formType))];
-      setFormTypes(types.sort());
+      setFormTypes([...new Set(formsData.map((f) => f.formType))].sort());
     } catch (error) {
       console.error('Error fetching forms:', error);
     } finally {
@@ -129,237 +117,225 @@ export default function FormResponsesPage() {
     }
   };
 
-  const filterForms = () => {
-    let filtered = forms;
-
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (form) =>
-          form.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          form.doctorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          form.formType.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter((form) =>
-        statusFilter === 'completed' ? form.isCompleted : !form.isCompleted
-      );
-    }
-
-    if (formTypeFilter !== 'all') {
-      filtered = filtered.filter((form) => form.formType === formTypeFilter);
-    }
-
-    setFilteredForms(filtered);
-  };
-
-  const openFormDetail = (form: FormResponse) => {
-    setSelectedForm({ form });
-    setShowModal(true);
-  };
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[calc(100vh-200px)] gap-6">
+        <div className="relative">
+          <div className="w-20 h-20 border-4 border-blue-200 dark:border-blue-800 rounded-full"></div>
+          <div className="w-20 h-20 border-4 border-blue-600 dark:border-blue-400 rounded-full border-t-transparent animate-spin absolute top-0"></div>
+        </div>
+        <div className="text-center">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Loading Form Responses</h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Please wait...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-8">
       {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-white">Form Responses</h1>
-        <p className="text-muted-foreground mt-2">Track and analyze all form submissions</p>
+      <div className="flex items-center justify-between mb-8">
+        <div>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 dark:from-white dark:via-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2">
+            Form Responses
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 flex items-center gap-2">
+            <BarChart3 className="w-4 h-4" />
+            Track and analyze all form submissions
+          </p>
+        </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-muted-foreground text-sm">Total Submissions</p>
-          <p className="text-2xl font-bold text-white mt-2">{forms.length}</p>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-3">
+              <FileText className="w-8 h-8" />
+              <span className="text-4xl font-bold">{forms.length}</span>
+            </div>
+            <p className="text-blue-100 font-medium">Total Submissions</p>
+          </div>
         </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-muted-foreground text-sm">Completed</p>
-          <p className="text-2xl font-bold text-green-400 mt-2">
-            {forms.filter((f) => f.isCompleted).length}
-          </p>
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-3">
+              <CheckCircle2 className="w-8 h-8" />
+              <span className="text-4xl font-bold">{forms.filter((f) => f.isCompleted).length}</span>
+            </div>
+            <p className="text-emerald-100 font-medium">Completed</p>
+          </div>
         </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-muted-foreground text-sm">In Progress</p>
-          <p className="text-2xl font-bold text-orange-400 mt-2">
-            {forms.filter((f) => !f.isCompleted).length}
-          </p>
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500 to-orange-600 p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-3">
+              <Clock className="w-8 h-8" />
+              <span className="text-4xl font-bold">{forms.filter((f) => !f.isCompleted).length}</span>
+            </div>
+            <p className="text-orange-100 font-medium">In Progress</p>
+          </div>
         </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <p className="text-muted-foreground text-sm">Completion Rate</p>
-          <p className="text-2xl font-bold text-blue-400 mt-2">
-            {forms.length > 0 ? Math.round((forms.filter((f) => f.isCompleted).length / forms.length) * 100) : 0}%
-          </p>
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500 to-violet-600 p-6 text-white shadow-lg hover:shadow-2xl transition-all duration-300 hover:-translate-y-1">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white opacity-10 rounded-full blur-3xl"></div>
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-3">
+              <BarChart3 className="w-8 h-8" />
+              <span className="text-4xl font-bold">{forms.length > 0 ? Math.round((forms.filter((f) => f.isCompleted).length / forms.length) * 100) : 0}%</span>
+            </div>
+            <p className="text-violet-100 font-medium">Completion Rate</p>
+          </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Search</label>
-          <div className="relative">
-            <Search className="absolute left-3 top-3 w-5 h-5 text-muted-foreground" />
-            <input
-              type="text"
-              placeholder="Search by name or form type..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-card border border-border rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-            />
+      <div className="rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg p-6 space-y-4">
+        <div className="relative">
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by name or form type..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+          />
+          {searchTerm && (
+            <button onClick={() => setSearchTerm('')} className="absolute right-4 top-1/2 -translate-y-1/2 p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">
+              <X className="w-4 h-4 text-gray-500" />
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status</label>
+            <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+              <option value="all">All Status</option>
+              <option value="completed">Completed</option>
+              <option value="incomplete">In Progress</option>
+            </select>
           </div>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Status</label>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full px-4 py-2 bg-card border border-border rounded-lg text-white focus:outline-none focus:border-blue-500"
-          >
-            <option value="all">All Status</option>
-            <option value="completed">Completed</option>
-            <option value="incomplete">In Progress</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-2">Form Type</label>
-          <select
-            value={formTypeFilter}
-            onChange={(e) => setFormTypeFilter(e.target.value)}
-            className="w-full px-4 py-2 bg-card border border-border rounded-lg text-white focus:outline-none focus:border-blue-500"
-          >
-            <option value="all">All Forms</option>
-            {formTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Form Type</label>
+            <select value={formTypeFilter} onChange={(e) => setFormTypeFilter(e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all">
+              <option value="all">All Forms</option>
+              {formTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </div>
         </div>
       </div>
 
       {/* Forms Table */}
-      <div className="bg-card border border-border rounded-lg overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center">
-            <p className="text-muted-foreground">Loading forms...</p>
-          </div>
-        ) : filteredForms.length === 0 ? (
-          <div className="p-8 text-center">
-            <AlertCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-            <p className="text-muted-foreground">No forms found</p>
+      <div className="rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg overflow-hidden">
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-750 dark:to-gray-800 border-b border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            All Submissions <span className="text-gray-500 dark:text-gray-400 font-normal text-sm ml-2">({filteredForms.length})</span>
+          </h3>
+        </div>
+        {filteredForms.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16">
+            <FileText className="w-12 h-12 text-gray-300 dark:text-gray-600 mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">No forms found matching your criteria</p>
           </div>
         ) : (
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border bg-muted/50">
-                <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Form Type</th>
-                <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Patient</th>
-                <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Doctor</th>
-                <th className="text-center px-6 py-3 text-sm font-semibold text-foreground">Completion</th>
-                <th className="text-center px-6 py-3 text-sm font-semibold text-foreground">Status</th>
-                <th className="text-left px-6 py-3 text-sm font-semibold text-foreground">Submitted</th>
-                <th className="text-center px-6 py-3 text-sm font-semibold text-foreground">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredForms.map((form) => (
-                <tr key={form.id} className="border-b border-border/70 hover:bg-muted/20 transition">
-                  <td className="px-6 py-4">
-                    <span className="inline-block px-3 py-1 bg-blue-900/30 text-blue-300 rounded text-sm font-medium">
-                      {form.formType}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-white font-medium">{form.patientName}</td>
-                  <td className="px-6 py-4 text-sm text-foreground">{form.doctorName}</td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-20 bg-muted rounded-full h-2">
-                        <div
-                          className="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full"
-                          style={{ width: `${form.completionPercentage}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-xs font-medium text-foreground w-8">{form.completionPercentage}%</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        form.isCompleted
-                          ? 'bg-green-900/30 text-green-300'
-                          : 'bg-orange-900/30 text-orange-300'
-                      }`}
-                    >
-                      {form.isCompleted ? 'Completed' : 'In Progress'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-sm text-foreground">{form.submittedAt.toLocaleDateString()}</td>
-                  <td className="px-6 py-4 text-center">
-                    <button
-                      onClick={() => openFormDetail(form)}
-                      className="p-2 hover:bg-muted/40 rounded-lg transition"
-                      title="View details"
-                    >
-                      <Eye className="w-4 h-4 text-blue-400" />
-                    </button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Form Type</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Patient</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Doctor</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Completion</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Submitted</th>
+                  <th className="px-6 py-4 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                {filteredForms.map((form, index) => (
+                  <tr
+                    key={form.id}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+                    style={{ animation: `fadeIn 0.3s ease-out ${index * 0.03}s forwards`, opacity: 0 }}
+                  >
+                    <td className="px-6 py-4">
+                      <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-full text-xs font-medium">
+                        {form.formType}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-900 dark:text-white font-medium text-sm">{form.patientName}</td>
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-400 text-sm">{form.doctorName}</td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                          <div className="bg-gradient-to-r from-violet-500 to-pink-500 h-2 rounded-full transition-all" style={{ width: `${form.completionPercentage}%` }}></div>
+                        </div>
+                        <span className="text-xs font-medium text-gray-600 dark:text-gray-400">{form.completionPercentage}%</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        form.isCompleted
+                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
+                          : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300'
+                      }`}>
+                        {form.isCompleted ? 'Completed' : 'In Progress'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-gray-600 dark:text-gray-400 text-sm">{form.submittedAt.toLocaleDateString()}</td>
+                    <td className="px-6 py-4 text-center">
+                      <button
+                        onClick={() => setSelectedForm(form)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-all shadow-sm hover:shadow-md"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                        View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
       {/* Detail Modal */}
-      {showModal && selectedForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-background rounded-lg max-w-3xl w-full max-h-96 overflow-y-auto border border-border">
-            <div className="sticky top-0 bg-card border-b border-border p-6 flex justify-between items-center">
+      {selectedForm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="rounded-2xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 w-full max-w-3xl max-h-[90vh] overflow-hidden shadow-2xl">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 rounded-t-2xl flex items-start justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-white">{selectedForm.form.formType}</h2>
-                <p className="text-sm text-muted-foreground mt-1">{selectedForm.form.patientName}</p>
+                <h2 className="text-xl font-bold text-white">{selectedForm.formType}</h2>
+                <p className="text-blue-100 text-sm mt-1">{selectedForm.patientName}</p>
               </div>
-              <button
-                onClick={() => setShowModal(false)}
-                className="text-muted-foreground hover:text-white text-2xl"
-              >
-                ×
+              <button onClick={() => setSelectedForm(null)} className="text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-xl p-2 transition-all">
+                <X className="w-5 h-5" />
               </button>
             </div>
-
-            <div className="p-6 space-y-6">
-              {/* Meta Info */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)] space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="bg-card rounded p-3">
-                  <p className="text-xs text-muted-foreground">Status</p>
-                  <p className={`text-sm font-bold mt-1 ${selectedForm.form.isCompleted ? 'text-green-400' : 'text-orange-400'}`}>
-                    {selectedForm.form.isCompleted ? 'Completed' : 'In Progress'}
-                  </p>
-                </div>
-                <div className="bg-card rounded p-3">
-                  <p className="text-xs text-muted-foreground">Completion</p>
-                  <p className="text-sm font-bold mt-1 text-blue-400">{selectedForm.form.completionPercentage}%</p>
-                </div>
-                <div className="bg-card rounded p-3">
-                  <p className="text-xs text-muted-foreground">Doctor</p>
-                  <p className="text-sm font-bold mt-1 text-white">{selectedForm.form.doctorName}</p>
-                </div>
-                <div className="bg-card rounded p-3">
-                  <p className="text-xs text-muted-foreground">Submitted</p>
-                  <p className="text-sm font-bold mt-1 text-white">
-                    {selectedForm.form.submittedAt.toLocaleDateString()}
-                  </p>
-                </div>
+                {[
+                  { label: 'Status', value: selectedForm.isCompleted ? 'Completed' : 'In Progress', color: selectedForm.isCompleted ? 'emerald' : 'orange' },
+                  { label: 'Completion', value: `${selectedForm.completionPercentage}%`, color: 'blue' },
+                  { label: 'Doctor', value: selectedForm.doctorName, color: 'violet' },
+                  { label: 'Submitted', value: selectedForm.submittedAt.toLocaleDateString(), color: 'gray' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className={`p-3 rounded-xl bg-${color}-50 dark:bg-${color}-900/20 border border-${color}-100 dark:border-${color}-800`}>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
+                    <p className="text-sm font-bold text-gray-900 dark:text-white mt-1">{value}</p>
+                  </div>
+                ))}
               </div>
-
-              {/* Form Data */}
               <div>
-                <h3 className="text-lg font-semibold text-white mb-4">Form Data</h3>
-                <div className="space-y-3">
-                  {Object.entries(selectedForm.form.data).map(([key, value]) => (
-                    <div key={key} className="bg-card/30 rounded p-3 border border-border">
-                      <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{key}</p>
-                      <p className="text-sm text-white mt-2">
+                <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">Form Data</h3>
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {Object.entries(selectedForm.data).map(([key, value]) => (
+                    <div key={key} className="bg-gray-50 dark:bg-gray-750 rounded-xl p-3 border border-gray-200 dark:border-gray-700">
+                      <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">{key}</p>
+                      <p className="text-sm text-gray-900 dark:text-white mt-1 break-words">
                         {typeof value === 'object' ? JSON.stringify(value) : String(value) || 'N/A'}
                       </p>
                     </div>
@@ -370,6 +346,13 @@ export default function FormResponsesPage() {
           </div>
         </div>
       )}
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
