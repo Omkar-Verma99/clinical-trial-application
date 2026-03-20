@@ -79,3 +79,5 @@ env:
 runConfig:
   minInstances: 1
   maxInstances: 10
+  memory: 2Gi
+  cpu: 2
