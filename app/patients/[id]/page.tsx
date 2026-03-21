@@ -15,7 +15,7 @@ import { downloadPatientPDF, downloadCSV, downloadExcel } from "@/lib/pdf-export
 import { toast } from "@/hooks/use-toast"
 import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"
-import { PatientFormPage } from "@/app/patients/add/page"
+import { PatientFormPage } from "@/components/patients/PatientForm"
 import { doctorLockedMessage, followupSectionKey, isSectionLocked, SectionLockMap } from "@/lib/section-locks"
 
 // OPTIMIZED: Memoize form components to prevent unnecessary re-renders

@@ -14,7 +14,7 @@ import { downloadPatientPDF, downloadCSV, downloadExcel } from '@/lib/pdf-export
 import type { Patient, BaselineData, FollowUpData, Doctor } from '@/lib/types';
 import { BaselineForm } from '@/components/baseline-form';
 import { FollowUpForm } from '@/components/followup-form';
-import { PatientFormPage } from '@/app/patients/add/page';
+import { PatientFormPage } from '@/components/patients/PatientForm';
 import { useAdminAuth } from '@/contexts/admin-auth-context';
 import { followupSectionKey, isSectionLocked, SectionLockMap } from '@/lib/section-locks';
 
