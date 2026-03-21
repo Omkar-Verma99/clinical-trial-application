@@ -27,11 +27,11 @@ export default function AdminHeader() {
   };
 
   const handleOpenProfile = () => {
-    router.push('/admin/profile');
+    setTimeout(() => router.push('/admin/profile'), 150);
   };
 
   const handleOpenSettings = () => {
-    router.push('/admin/settings');
+    setTimeout(() => router.push('/admin/settings'), 150);
   };
 
   return (

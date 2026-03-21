@@ -2,6 +2,7 @@
 
 import { useAdminAuth } from '@/contexts/admin-auth-context';
 import { Shield, Mail, Calendar, Activity, Key, Lock } from 'lucide-react';
+import { ChangePasswordForm } from './change-password-form';
 
 const PERMISSION_DISPLAY: Record<string, { label: string; group: string; color: string }> = {
   view_dashboard:   { label: 'View Dashboard', group: 'Core Access', color: 'blue' },
@@ -187,6 +188,9 @@ export default function AdminProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Security Settings */}
+      <ChangePasswordForm />
     </div>
   );
 }

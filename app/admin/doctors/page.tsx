@@ -3,9 +3,11 @@
 import { useEffect, useState, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Search, Eye, Mail, Phone, Calendar, Users, Stethoscope, X, Filter, ChevronDown, ArrowUpRight } from 'lucide-react';
+import { Search, Eye, Mail, Phone, Calendar, Users, Stethoscope, X, Filter, ChevronDown, ArrowUpRight, UserPlus, FileUp } from 'lucide-react';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
+import { AddDoctorModal } from '@/components/admin/add-doctor-modal';
+import { BulkAddDoctorsModal } from '@/components/admin/bulk-add-doctors-modal';
 
 interface Doctor {
   id: string;
@@ -43,6 +45,8 @@ export default function DoctorsManagementPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
+  const [isAddDoctorModalOpen, setIsAddDoctorModalOpen] = useState(false);
+  const [isBulkAddModalOpen, setIsBulkAddModalOpen] = useState(false);
 
   useEffect(() => {
     setIsLoading(true);
@@ -140,7 +144,7 @@ export default function DoctorsManagementPage() {
   return (
     <div className="space-y-6 pb-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-4xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-700 dark:from-white dark:via-gray-100 dark:to-gray-300 bg-clip-text text-transparent mb-2">
             Doctor Management
@@ -149,6 +153,22 @@ export default function DoctorsManagementPage() {
             <Stethoscope className="w-4 h-4" />
             Manage and monitor all doctors in the system
           </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsAddDoctorModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 rounded-xl font-medium shadow-sm transition-all"
+          >
+            <UserPlus className="w-4 h-4" />
+            Add Doctor
+          </button>
+          <button
+            onClick={() => setIsBulkAddModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-medium shadow-md transition-all"
+          >
+            <FileUp className="w-4 h-4" />
+            Bulk Upload
+          </button>
         </div>
       </div>
 
@@ -413,6 +433,16 @@ export default function DoctorsManagementPage() {
           </div>
         </div>
       )}
+
+      {/* Add Doctor Modals */}
+      <AddDoctorModal
+        isOpen={isAddDoctorModalOpen}
+        onClose={() => setIsAddDoctorModalOpen(false)}
+      />
+      <BulkAddDoctorsModal
+        isOpen={isBulkAddModalOpen}
+        onClose={() => setIsBulkAddModalOpen(false)}
+      />
 
       <style jsx>{`
         @keyframes fadeIn {
