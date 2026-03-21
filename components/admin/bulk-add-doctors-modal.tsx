@@ -155,6 +155,10 @@ export function BulkAddDoctorsModal({ isOpen, onClose, onSuccess }: BulkAddDocto
           if (doc[key]) isValidRow = true
         }
 
+        if (doc.dateOfBirth && !/^\d{4}-\d{2}-\d{2}$/.test(doc.dateOfBirth)) {
+          throw new Error(`Invalid Date of Birth format for doctor "${doc.name || doc.email}". Expected YYYY-MM-DD, but got "${doc.dateOfBirth}". Please correct the file and try again.`)
+        }
+
         if (isValidRow) {
           dataToSubmit.push(doc)
         }
@@ -244,8 +248,9 @@ export function BulkAddDoctorsModal({ isOpen, onClose, onSuccess }: BulkAddDocto
               <div className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-10 bg-white dark:bg-gray-800 transition-colors hover:border-emerald-400 dark:hover:border-emerald-500">
                 <FileUp className="w-12 h-12 text-gray-400 mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Upload CSV File</h3>
-                <p className="text-sm text-gray-500 text-center max-w-[280px] mb-6">
-                  Select a CSV file containing doctor details structured according to the template.
+                <p className="text-sm text-gray-500 text-center max-w-[320px] mb-6">
+                  Select a CSV file containing doctor details structured according to the template. <br/>
+                  <strong className="text-emerald-600 dark:text-emerald-400">Date of Birth must be strictly in YYYY-MM-DD format.</strong>
                 </p>
                 <input
                   ref={fileInputRef}

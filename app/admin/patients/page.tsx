@@ -196,7 +196,7 @@ export default function PatientManagementPage() {
           age: typeof data.age === 'number' ? data.age : undefined,
           gender: data.gender ? String(data.gender) : undefined,
         };
-      }).sort((a, b) => b.enrollmentDate.getTime() - a.enrollmentDate.getTime());
+      }).sort((a, b) => a.patientCode.localeCompare(b.patientCode, 'en', { numeric: true, sensitivity: 'base' }));
 
       setPatients(patientsData);
       setDoctorOptions([...new Set(patientsData.map((p) => p.doctorName).filter(Boolean))].sort());

@@ -394,11 +394,11 @@ export default function DashboardPage() {
       })
     }
     
-    // Sort by createdAt descending
-    return [...filtered].sort((a, b) => 
-      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    // Sort by patientCode ascending
+    return [...filtered].sort((a, b) =>
+      patientCodeSorter.compare(a.patientCode || "", b.patientCode || "")
     )
-  }, [patients, searchTerm, statusFilter])
+  }, [patients, searchTerm, statusFilter, patientCodeSorter])
 
   const currentPagePatients = useMemo(() => {
     return filteredPatients.slice(pagination.offset, pagination.offset + pagination.limit)
