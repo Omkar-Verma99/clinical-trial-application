@@ -12,6 +12,7 @@ export interface Doctor {
   address: string
   studySiteCode: string               // Clinic/Hospital name (Study Site)
   createdAt: string
+  status?: "active" | "inactive"      // Account status
 }
 
 // PATIENT - Anonymized RWE Study Participant

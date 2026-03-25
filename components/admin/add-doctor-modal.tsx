@@ -230,7 +230,7 @@ export function AddDoctorModal({ isOpen, onClose, onSuccess }: AddDoctorModalPro
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="dateOfBirth" className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                    Date of Birth <span className="text-red-500">*</span>
+                    Date of Birth <span className="text-gray-400 font-normal">(Optional)</span>
                   </Label>
                   <div className="relative">
                     <DateField
@@ -240,7 +240,6 @@ export function AddDoctorModal({ isOpen, onClose, onSuccess }: AddDoctorModalPro
                       onChangeAction={(value) => setFormData((prev) => ({ ...prev, dateOfBirth: value }))}
                       min="1900-01-01"
                       max="2100-12-31"
-                      required
                     />
                   </div>
                 </div>

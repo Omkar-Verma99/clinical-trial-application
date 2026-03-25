@@ -98,7 +98,7 @@ export default function AdminDashboard() {
 
         const totalPatients = patientsSnapshot.size;
         const activeDoctors = doctorsSnapshot.docs.filter(
-          (doc) => doc.data().status === 'active'
+          (doc) => (doc.data().status || 'active') === 'active'
         ).length;
 
         const patientRows = patientsSnapshot.docs.map((patientDoc) => {
