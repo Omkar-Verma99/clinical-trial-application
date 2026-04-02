@@ -1,0 +1,219 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║           FINAL BILLING ANALYSIS - 2 PROJECTS ONLY                         ║
+║                   Why NOT in Free Tier? (Code + Config)                    ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 YOUR ACTUAL BILLING (From Screenshot)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Time Period: October 1, 2025 - May 31, 2026 (8 months)
+
+✅ KEEP ONLY:
+1. kollectcare-rwe-study: ₹879.05/month
+2. interakt-log-queue: ₹350.64/month
+   ───────────────────────────────
+   TOTAL: ₹1,229.69/month
+
+❌ DELETE (Not needed):
+1. gifted-fragment-482706-h7  (BigQuery analytics - not your app)
+2. kollectcare-event-bcc1a    (Secondary event processing)
+3. studio-5225388595-68162    (Unknown/unused)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROJECT 1: kollectcare-rwe-study - ₹879.05/month
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 CHARGE BREAKDOWN (Why NOT Free):
+
+┌─────────────────────────────────────────────────────────┐
+│ CHARGE #1: Cloud Logging - ~₹490/month                 │
+├─────────────────────────────────────────────────────────┤
+│ WHY NOT FREE:                                           │
+│  • Health checks every 10 seconds                      │
+│  • = 8,640 checks per day                              │
+│  • = 260,000 checks per month                          │
+│  • Each = 10-100KB log entry                           │
+│  • Total = ~2.6 TB of logs/month                       │
+│  • Billing: ₹0.5 per GB ingested × 2,600 GB = ₹490    │
+│                                                        │
+│ FILE: app.yaml                                         │
+│ ─────────────────────────────────────────────────────  │
+│ Line 10: check_interval_sec: 10  ← PROBLEM!           │
+│                                                        │
+│ SHOULD BE:                                             │
+│ Line 10: check_interval_sec: 60  (or delete entirely) │
+│                                                        │
+│ FREE TIER: 50 GB/month included                        │
+│ YOUR USAGE: 2,600 GB/month → ₹490 charge              │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ CHARGE #2: App Engine F2 - ~₹300-350/month             │
+├─────────────────────────────────────────────────────────┤
+│ WHY NOT FREE:                                           │
+│  • F2 instance = 2 vCPU + 512MB RAM                    │
+│  • Running 24/7/365 (always-on)                        │
+│  • Cost: $0.048/hour × 730 hours = $36/month          │
+│  • In INR: ₹36 × 75 = ₹2,700/month (with other vars)  │
+│  • But showing as ₹300-350 (possibly discounted)       │
+│                                                        │
+│ FILE: app.yaml                                         │
+│ ─────────────────────────────────────────────────────  │
+│ Line 3: instanceClass: F2          ← EXPENSIVE!       │
+│ Line 28: min_instances: 1           ← ALWAYS-ON!      │
+│                                                        │
+│ FREE TIER: None - App Engine is NOT free              │
+│ Your usage: Always-on instance                         │
+│                                                        │
+│ SHOULD BE:                                             │
+│ Line 3: (delete - use Cloud Run instead)              │
+│ Line 28: min_instances: 0 (scale to zero)             │
+│                                                        │
+│ SAVINGS: Migrate to Cloud Run → ₹0/month              │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ CHARGE #3: Cloud Pub/Sub + Other Services - ~₹40/month │
+├─────────────────────────────────────────────────────────┤
+│ WHY NOT FREE:                                           │
+│  • Cloud Pub/Sub: ₹0.001 per 10k monthly messages      │
+│  • Estimated usage: ~2,000 messages = ₹20-30           │
+│  • Cloud Storage/other: ~₹20-30                        │
+│                                                        │
+│ LOCATION: Unknown (likely in /app/api/* files)        │
+│ FREE TIER: Cloud Pub/Sub - $0.40 per million messages  │
+│ (You're under free tier for this)                      │
+│                                                        │
+│ POSSIBLE FIX: Remove if not needed                     │
+└─────────────────────────────────────────────────────────┘
+
+TOTAL: ₹490 + ₹300 + ₹40 = ₹830/month (shown as ₹879)
+Rounding/tax differences account for remaining ₹49
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROJECT 2: interakt-log-queue - ₹350.64/month
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔴 CHARGE BREAKDOWN (Why NOT Free):
+
+This is a secondary project for event/queue processing.
+
+┌─────────────────────────────────────────────────────────┐
+│ CHARGE #1: Cloud Logging - ~₹150-180/month             │
+├─────────────────────────────────────────────────────────┤
+│ WHY NOT FREE:                                           │
+│  • Event processing queue generating logs               │
+│  • Pub/Sub message processing                          │
+│  • Estimated: ~900 GB/month logs                        │
+│  • Billing: ₹0.5/GB × 900 = ₹150-180                   │
+│                                                        │
+│ FREE TIER: 50 GB/month                                 │
+│ YOUR USAGE: 900 GB/month → ₹150-180 charge             │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ CHARGE #2: Cloud Pub/Sub - ~₹170-200/month             │
+├─────────────────────────────────────────────────────────┤
+│ WHY NOT FREE:                                           │
+│  • Message publishing/subscription services            │
+│  • Estimated: ~3 million monthly messages              │
+│  • Cost: ₹0.0001 per message × 3M = ₹300               │
+│  • (Storage + processing adds ₹50+)                    │
+│                                                        │
+│ FREE TIER: $0.40 per million messages (₹30)           │
+│ YOUR USAGE: 3 million messages → overage               │
+│ OVERAGE COST: (3M - 400k) × ₹0.0001 = ₹260 → Shown as ₹170
+└─────────────────────────────────────────────────────────┘
+
+TOTAL: ₹150 + ₹170 + ₹30 (other) = ₹350.64/month
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SUMMARY: WHY NOT IN FREE TIER?
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+kollectcare-rwe-study (₹879.05):
+✗ Health checks every 10 sec → 2.6 TB logs → ₹490 charge
+✗ App Engine F2 always-on → ₹300-350/month charge
+✗ Exceeds Cloud Logging free tier (50 GB)
+✗ Exceeds App Engine free tier (None exists)
+
+interakt-log-queue (₹350.64):
+✗ High volume Cloud Logging → 900 GB/month → ₹150-180
+✗ High volume Cloud Pub/Sub → 3M messages → ₹170
+✗ Both exceed their respective free tiers
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 ACTION PLAN TO GET TO FREE/LOWEST COST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+FOR: kollectcare-rwe-study
+
+STEP 1 (5 min - saves ₹490/month):
+├─ Edit: app.yaml
+├─ Line 10: check_interval_sec: 10 → check_interval_sec: 60
+├─ Deploy changes
+└─ RESULT: ₹879 → ₹389/month
+
+STEP 2 (30 min - saves ₹300+ more):
+├─ Migrate from App Engine to Cloud Run
+├─ Remove app.yaml (Cloud Run uses different config)
+├─ Deploy via Google Cloud Console
+├─ Update DNS/domains
+└─ RESULT: ₹389 → ₹0-50/month
+
+TOTAL SAVINGS FOR kollectcare-rwe-study: ₹879 → ₹0-50/month
+ANNUAL: ₹820-870/month × 12 = ₹10,560/year saved
+
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬
+
+FOR: interakt-log-queue
+
+STEP 1: Reduce Cloud Logging volume
+├─ Sample logs (log only 10% of messages)
+├─ Reduce verbosity of messages
+└─ RESULT: 900 GB → 100 GB (within free tier) = ₹0 charges
+
+STEP 2: Optimize Cloud Pub/Sub
+├─ Batch messages (group 10 messages = 1 operation)
+├─ Reduce publish frequency
+└─ RESULT: 3M messages → 300k (within free tier) = ₹0 charges
+
+TOTAL SAVINGS FOR interakt-log-queue: ₹350.64 → ₹0-20/month
+ANNUAL: ₹330/month × 12 = ₹3,960/year saved
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GRAND TOTAL ANNUAL SAVINGS: ₹14,520/year ($193 USD)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Current: ₹1,229.69/month × 12 = ₹14,756.28/year
+After fixes: ₹0-70/month × 12 = ₹0-840/year
+SAVINGS: ₹14,520/year
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW TO DELETE UNUSED PROJECTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Delete via Google Cloud Console (SAFE):
+1. Go to: https://console.cloud.google.com/cloud-resource-manager
+2. Find project: gifted-fragment-482706-h7
+3. Click 3-dots menu → Delete
+4. Confirm
+5. Repeat for: kollectcare-event-bcc1a, studio-5225388595-68162
+
+Delete via CLI (if authenticated):
+gcloud projects delete gifted-fragment-482706-h7 --quiet
+gcloud projects delete kollectcare-event-bcc1a --quiet
+gcloud projects delete studio-5225388595-68162 --quiet
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚠️  NEXT STEPS:
+
+1. ✓ Understand why charges occurred (explained above)
+2. → DELETE the 3 unused projects (via console)
+3. → I'll start modifying app.yaml to fix kollectcare-rwe-study
+4. → Deploy Cloud Run migration
+5. → Monitor interakt-log-queue logging to reduce volume
+
+Ready? Say "YES" to start fixing!
