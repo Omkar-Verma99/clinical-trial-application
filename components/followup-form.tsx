@@ -24,6 +24,10 @@ import {
   DEFAULT_CLINICAL_VALIDATION_RANGES,
   normalizeClinicalValidationRanges,
 } from "@/lib/clinical-ranges"
+import { hasAtLeastOneCheckbox, hasDuplicateVisitDate } from "@/lib/form-validation"
+import { preserveScrollPosition } from "@/lib/scroll-preserve"
+import { todayIsoDate, validateFollowUpVisitDate } from "@/lib/study-dates"
+import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
 
 interface FollowUpFormProps {
   patientId: string
@@ -173,6 +177,7 @@ export const FollowUpForm = memo(function FollowUpForm({
     dizzinessDehydration: existingData?.eventsOfSpecialInterest?.dizzinessDehydrationSymptoms ?? false,
     hospitalizationErVisit: existingData?.eventsOfSpecialInterest?.hospitalizationOrErVisit ?? false,
     hospitalizationReason: existingData?.eventsOfSpecialInterest?.hospitalizationReason || "",
+    eventsNone: (existingData?.eventsOfSpecialInterest as { none?: boolean })?.none ?? false,
     overallEfficacy: existingData?.physicianAssessment?.overallEfficacy || "",
     overallTolerability: existingData?.physicianAssessment?.overallTolerability || "",
     complianceJudgment: existingData?.physicianAssessment?.complianceJudgment || "",
@@ -182,6 +187,9 @@ export const FollowUpForm = memo(function FollowUpForm({
     ckdPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.ckdPatients ?? false,
     htnT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.htnPlusT2dm ?? false,
     elderlyPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.elderlyPatients ?? false,
+    profileOther: (existingData?.physicianAssessment?.preferredPatientProfiles as { other?: boolean })?.other ?? false,
+    profileOtherText:
+      (existingData?.physicianAssessment?.preferredPatientProfiles as { otherDetails?: string })?.otherDetails || "",
     noPersonalIdentifiers: existingData?.dataPrivacy?.noPersonalIdentifiersRecorded ?? false,
     dataAsRoutinePractice: existingData?.dataPrivacy?.dataCollectedAsRoutineClinicalPractice ?? false,
     patientIdentityMapping: existingData?.dataPrivacy?.patientIdentityMappingAtClinicOnly ?? false,
@@ -314,17 +322,72 @@ export const FollowUpForm = memo(function FollowUpForm({
       // VALIDATION PHASE 1: Check required fields
       const validationErrors: string[] = []
       
-      if (!formData.visitDate) validationErrors.push("Visit date is required")
+      if (!formData.visitDate) {
+        validationErrors.push("Visit date is required")
+      } else {
+        const visitDateError = validateFollowUpVisitDate(formData.visitDate)
+        if (visitDateError) validationErrors.push(visitDateError)
+        if (hasDuplicateVisitDate(formData.visitDate, allFollowUps, followUpIndex)) {
+          validationErrors.push("Another follow-up already uses this visit date")
+        }
+      }
       if (!formData.hba1c) validationErrors.push("HbA1c is required")
       if (!formData.fpg) validationErrors.push("FPG is required")
+      if (!formData.ppg) validationErrors.push("PPG is required")
       if (!formData.weight) validationErrors.push("Weight is required")
       if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
       if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
+      if (!formData.heartRate) validationErrors.push("Heart Rate is required")
+      if (!formData.serumCreatinine) validationErrors.push("Serum Creatinine is required")
+      if (!formData.egfr) validationErrors.push("eGFR is required")
+      if (!formData.urinalysisType) validationErrors.push("Urinalysis is required")
+      if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify.trim()) {
+        validationErrors.push("Please specify abnormality for urinalysis")
+      }
       if (!formData.hba1cResponse) validationErrors.push("HbA1c response category is required")
+      if (!formData.weightChange) validationErrors.push("Weight change is required")
       if (formData.patientContinuingTreatment === null) validationErrors.push("Please select patient continuing treatment status")
       if (formData.bpControlAchieved === null) validationErrors.push("Please select blood pressure control status")
+      if (!formData.renalOutcome) validationErrors.push("Renal outcome is required")
       if (formData.addOnTherapy === null) validationErrors.push("Please select add-on/change therapy status")
+      if (formData.addOnTherapy === true && !formData.addOnTherapyDetails.trim()) {
+        validationErrors.push("Please specify add-on/changed therapy details")
+      }
       if (formData.adverseEventsPresent === null) validationErrors.push("Please select adverse event status")
+      if (formData.preferLongTerm === null) validationErrors.push("Please select long-term KC MeSempa preference")
+      if (!formData.additionalComments.trim()) validationErrors.push("Additional comments are required")
+
+      const profileChecks = {
+        uncontrolledT2dm: formData.uncontrolledT2dm,
+        obeseT2dm: formData.obeseT2dm,
+        ckdPatients: formData.ckdPatients,
+        htnT2dm: formData.htnT2dm,
+        elderlyPatients: formData.elderlyPatients,
+        other: formData.profileOther,
+      }
+      if (!hasAtLeastOneCheckbox(profileChecks)) {
+        validationErrors.push("Please select at least one preferred patient profile (or Other)")
+      }
+      if (formData.profileOther && !formData.profileOtherText.trim()) {
+        validationErrors.push("Please specify the other preferred patient profile")
+      }
+
+      const eventChecks = {
+        hypoglycemiaMild: formData.hypoglycemiaMild,
+        hypoglycemiaModerate: formData.hypoglycemiaModerate,
+        hypoglycemiaSevere: formData.hypoglycemiaSevere,
+        uti: formData.uti,
+        genitalInfection: formData.genitalInfection,
+        dizzinessDehydration: formData.dizzinessDehydration,
+        hospitalizationErVisit: formData.hospitalizationErVisit,
+        none: formData.eventsNone,
+      }
+      if (!hasAtLeastOneCheckbox(eventChecks)) {
+        validationErrors.push("Please select at least one event of special interest (or None)")
+      }
+      if (formData.hospitalizationErVisit && !formData.hospitalizationReason.trim()) {
+        validationErrors.push("Please specify the reason for hospitalization/ER visit")
+      }
       if (formData.patientContinuingTreatment === false && !formData.discontinuationReason) validationErrors.push("Please specify discontinuation reason")
       if (formData.patientContinuingTreatment === false && formData.discontinuationReason === "Other" && !formData.discontinuationReasonOther.trim()) {
         validationErrors.push("Please specify discontinuation reason details")
@@ -404,7 +467,7 @@ export const FollowUpForm = memo(function FollowUpForm({
       if (formData.fpg && (isNaN(fpg) || fpg < ranges.fpg.min || fpg > ranges.fpg.max)) {
         rangeErrors.push(`FPG must be between ${ranges.fpg.min}-${ranges.fpg.max} mg/dL`)
       }
-      if (formData.ppg && (isNaN(ppg) || ppg < ranges.ppg.min || ppg > ranges.ppg.max)) {
+      if (isNaN(ppg) || ppg < ranges.ppg.min || ppg > ranges.ppg.max) {
         rangeErrors.push(`PPG must be between ${ranges.ppg.min}-${ranges.ppg.max} mg/dL`)
       }
       if (formData.weight && (isNaN(weight) || weight < ranges.weight.min || weight > ranges.weight.max)) {
@@ -422,16 +485,17 @@ export const FollowUpForm = memo(function FollowUpForm({
       ) {
         rangeErrors.push(`BP Diastolic must be between ${ranges.bpDiastolic.min}-${ranges.bpDiastolic.max} mmHg`)
       }
-      if (formData.heartRate && (isNaN(heartRate) || heartRate < ranges.heartRate.min || heartRate > ranges.heartRate.max)) {
+      if (isNaN(heartRate) || heartRate < ranges.heartRate.min || heartRate > ranges.heartRate.max) {
         rangeErrors.push(`Heart Rate must be between ${ranges.heartRate.min}-${ranges.heartRate.max} bpm`)
       }
       if (
-        formData.serumCreatinine &&
-        (isNaN(serumCreatinine) || serumCreatinine < ranges.serumCreatinine.min || serumCreatinine > ranges.serumCreatinine.max)
+        isNaN(serumCreatinine) ||
+        serumCreatinine < ranges.serumCreatinine.min ||
+        serumCreatinine > ranges.serumCreatinine.max
       ) {
         rangeErrors.push(`Serum Creatinine must be between ${ranges.serumCreatinine.min}-${ranges.serumCreatinine.max} mg/dL`)
       }
-      if (formData.egfr && (isNaN(egfr) || egfr < ranges.egfr.min || egfr > ranges.egfr.max)) {
+      if (isNaN(egfr) || egfr < ranges.egfr.min || egfr > ranges.egfr.max) {
         rangeErrors.push(`eGFR must be between ${ranges.egfr.min}-${ranges.egfr.max} mL/min/1.73m2`)
       }
 
@@ -469,17 +533,19 @@ export const FollowUpForm = memo(function FollowUpForm({
         patientId,
         doctorId: resolvedDoctorId,
         visitDate: formData.visitDate,
-        hba1c: formData.hba1c ? Number.parseFloat(formData.hba1c) : null,
-        fpg: formData.fpg ? Number.parseFloat(formData.fpg) : null,
-        ppg: formData.ppg ? Number.parseFloat(formData.ppg) : null,
-        weight: formData.weight ? Number.parseFloat(formData.weight) : null,
-        bloodPressureSystolic: formData.bloodPressureSystolic ? Number.parseInt(formData.bloodPressureSystolic) : null,
-        bloodPressureDiastolic: formData.bloodPressureDiastolic ? Number.parseInt(formData.bloodPressureDiastolic) : null,
-        heartRate: formData.heartRate ? Number.parseInt(formData.heartRate) : null,
-        serumCreatinine: formData.serumCreatinine ? Number.parseFloat(formData.serumCreatinine) : null,
-        egfr: formData.egfr ? Number.parseFloat(formData.egfr) : null,
-        urinalysis: formData.urinalysisType === "Abnormal" && sanitizedFormData.urinalysisSpecify ? 
-          `Abnormal: ${sanitizedFormData.urinalysisSpecify}` : "Normal",
+        hba1c: Number.parseFloat(formData.hba1c),
+        fpg: Number.parseFloat(formData.fpg),
+        ppg: Number.parseFloat(formData.ppg),
+        weight: Number.parseFloat(formData.weight),
+        bloodPressureSystolic: Number.parseInt(formData.bloodPressureSystolic),
+        bloodPressureDiastolic: Number.parseInt(formData.bloodPressureDiastolic),
+        heartRate: Number.parseInt(formData.heartRate),
+        serumCreatinine: Number.parseFloat(formData.serumCreatinine),
+        egfr: Number.parseFloat(formData.egfr),
+        urinalysis:
+          formData.urinalysisType === "Abnormal" && sanitizedFormData.urinalysisSpecify
+            ? `Abnormal: ${sanitizedFormData.urinalysisSpecify}`
+            : "Normal",
         glycemicResponse: {
           category: formData.hba1cResponse,
         },
@@ -511,18 +577,23 @@ export const FollowUpForm = memo(function FollowUpForm({
           dizzinessDehydrationSymptoms: formData.dizzinessDehydration,
           hospitalizationOrErVisit: formData.hospitalizationErVisit,
           hospitalizationReason: formData.hospitalizationErVisit ? sanitizedFormData.hospitalizationReason : null,
+          none: formData.eventsNone,
         },
         physicianAssessment: {
           overallEfficacy: formData.overallEfficacy,
           overallTolerability: formData.overallTolerability,
           complianceJudgment: formData.complianceJudgment,
-          preferKcMeSempaForLongTerm: formData.preferLongTerm === true,
+          preferKcMeSempaForLongTerm: formData.preferLongTerm === true ? true : false,
           preferredPatientProfiles: {
             uncontrolledT2dm: formData.uncontrolledT2dm,
             obeseT2dm: formData.obeseT2dm,
             ckdPatients: formData.ckdPatients,
             htnPlusT2dm: formData.htnT2dm,
             elderlyPatients: formData.elderlyPatients,
+            other: formData.profileOther,
+            otherDetails: formData.profileOther
+              ? DOMPurify.sanitize(formData.profileOtherText)
+              : "NA",
           },
         },
         dataPrivacy: {
@@ -541,7 +612,7 @@ export const FollowUpForm = memo(function FollowUpForm({
         comments: formData.additionalComments,
         createdAt: existingData?.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      }
+      } as FollowUpData & { doctorId: string; updatedAt: string }
 
       try {
         // FIX: Check if this follow-up already exists (for editing)
@@ -553,34 +624,44 @@ export const FollowUpForm = memo(function FollowUpForm({
         let updateData: any = { updatedAt: new Date().toISOString() }
         
         if (patientSnap.exists()) {
-          const existingFollowups = patientSnap.data().followups || []
-          
-          // Find if this follow-up already exists (by visitNumber + doctorId)
-          const existingIndex = existingFollowups.findIndex(
-            (fu: any) => fu.visitNumber === formData.visitNumber && fu.doctorId === resolvedDoctorId
-          )
-          
-          if (existingIndex >= 0) {
-            // UPDATE existing follow-up: replace the old one with new data
+          const existingFollowups: FollowUpData[] = [...(patientSnap.data().followups || [])]
+          const isUpdateByIndex =
+            followUpIndex >= 0 && followUpIndex < existingFollowups.length
+
+          if (isUpdateByIndex) {
+            if (hasDuplicateVisitDate(formData.visitDate, existingFollowups, followUpIndex)) {
+              toast({
+                variant: "destructive",
+                title: "Duplicate visit date",
+                description: "Another follow-up already uses this visit date. Choose a different date.",
+              })
+              return
+            }
             const updatedFollowups = [...existingFollowups]
-            updatedFollowups[existingIndex] = data
+            const prior = existingFollowups[followUpIndex]
+            updatedFollowups[followUpIndex] = {
+              ...data,
+              createdAt: prior?.createdAt || data.createdAt,
+            }
             updateData.followups = updatedFollowups
           } else {
-            // ADD new follow-up: use arrayUnion for new entries
+            if (hasDuplicateVisitDate(formData.visitDate, existingFollowups, -1)) {
+              toast({
+                variant: "destructive",
+                title: "Duplicate visit date",
+                description: "Another follow-up already uses this visit date. Choose a different date.",
+              })
+              return
+            }
             updateData.followups = arrayUnion(data)
           }
         } else {
-          // First follow-up for this patient
           updateData.followups = arrayUnion(data)
         }
         
         const batch = writeBatch(db)
         batch.set(patientDocRef, updateData, { merge: true })
         await batch.commit()
-
-        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-          console.log('✓ Follow-up form saved to Firebase')
-        }
       } catch (error) {
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.error("Error saving follow-up data:", error)
@@ -592,7 +673,11 @@ export const FollowUpForm = memo(function FollowUpForm({
         toast({
           variant: "destructive",
           title: "Error saving data",
-          description: error instanceof Error ? error.message : "Please try again.",
+          description: getFirestoreSaveErrorMessage(error, {
+            isSectionLocked,
+            canOverrideLock,
+            lockMessage,
+          }),
         })
         return
       }
@@ -602,7 +687,7 @@ export const FollowUpForm = memo(function FollowUpForm({
         description: "Week 12 assessment has been recorded.",
       })
 
-      onSuccess()
+      preserveScrollPosition(onSuccess)
     } catch (error) {
       if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
         console.error("Error saving follow-up data:", error)
@@ -610,7 +695,11 @@ export const FollowUpForm = memo(function FollowUpForm({
       toast({
         variant: "destructive",
         title: "Error saving data",
-        description: error instanceof Error ? error.message : "Please try again.",
+        description: getFirestoreSaveErrorMessage(error, {
+          isSectionLocked,
+          canOverrideLock,
+          lockMessage,
+        }),
       })
     } finally {
       // Ensure minimum loading time of 400ms for visual feedback
@@ -657,7 +746,7 @@ export const FollowUpForm = memo(function FollowUpForm({
                   }
                 }}
                 min="1900-01-01"
-                max="2100-12-31"
+                max={todayIsoDate()}
                 ariaLabel="Date of follow-up visit required"
                 required
               />
@@ -705,7 +794,7 @@ export const FollowUpForm = memo(function FollowUpForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ppg">PPG (mg/dL)</Label>
+                <Label htmlFor="ppg">PPG (mg/dL) *</Label>
                 <Input
                   id="ppg"
                   type="number"
@@ -714,6 +803,7 @@ export const FollowUpForm = memo(function FollowUpForm({
                   placeholder="160"
                   value={formData.ppg}
                   onChange={(e) => setFormData({ ...formData, ppg: e.target.value })}
+                  required
                 />
               </div>
             </div>
@@ -763,7 +853,7 @@ export const FollowUpForm = memo(function FollowUpForm({
 
             <div className="grid md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="heartRate">Heart Rate (bpm)</Label>
+                <Label htmlFor="heartRate">Heart Rate (bpm) *</Label>
                 <Input
                   id="heartRate"
                   type="number"
@@ -772,10 +862,11 @@ export const FollowUpForm = memo(function FollowUpForm({
                   placeholder="72"
                   value={formData.heartRate}
                   onChange={(e) => setFormData({ ...formData, heartRate: e.target.value })}
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="creatinine">Serum Creatinine (mg/dL)</Label>
+                <Label htmlFor="creatinine">Serum Creatinine (mg/dL) *</Label>
                 <Input
                   id="creatinine"
                   type="number"
@@ -785,10 +876,11 @@ export const FollowUpForm = memo(function FollowUpForm({
                   placeholder="0.95"
                   value={formData.serumCreatinine}
                   onChange={(e) => setFormData({ ...formData, serumCreatinine: e.target.value })}
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="egfr">eGFR (mL/min/1.73m²)</Label>
+                <Label htmlFor="egfr">eGFR (mL/min/1.73m²) *</Label>
                 <Input
                   id="egfr"
                   type="number"
@@ -797,6 +889,7 @@ export const FollowUpForm = memo(function FollowUpForm({
                   placeholder="92"
                   value={formData.egfr}
                   onChange={(e) => setFormData({ ...formData, egfr: e.target.value })}
+                  required
                 />
               </div>
             </div>
@@ -904,7 +997,7 @@ export const FollowUpForm = memo(function FollowUpForm({
             <h3 className="font-semibold text-lg">Weight, BP & Renal Outcomes</h3>
             
             <div className="space-y-3">
-              <Label className="text-base font-medium">Weight change:</Label>
+              <Label className="text-base font-medium">Weight change: *</Label>
               <div className="space-y-2 ml-2">
                 <div className="flex items-center gap-2">
                   <input
@@ -954,7 +1047,7 @@ export const FollowUpForm = memo(function FollowUpForm({
             </div>
 
             <div className="space-y-3 pt-4">
-              <Label className="text-base font-medium">Renal outcome:</Label>
+              <Label className="text-base font-medium">Renal outcome: *</Label>
               <div className="space-y-2 ml-2">
                 <div className="flex items-center gap-2">
                   <input
@@ -1398,54 +1491,118 @@ export const FollowUpForm = memo(function FollowUpForm({
             )}
 
             <div className="space-y-3 border-t pt-4">
-              <Label className="text-base font-medium">Events of Special Interest (tick all that apply)</Label>
+              <Label className="text-base font-medium">Events of Special Interest * (tick all that apply, or None)</Label>
               <div className="space-y-2 ml-2">
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
+                    checked={formData.eventsNone}
+                    onCheckedChange={(checked) => {
+                      const isChecked = checked === true
+                      if (!isChecked) {
+                        setFormData((prev) => ({ ...prev, eventsNone: false }))
+                        return
+                      }
+                      setFormData((prev) => ({
+                        ...prev,
+                        eventsNone: true,
+                        hypoglycemiaMild: false,
+                        hypoglycemiaModerate: false,
+                        hypoglycemiaSevere: false,
+                        uti: false,
+                        genitalInfection: false,
+                        dizzinessDehydration: false,
+                        hospitalizationErVisit: false,
+                        hospitalizationReason: "",
+                      }))
+                    }}
+                  />
+                  <span className="font-normal">None</span>
+                </Label>
+                <Label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
                     checked={formData.hypoglycemiaMild}
-                    onCheckedChange={(checked) => setFormData({ ...formData, hypoglycemiaMild: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        hypoglycemiaMild: checked as boolean,
+                        eventsNone: false,
+                      }))
+                    }
                   />
                   <span className="font-normal">Hypoglycemia - mild (ADA Level 1-Blood Glucose &lt;70 mg/dL and &ge;54 mg/dL)</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.hypoglycemiaModerate}
-                    onCheckedChange={(checked) => setFormData({ ...formData, hypoglycemiaModerate: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        hypoglycemiaModerate: checked as boolean,
+                        eventsNone: false,
+                      }))
+                    }
                   />
                   <span className="font-normal">Hypoglycemia - moderate (ADA Level 2 - Blood glucose &lt;54 mg/dL)</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.hypoglycemiaSevere}
-                    onCheckedChange={(checked) => setFormData({ ...formData, hypoglycemiaSevere: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        hypoglycemiaSevere: checked as boolean,
+                        eventsNone: false,
+                      }))
+                    }
                   />
                   <span className="font-normal">Hypoglycemia – severe</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.uti}
-                    onCheckedChange={(checked) => setFormData({ ...formData, uti: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({ ...prev, uti: checked as boolean, eventsNone: false }))
+                    }
                   />
                   <span className="font-normal">UTI</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.genitalInfection}
-                    onCheckedChange={(checked) => setFormData({ ...formData, genitalInfection: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        genitalInfection: checked as boolean,
+                        eventsNone: false,
+                      }))
+                    }
                   />
                   <span className="font-normal">Genital mycotic infection</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.dizzinessDehydration}
-                    onCheckedChange={(checked) => setFormData({ ...formData, dizzinessDehydration: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        dizzinessDehydration: checked as boolean,
+                        eventsNone: false,
+                      }))
+                    }
                   />
                   <span className="font-normal">Dizziness / dehydration symptoms</span>
                 </Label>
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.hospitalizationErVisit}
-                    onCheckedChange={(checked) => setFormData({ ...formData, hospitalizationErVisit: checked as boolean, hospitalizationReason: "" })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        hospitalizationErVisit: checked as boolean,
+                        hospitalizationReason: checked ? prev.hospitalizationReason : "",
+                        eventsNone: false,
+                      }))
+                    }
                   />
                   <span className="font-normal">Hospitalization / ER visit</span>
                 </Label>
@@ -1456,6 +1613,7 @@ export const FollowUpForm = memo(function FollowUpForm({
                     value={formData.hospitalizationReason}
                     onChange={(e) => setFormData({ ...formData, hospitalizationReason: e.target.value })}
                     className="ml-6"
+                    required
                   />
                 )}
               </div>
@@ -1518,7 +1676,7 @@ export const FollowUpForm = memo(function FollowUpForm({
             </div>
 
             <div className="space-y-3 pt-4 border-t">
-              <Label className="text-base font-medium">Would you prefer KC MeSempa for long-term therapy?</Label>
+              <Label className="text-base font-medium">Would you prefer KC MeSempa for long-term therapy? *</Label>
               <div className="flex gap-6 ml-2">
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -1544,12 +1702,14 @@ export const FollowUpForm = memo(function FollowUpForm({
             </div>
 
             <div className="space-y-2 border-t pt-4">
-              <Label className="font-semibold">Patient profiles where KC MeSempa is preferred:</Label>
+              <Label className="font-semibold">Patient profiles where KC MeSempa is preferred: *</Label>
               <div className="space-y-2 ml-6">
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.uncontrolledT2dm}
-                    onCheckedChange={(checked) => setFormData({ ...formData, uncontrolledT2dm: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({ ...prev, uncontrolledT2dm: checked as boolean }))
+                    }
                   />
                   Uncontrolled T2DM
                 </Label>
@@ -1577,10 +1737,35 @@ export const FollowUpForm = memo(function FollowUpForm({
                 <Label className="flex items-center gap-2 cursor-pointer">
                   <Checkbox
                     checked={formData.elderlyPatients}
-                    onCheckedChange={(checked) => setFormData({ ...formData, elderlyPatients: checked as boolean })}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({ ...prev, elderlyPatients: checked as boolean }))
+                    }
                   />
                   Elderly patients
                 </Label>
+                <Label className="flex items-center gap-2 cursor-pointer">
+                  <Checkbox
+                    checked={formData.profileOther}
+                    onCheckedChange={(checked) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        profileOther: checked as boolean,
+                        profileOtherText: checked ? prev.profileOtherText : "",
+                      }))
+                    }
+                  />
+                  Other
+                </Label>
+                {formData.profileOther && (
+                  <Input
+                    type="text"
+                    placeholder="Specify other patient profile..."
+                    value={formData.profileOtherText}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, profileOtherText: e.target.value }))}
+                    className="ml-6"
+                    required
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -1638,13 +1823,14 @@ export const FollowUpForm = memo(function FollowUpForm({
           <div className="space-y-4 pt-4 border-t">
             <h3 className="font-semibold text-lg">Additional Notes</h3>
             <div className="space-y-2">
-              <Label htmlFor="comments">Additional Comments (optional)</Label>
+              <Label htmlFor="comments">Additional Comments *</Label>
               <Textarea
                 id="comments"
                 placeholder="Any additional observations or clinical notes"
                 value={formData.additionalComments}
                 onChange={(e) => setFormData({ ...formData, additionalComments: e.target.value })}
                 rows={3}
+                required
               />
             </div>
           </div>

@@ -14,9 +14,23 @@ import { DateField } from "@/components/ui/date-field"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
 import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
+import { hasAtLeastOneCheckbox, normalizeOtherArray } from "@/lib/form-validation"
+import { validateBaselineVisitDate, BASELINE_VISIT_MIN, BASELINE_VISIT_MAX } from "@/lib/study-dates"
+import { preserveScrollPosition } from "@/lib/scroll-preserve"
+import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
 import Link from "next/link"
 import type { Patient } from "@/lib/types"
 
@@ -54,6 +68,8 @@ export function PatientFormPage({
   const [ownerDoctorId, setOwnerDoctorId] = useState<string>("")
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
   const [showIneligibleModal, setShowIneligibleModal] = useState(false)
+  const [showGenderOtherDialog, setShowGenderOtherDialog] = useState(false)
+  const [treatmentInitiationDate, setTreatmentInitiationDate] = useState("")
 
   useEffect(() => {
     if (presetEditPatientId || forceEmbedded !== undefined) {
@@ -99,6 +115,7 @@ export function PatientFormPage({
     ascvd: false,
     heartFailure: false,
     chronicKidneyDisease: false,
+    none: false,
     other: "",
     ckdEgfrCategory: "",
   })
@@ -112,6 +129,7 @@ export function PatientFormPage({
     sglt2Inhibitor: false,
     tzd: false,
     insulin: false,
+    none: false,
     other: "",
   })
 
@@ -209,35 +227,57 @@ export function PatientFormPage({
     }
 
     if (patientData.comorbidities) {
+      const otherRaw = patientData.comorbidities?.other
+      const otherText = Array.isArray(otherRaw)
+        ? otherRaw.filter((v) => v && v !== "NA").join(", ")
+        : (otherRaw as string) || ""
+      const hasAnyCondition =
+        patientData.comorbidities.hypertension ||
+        patientData.comorbidities.dyslipidemia ||
+        patientData.comorbidities.obesity ||
+        patientData.comorbidities.ascvd ||
+        patientData.comorbidities.heartFailure ||
+        patientData.comorbidities.chronicKidneyDisease
       setComorbidities((prev) => ({
         ...prev,
         ...patientData.comorbidities,
-        other: Array.isArray(patientData.comorbidities?.other)
-          ? patientData.comorbidities.other.join(", ")
-          : (patientData.comorbidities?.other as any) || "",
+        none: (patientData.comorbidities as { none?: boolean }).none ?? (!hasAnyCondition && !otherText),
+        other: otherText,
         ckdEgfrCategory: patientData.comorbidities?.ckdEgfrCategory || "",
       }))
     }
 
+    const baselineData = patientData.baseline as { treatmentInitiationDate?: string } | undefined
+    setTreatmentInitiationDate(baselineData?.treatmentInitiationDate || "")
+
     setPreviousTreatmentType(patientData.previousTreatmentType || "")
 
     if (patientData.previousDrugClasses) {
+      const drugOtherRaw = patientData.previousDrugClasses?.other
+      const drugOtherText = Array.isArray(drugOtherRaw)
+        ? drugOtherRaw.filter((v) => v && v !== "NA").join(", ")
+        : (drugOtherRaw as string) || ""
+      const hasAnyDrugClass = Object.entries(patientData.previousDrugClasses).some(
+        ([key, value]) => key !== "other" && key !== "none" && value === true
+      )
       setPreviousDrugClasses((prev) => ({
         ...prev,
         ...patientData.previousDrugClasses,
-        other: Array.isArray(patientData.previousDrugClasses?.other)
-          ? patientData.previousDrugClasses.other.join(", ")
-          : (patientData.previousDrugClasses?.other as any) || "",
+        none:
+          (patientData.previousDrugClasses as { none?: boolean }).none ?? (!hasAnyDrugClass && !drugOtherText),
+        other: drugOtherText,
       }))
     }
 
     if (patientData.reasonForTripleFDC) {
+      const reasonOtherRaw = patientData.reasonForTripleFDC?.other
+      const reasonOtherText = Array.isArray(reasonOtherRaw)
+        ? reasonOtherRaw.filter((v) => v && v !== "NA").join(", ")
+        : (reasonOtherRaw as string) || ""
       setReasonForTripleFDC((prev) => ({
         ...prev,
         ...patientData.reasonForTripleFDC,
-        other: Array.isArray(patientData.reasonForTripleFDC?.other)
-          ? patientData.reasonForTripleFDC.other.join(", ")
-          : (patientData.reasonForTripleFDC?.other as any) || "",
+        other: reasonOtherText,
       }))
     }
   }
@@ -377,9 +417,16 @@ export function PatientFormPage({
     // Validate required fields before saving to Firestore
     const requiredFields = [
       { field: formData.patientCode, name: "Patient Code" },
+      { field: formData.baselineVisitDate, name: "Baseline Visit Date" },
       { field: formData.age, name: "Age" },
       { field: formData.gender, name: "Gender" },
+      { field: formData.height, name: "Height" },
+      { field: formData.weight, name: "Weight" },
       { field: formData.durationOfDiabetes, name: "Duration of Diabetes" },
+      { field: formData.baselineGlycemicSeverity, name: "Baseline Glycemic Severity" },
+      { field: formData.smokingStatus, name: "Smoking Status" },
+      { field: formData.alcoholIntake, name: "Alcohol Intake" },
+      { field: formData.physicalActivityLevel, name: "Physical Activity Level" },
       { field: previousTreatmentType, name: "Previous Treatment Type" },
     ]
 
@@ -390,6 +437,92 @@ export function PatientFormPage({
         variant: "destructive",
         title: "Missing Required Fields",
         description: `Please fill in: ${missingFields.join(", ")}`,
+      })
+      setLoading(false)
+      submitLockRef.current = false
+      return
+    }
+
+    let latestTreatmentDate = treatmentInitiationDate
+    if (isEditMode && editPatientId && db) {
+      try {
+        const patientSnap = await getDoc(doc(db, "patients", editPatientId))
+        if (patientSnap.exists()) {
+          latestTreatmentDate = String((patientSnap.data() as { baseline?: { treatmentInitiationDate?: string } })?.baseline?.treatmentInitiationDate || "")
+        }
+      } catch {
+        // Fall back to cached value from initial load
+      }
+    }
+
+    const baselineDateError = validateBaselineVisitDate(formData.baselineVisitDate, latestTreatmentDate)
+    if (baselineDateError) {
+      toast({
+        variant: "destructive",
+        title: "Invalid Baseline Visit Date",
+        description: baselineDateError,
+      })
+      setLoading(false)
+      submitLockRef.current = false
+      return
+    }
+
+    if (!hasAtLeastOneCheckbox(diabetesComplications)) {
+      toast({
+        variant: "destructive",
+        title: "Missing Selection",
+        description: "Please select at least one diabetes-related complication (or None).",
+      })
+      setLoading(false)
+      submitLockRef.current = false
+      return
+    }
+
+    const comorbidityChecks = {
+      hypertension: comorbidities.hypertension,
+      dyslipidemia: comorbidities.dyslipidemia,
+      obesity: comorbidities.obesity,
+      ascvd: comorbidities.ascvd,
+      heartFailure: comorbidities.heartFailure,
+      chronicKidneyDisease: comorbidities.chronicKidneyDisease,
+      none: comorbidities.none,
+    }
+    if (!hasAtLeastOneCheckbox(comorbidityChecks)) {
+      toast({
+        variant: "destructive",
+        title: "Missing Selection",
+        description: "Please select at least one comorbidity (or None).",
+      })
+      setLoading(false)
+      submitLockRef.current = false
+      return
+    }
+
+    if (comorbidities.chronicKidneyDisease && !comorbidities.ckdEgfrCategory) {
+      toast({
+        variant: "destructive",
+        title: "Missing CKD Category",
+        description: "Please select the baseline eGFR category when Chronic Kidney Disease is checked.",
+      })
+      setLoading(false)
+      submitLockRef.current = false
+      return
+    }
+
+    const drugClassChecks = {
+      metformin: previousDrugClasses.metformin,
+      sulfonylurea: previousDrugClasses.sulfonylurea,
+      dpp4Inhibitor: previousDrugClasses.dpp4Inhibitor,
+      sglt2Inhibitor: previousDrugClasses.sglt2Inhibitor,
+      tzd: previousDrugClasses.tzd,
+      insulin: previousDrugClasses.insulin,
+      none: previousDrugClasses.none,
+    }
+    if (!hasAtLeastOneCheckbox(drugClassChecks)) {
+      toast({
+        variant: "destructive",
+        title: "Missing Selection",
+        description: "Please select at least one previously used drug class (or None).",
       })
       setLoading(false)
       submitLockRef.current = false
@@ -502,8 +635,17 @@ export function PatientFormPage({
       return
     }
 
-    // Check if at least one reason for triple FDC is selected
-    if (!Object.values(reasonForTripleFDC).some(v => v)) {
+    const hasReasonForKcMeSempa =
+      reasonForTripleFDC.inadequateGlycemicControl ||
+      reasonForTripleFDC.weightConcerns ||
+      reasonForTripleFDC.hypoglycemiaOnPriorTherapy ||
+      reasonForTripleFDC.highPillBurden ||
+      reasonForTripleFDC.poorAdherence ||
+      reasonForTripleFDC.costConsiderations ||
+      reasonForTripleFDC.physicianClinicalJudgment ||
+      Boolean(reasonForTripleFDC.other.trim())
+
+    if (!hasReasonForKcMeSempa) {
       toast({
         variant: "destructive",
         title: "Missing Selection",
@@ -539,17 +681,17 @@ export function PatientFormPage({
           .filter(Boolean)),
       ]
 
-      const selectedComorbidities = [
-        ...Object.entries(comorbidities)
-          .filter(([key, value]) => key !== "other" && key !== "ckdEgfrCategory" && value)
-          .map(([key]) => key),
-        ...(comorbidities.other ? [sanitizeInput(comorbidities.other)] : []),
-      ]
+      const comorbidityOtherEntries = normalizeOtherArray(comorbidities.other).map((entry) =>
+        entry === "NA" ? "NA" : sanitizeInput(entry)
+      )
 
-      const selectedReasons = Object.entries(reasonForTripleFDC)
-        .filter(([key, value]) => key !== "other" && value)
-        .map(([key]) => key)
-        .concat(reasonForTripleFDC.other ? [sanitizeInput(reasonForTripleFDC.other)] : [])
+      const drugClassOtherEntries = normalizeOtherArray(previousDrugClasses.other).map((entry) =>
+        entry === "NA" ? "NA" : sanitizeInput(entry)
+      )
+
+      const reasonOtherEntries = normalizeOtherArray(reasonForTripleFDC.other).map((entry) =>
+        entry === "NA" ? "NA" : sanitizeInput(entry)
+      )
 
       // Parse numerics robustly to avoid NaN writes
       const ageValue = toIntOrNull(formData.age)
@@ -558,11 +700,11 @@ export function PatientFormPage({
       const weightValue = toFloatOrNull(formData.weight)
       const bmiValueParsed = toFloatOrNull(formData.bmi)
 
-      if (ageValue === null || durationValue === null) {
+      if (ageValue === null || durationValue === null || heightValue === null || weightValue === null) {
         toast({
           variant: "destructive",
           title: "Invalid numeric values",
-          description: "Age and Duration of Diabetes must be valid numbers.",
+          description: "Age, height, weight, and duration of diabetes must be valid numbers.",
         })
         setLoading(false)
         submitLockRef.current = false
@@ -584,15 +726,13 @@ export function PatientFormPage({
         weight: weightValue,
         bmi: bmiValueParsed,
         durationOfDiabetes: durationValue,
-        baselineGlycemicSeverity: sanitizedFormData.baselineGlycemicSeverity || null,
-        smokingStatus: sanitizedFormData.smokingStatus || null,
-        alcoholIntake: sanitizedFormData.alcoholIntake || null,
-        physicalActivityLevel: sanitizedFormData.physicalActivityLevel || null,
+        baselineGlycemicSeverity: sanitizedFormData.baselineGlycemicSeverity,
+        smokingStatus: sanitizedFormData.smokingStatus,
+        alcoholIntake: sanitizedFormData.alcoholIntake,
+        physicalActivityLevel: sanitizedFormData.physicalActivityLevel,
         
         // Diabetes complications
-        diabetesComplications: Object.keys(diabetesComplications).some(key => diabetesComplications[key as keyof typeof diabetesComplications])
-          ? diabetesComplications
-          : null,
+        diabetesComplications,
         
         // Comorbidities
         comorbidities: {
@@ -602,23 +742,23 @@ export function PatientFormPage({
           ascvd: comorbidities.ascvd,
           heartFailure: comorbidities.heartFailure,
           chronicKidneyDisease: comorbidities.chronicKidneyDisease,
+          none: comorbidities.none,
           ckdEgfrCategory: comorbidities.ckdEgfrCategory || null,
-          other: selectedComorbidities.filter(c => !["hypertension", "dyslipidemia", "obesity", "ascvd", "heartFailure", "chronicKidneyDisease"].includes(c)),
+          other: comorbidityOtherEntries,
         },
         
         // Prior therapy
         previousTreatmentType: previousTreatmentType,
-        previousDrugClasses: Object.keys(previousDrugClasses)
-          .filter(key => key !== "other")
-          .reduce((acc, key) => {
-            acc[key as keyof typeof previousDrugClasses] = previousDrugClasses[key as keyof typeof previousDrugClasses]
-            return acc
-          }, {
-            other: ((previousDrugClasses.other || "")
-              .split(",")
-              .map((v) => sanitizeInput(v.trim()))
-              .filter(Boolean)),
-          } as any),
+        previousDrugClasses: {
+          metformin: previousDrugClasses.metformin,
+          sulfonylurea: previousDrugClasses.sulfonylurea,
+          dpp4Inhibitor: previousDrugClasses.dpp4Inhibitor,
+          sglt2Inhibitor: previousDrugClasses.sglt2Inhibitor,
+          tzd: previousDrugClasses.tzd,
+          insulin: previousDrugClasses.insulin,
+          none: previousDrugClasses.none,
+          other: drugClassOtherEntries,
+        },
         
         // Reason for triple FDC
         reasonForTripleFDC: {
@@ -629,7 +769,7 @@ export function PatientFormPage({
           poorAdherence: reasonForTripleFDC.poorAdherence,
           costConsiderations: reasonForTripleFDC.costConsiderations,
           physicianClinicalJudgment: reasonForTripleFDC.physicianClinicalJudgment,
-          other: reasonForTripleFDC.other ? [sanitizeInput(reasonForTripleFDC.other)] : [],
+          other: reasonOtherEntries,
         },
         
         // Legacy fields for backward compatibility
@@ -672,11 +812,10 @@ export function PatientFormPage({
           })
 
           if (onSaved) {
-            onSaved()
+            preserveScrollPosition(onSaved)
             return
           }
 
-          await new Promise(resolve => setTimeout(resolve, 400))
           await router.push(`/patients/${editPatientId}`)
         } else {
           // Generate a Firestore document with an auto ID.
@@ -705,11 +844,10 @@ export function PatientFormPage({
           })
 
           if (onSaved) {
-            onSaved()
+            preserveScrollPosition(onSaved)
             return
           }
 
-          await new Promise(resolve => setTimeout(resolve, 500))
           await router.push("/dashboard")
         }
       } catch (firebaseError) {
@@ -724,11 +862,14 @@ export function PatientFormPage({
           userId: user?.uid,
           severity: "high"
         })
-        const errMsg = firebaseError instanceof Error ? firebaseError.message : "Failed to save patient to database."
         toast({
           variant: "destructive",
           title: "Error saving patient",
-          description: firebaseCode !== "unknown" ? `${errMsg} (${firebaseCode})` : errMsg,
+          description: getFirestoreSaveErrorMessage(firebaseError, {
+            isSectionLocked,
+            canOverrideLock,
+            lockMessage,
+          }),
         })
         setLoading(false)
         submitLockRef.current = false
@@ -819,8 +960,8 @@ export function PatientFormPage({
                       id="baselineVisitDate"
                       value={formData.baselineVisitDate}
                       onChangeAction={(value) => setFormData((prev) => ({ ...prev, baselineVisitDate: value }))}
-                      min="1900-01-01"
-                      max="2100-12-31"
+                      min={BASELINE_VISIT_MIN}
+                      max={BASELINE_VISIT_MAX}
                       required
                     />
                   </div>
@@ -874,17 +1015,18 @@ export function PatientFormPage({
                     {ageValidationError && <p className="text-xs text-red-600">{ageValidationError}</p>}
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="height">Height (cm)</Label>
+                    <Label htmlFor="height">Height (cm) *</Label>
                     <Input
                       id="height"
                       type="number"
                       placeholder="170"
                       value={formData.height}
                       onChange={handleHeightChange}
+                      required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="weight">Weight (kg)</Label>
+                    <Label htmlFor="weight">Weight (kg) *</Label>
                     <Input
                       id="weight"
                       type="number"
@@ -892,6 +1034,7 @@ export function PatientFormPage({
                       placeholder="70"
                       value={formData.weight}
                       onChange={handleWeightChange}
+                      required
                     />
                   </div>
                   <div className="space-y-2">
@@ -918,7 +1061,13 @@ export function PatientFormPage({
                           name="gender"
                           value={gender}
                           checked={formData.gender === gender}
-                          onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                          onChange={(e) => {
+                            if (e.target.value === "Other") {
+                              setShowGenderOtherDialog(true)
+                              return
+                            }
+                            setFormData({ ...formData, gender: e.target.value })
+                          }}
                           required
                           className="h-4 w-4"
                         />
@@ -930,11 +1079,12 @@ export function PatientFormPage({
 
                 <div className="grid md:grid-cols-3 gap-4 mt-4">
                   <div className="space-y-2">
-                    <Label>Smoking Status</Label>
+                    <Label>Smoking Status *</Label>
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={formData.smokingStatus}
                       onChange={(e) => setFormData({ ...formData, smokingStatus: e.target.value })}
+                      required
                     >
                       <option value="">Select...</option>
                       <option value="Never">Never</option>
@@ -943,11 +1093,12 @@ export function PatientFormPage({
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Alcohol Intake</Label>
+                    <Label>Alcohol Intake *</Label>
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={formData.alcoholIntake}
                       onChange={(e) => setFormData({ ...formData, alcoholIntake: e.target.value })}
+                      required
                     >
                       <option value="">Select...</option>
                       <option value="No">No</option>
@@ -956,11 +1107,12 @@ export function PatientFormPage({
                     </select>
                   </div>
                   <div className="space-y-2">
-                    <Label>Physical Activity Level</Label>
+                    <Label>Physical Activity Level *</Label>
                     <select
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={formData.physicalActivityLevel}
                       onChange={(e) => setFormData({ ...formData, physicalActivityLevel: e.target.value })}
+                      required
                     >
                       <option value="">Select...</option>
                       <option value="Sedentary">Sedentary</option>
@@ -990,11 +1142,12 @@ export function PatientFormPage({
                 </div>
 
                 <div className="space-y-2 mb-4">
-                  <Label>Baseline Glycemic Severity</Label>
+                  <Label>Baseline Glycemic Severity *</Label>
                   <select
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={formData.baselineGlycemicSeverity}
                     onChange={(e) => setFormData({ ...formData, baselineGlycemicSeverity: e.target.value })}
+                    required
                   >
                     <option value="">Select...</option>
                     <option value="HbA1c <7.5%">HbA1c &lt;7.5%</option>
@@ -1005,7 +1158,7 @@ export function PatientFormPage({
                 </div>
 
                 <div className="space-y-3">
-                  <Label>Diabetes-Related Complications</Label>
+                  <Label>Diabetes-Related Complications *</Label>
                   <div className="space-y-2">
                     {Object.entries(diabetesComplications).map(([key, value]) => (
                       <div key={key} className="flex items-center gap-2">
@@ -1047,22 +1200,54 @@ export function PatientFormPage({
 
               {/* Comorbidities */}
               <div className="border-t pt-6">
-                <h3 className="text-lg font-bold mb-4">Comorbidities</h3>
+                <h3 className="text-lg font-bold mb-4">Comorbidities *</h3>
                 <div className="space-y-3">
                   {["hypertension", "dyslipidemia", "obesity", "ascvd", "heartFailure", "chronicKidneyDisease"].map((condition) => (
                     <div key={condition} className="flex items-center gap-2">
                       <Checkbox
                         id={condition}
                         checked={comorbidities[condition as keyof typeof comorbidities] as boolean}
-                        onCheckedChange={(checked) =>
-                          setComorbidities({ ...comorbidities, [condition]: checked as boolean })
-                        }
+                        onCheckedChange={(checked) => {
+                          const isChecked = checked === true
+                          setComorbidities((prev) => ({
+                            ...prev,
+                            [condition]: isChecked,
+                            none: isChecked ? false : prev.none,
+                          }))
+                        }}
                       />
                       <Label htmlFor={condition} className="cursor-pointer font-normal">
                         {condition === "ascvd" ? "ASCVD" : condition === "heartFailure" ? "Heart Failure" : condition === "chronicKidneyDisease" ? "Chronic Kidney Disease" : condition.charAt(0).toUpperCase() + condition.slice(1)}
                       </Label>
                     </div>
                   ))}
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="comorbidity-none"
+                      checked={comorbidities.none}
+                      onCheckedChange={(checked) => {
+                        const isChecked = checked === true
+                        if (!isChecked) {
+                          setComorbidities((prev) => ({ ...prev, none: false }))
+                          return
+                        }
+                        setComorbidities({
+                          hypertension: false,
+                          dyslipidemia: false,
+                          obesity: false,
+                          ascvd: false,
+                          heartFailure: false,
+                          chronicKidneyDisease: false,
+                          none: true,
+                          other: "",
+                          ckdEgfrCategory: "",
+                        })
+                      }}
+                    />
+                    <Label htmlFor="comorbidity-none" className="cursor-pointer font-normal">
+                      None
+                    </Label>
+                  </div>
                 </div>
 
                 {comorbidities.chronicKidneyDisease && (
@@ -1114,27 +1299,64 @@ export function PatientFormPage({
                 </div>
 
                 <div className="space-y-3 mb-6">
-                  <Label>Previously Used Drug Classes</Label>
+                  <Label>Previously Used Drug Classes *</Label>
                   <div className="space-y-2">
                     {["metformin", "sulfonylurea", "dpp4Inhibitor", "sglt2Inhibitor", "tzd", "insulin"].map((drug) => (
                       <div key={drug} className="flex items-center gap-2">
                         <Checkbox
                           id={drug}
                           checked={previousDrugClasses[drug as keyof typeof previousDrugClasses] as boolean}
-                          onCheckedChange={(checked) =>
-                            setPreviousDrugClasses({ ...previousDrugClasses, [drug]: checked as boolean })
-                          }
+                          onCheckedChange={(checked) => {
+                            const isChecked = checked === true
+                            setPreviousDrugClasses((prev) => ({
+                              ...prev,
+                              [drug]: isChecked,
+                              none: isChecked ? false : prev.none,
+                            }))
+                          }}
                         />
                         <Label htmlFor={drug} className="cursor-pointer font-normal">
                           {drug === "dpp4Inhibitor" ? "DPP-4 Inhibitor" : drug === "sglt2Inhibitor" ? "SGLT-2 Inhibitor" : drug === "tzd" ? "TZD" : drug.charAt(0).toUpperCase() + drug.slice(1)}
                         </Label>
                       </div>
                     ))}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="drug-class-none"
+                        checked={previousDrugClasses.none}
+                        onCheckedChange={(checked) => {
+                          const isChecked = checked === true
+                          if (!isChecked) {
+                            setPreviousDrugClasses((prev) => ({ ...prev, none: false }))
+                            return
+                          }
+                          setPreviousDrugClasses({
+                            metformin: false,
+                            sulfonylurea: false,
+                            dpp4Inhibitor: false,
+                            sglt2Inhibitor: false,
+                            tzd: false,
+                            insulin: false,
+                            none: true,
+                            other: "",
+                          })
+                        }}
+                      />
+                      <Label htmlFor="drug-class-none" className="cursor-pointer font-normal">
+                        None
+                      </Label>
+                    </div>
                   </div>
                   <Input
                     placeholder="Other drug classes (comma-separated)"
                     value={previousDrugClasses.other}
-                    onChange={(e) => setPreviousDrugClasses({ ...previousDrugClasses, other: e.target.value })}
+                    onChange={(e) =>
+                      setPreviousDrugClasses((prev) => ({
+                        ...prev,
+                        other: e.target.value,
+                        none: e.target.value ? false : prev.none,
+                      }))
+                    }
                   />
                 </div>
 
@@ -1230,6 +1452,23 @@ export function PatientFormPage({
           </CardContent>
         </Card>
       </main>
+
+      <AlertDialog open={showGenderOtherDialog} onOpenChange={setShowGenderOtherDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Gender Selection</AlertDialogTitle>
+            <AlertDialogDescription>
+              You selected &quot;Other&quot; for gender. Please confirm this is correct and was not selected by mistake.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => setFormData((prev) => ({ ...prev, gender: "Other" }))}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

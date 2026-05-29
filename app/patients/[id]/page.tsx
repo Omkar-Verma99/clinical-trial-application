@@ -16,7 +16,7 @@ import { toast } from "@/hooks/use-toast"
 import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"
 import { PatientFormPage } from "@/components/patients/PatientForm"
-import { doctorLockedMessage, followupSectionKey, isSectionLocked, SectionLockMap } from "@/lib/section-locks"
+import { followupSectionKey, getDoctorLockMessage, isSectionLocked, SectionLockMap } from "@/lib/section-locks"
 
 // OPTIMIZED: Memoize form components to prevent unnecessary re-renders
 const MemoizedBaselineForm = memo(BaselineForm)
@@ -73,6 +73,8 @@ export default function PatientDetailPage({ params }: Props) {
 
   const patientInfoLocked = isSectionLocked(sectionLocks, "patient_info")
   const baselineLocked = isSectionLocked(sectionLocks, "baseline")
+  const patientInfoLockMessage = getDoctorLockMessage(sectionLocks, "patient_info")
+  const baselineLockMessage = getDoctorLockMessage(sectionLocks, "baseline")
 
   // Auth guard: redirect to login if not authenticated
   useEffect(() => {
@@ -112,8 +114,8 @@ export default function PatientDetailPage({ params }: Props) {
   }, [patient])
 
   const tabColumnCount = useMemo(
-    () => 4 + followUps.length + (creatingFollowUp ? 1 : 0),
-    [followUps.length, creatingFollowUp]
+    () => 4 + followUpsWithDefault.length + (creatingFollowUp ? 1 : 0),
+    [followUpsWithDefault.length, creatingFollowUp]
   )
 
   const startNewFollowUp = useCallback(() => {
@@ -131,9 +133,19 @@ export default function PatientDetailPage({ params }: Props) {
       return
     }
 
+    const nextSection = followupSectionKey(followUps.length)
+    if (isSectionLocked(sectionLocks, nextSection)) {
+      toast({
+        variant: "destructive",
+        title: "Section locked",
+        description: getDoctorLockMessage(sectionLocks, nextSection),
+      })
+      return
+    }
+
     setCreatingFollowUp(true)
     setActiveTab("new-followup")
-  }, [baseline, creatingFollowUp])
+  }, [baseline, creatingFollowUp, followUps.length, sectionLocks])
 
   useEffect(() => {
     // CRITICAL: Check authentication BEFORE setting up any listeners
@@ -365,19 +377,25 @@ export default function PatientDetailPage({ params }: Props) {
             style={{ gridTemplateColumns: `repeat(${tabColumnCount}, minmax(0, 1fr))` }}
           >
             <TabsTrigger value="overview" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Overview</TabsTrigger>
-            <TabsTrigger value="patient-info" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Patient Info</TabsTrigger>
-            <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">Baseline</TabsTrigger>
+            <TabsTrigger value="patient-info" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
+              Patient Info{patientInfoLocked ? " 🔒" : ""}
+            </TabsTrigger>
+            <TabsTrigger value="baseline" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
+              Baseline{baselineLocked ? " 🔒" : ""}
+            </TabsTrigger>
             
             {/* Dynamic FollowUp Tabs */}
-            {followUps.length > 0 && followUps.map((_, index) => (
+            {followUpsWithDefault.map((_, index) => (
               <TabsTrigger key={`visit-${index}`} value={`visit-${index}`} className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
                 Follow Up {index + 1}
+                {isSectionLocked(sectionLocks, followupSectionKey(index)) ? " 🔒" : ""}
               </TabsTrigger>
             ))}
 
             {creatingFollowUp && (
               <TabsTrigger value="new-followup" className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
                 Follow Up {followUps.length + 1}
+                {isSectionLocked(sectionLocks, followupSectionKey(followUps.length)) ? " 🔒" : ""}
               </TabsTrigger>
             )}
             
@@ -554,8 +572,8 @@ export default function PatientDetailPage({ params }: Props) {
                 patientBaselineVisitDate={patient.baselineVisitDate}
                 patientWeight={typeof patient.weight === "number" ? patient.weight : null}
                 isSectionLocked={baselineLocked}
-                lockMessage={doctorLockedMessage()}
-                onSuccess={() => setActiveTab("overview")}
+                lockMessage={baselineLockMessage}
+                onSuccess={() => {}}
               />
             </TabsContent>
           )}
@@ -565,8 +583,8 @@ export default function PatientDetailPage({ params }: Props) {
               presetEditPatientId={patient.id}
               forceEmbedded={true}
               isSectionLocked={patientInfoLocked}
-              lockMessage={doctorLockedMessage()}
-              onSaved={() => setActiveTab("overview")}
+              lockMessage={patientInfoLockMessage}
+              onSaved={() => {}}
             />
           </TabsContent>
 
@@ -583,11 +601,8 @@ export default function PatientDetailPage({ params }: Props) {
                     followUpIndex={visitIndex}
                     allFollowUps={followUps}
                     isSectionLocked={isSectionLocked(sectionLocks, followupSectionKey(visitIndex))}
-                    lockMessage={doctorLockedMessage()}
-                    onSuccess={() => {
-                      // Refresh and stay on this visit
-                      setActiveTab(`visit-${visitIndex}`)
-                    }}
+                    lockMessage={getDoctorLockMessage(sectionLocks, followupSectionKey(visitIndex))}
+                    onSuccess={() => {}}
                   />
 
                   {/* Divider */}
@@ -645,10 +660,11 @@ export default function PatientDetailPage({ params }: Props) {
                     followUpIndex={followUps.length}
                     allFollowUps={followUps}
                     isSectionLocked={isSectionLocked(sectionLocks, followupSectionKey(followUps.length))}
-                    lockMessage={doctorLockedMessage()}
+                    lockMessage={getDoctorLockMessage(sectionLocks, followupSectionKey(followUps.length))}
                     onSuccess={() => {
+                      const savedIndex = followUps.length
                       setCreatingFollowUp(false)
-                      setActiveTab("overview")
+                      setActiveTab(`visit-${savedIndex}`)
                     }}
                   />
                 </div>

@@ -40,3 +40,41 @@ export function isSectionLocked(
 export function doctorLockedMessage(): string {
   return 'Locked. You cannot edit this section.'
 }
+
+export function getDoctorLockMessage(
+  sectionLocks: SectionLockMap | null | undefined,
+  section: LockableSection
+): string {
+  const lock = getSectionLock(sectionLocks, section)
+  if (!lock?.locked) return doctorLockedMessage()
+  if (lock.lockedByName?.trim()) {
+    return `Locked by ${lock.lockedByName}. You cannot edit this section.`
+  }
+  if (lock.reason?.trim()) {
+    return lock.reason
+  }
+  return doctorLockedMessage()
+}
+
+export function getFirestoreSaveErrorMessage(
+  error: unknown,
+  options?: {
+    lockMessage?: string
+    isSectionLocked?: boolean
+    canOverrideLock?: boolean
+  }
+): string {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: string }).code)
+      : ""
+
+  if (code === "permission-denied") {
+    if (options?.isSectionLocked && !options?.canOverrideLock) {
+      return options.lockMessage || doctorLockedMessage()
+    }
+    return "You do not have permission to save these changes. This section may be locked."
+  }
+
+  return error instanceof Error ? error.message : "Please try again."
+}

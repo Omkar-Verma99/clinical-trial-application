@@ -22,6 +22,15 @@ import {
   DEFAULT_CLINICAL_VALIDATION_RANGES,
   normalizeClinicalValidationRanges,
 } from "@/lib/clinical-ranges"
+import { hasAtLeastOneTrue, parseUrinalysisFields } from "@/lib/form-validation"
+import { preserveScrollPosition } from "@/lib/scroll-preserve"
+import {
+  TREATMENT_INITIATION_MIN,
+  todayIsoDate,
+  validateBaselineVisitDate,
+  validateTreatmentInitiationDate,
+} from "@/lib/study-dates"
+import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
 
 interface BaselineFormProps {
   patientId: string
@@ -51,6 +60,9 @@ export const BaselineForm = memo(function BaselineForm({
   const [loading, setLoading] = useState(false)
   const [ranges, setRanges] = useState<ClinicalValidationRanges>(DEFAULT_CLINICAL_VALIDATION_RANGES)
   const submitLockRef = useRef(false)
+  const lastSyncedBaselineAtRef = useRef<string | null>(null)
+
+  const initialUrinalysis = parseUrinalysisFields(existingData?.urinalysis)
 
   const [formData, setFormData] = useState({
     baselineVisitDate: (existingData as any)?.baselineVisitDate || "",
@@ -64,8 +76,8 @@ export const BaselineForm = memo(function BaselineForm({
     heartRate: (existingData as any)?.heartRate?.toString() || "",
     serumCreatinine: existingData?.serumCreatinine?.toString() || "",
     egfr: existingData?.egfr?.toString() || "",
-    urinalysisType: existingData?.urinalysis?.includes("Abnormal") ? "Abnormal" : (existingData?.urinalysis || ""),
-    urinalysisSpecify: (existingData as any)?.urinalysisSpecify || "",
+    urinalysisType: initialUrinalysis.urinalysisType,
+    urinalysisSpecify: initialUrinalysis.urinalysisSpecify,
     
     // SECTION G - Treatment & Counseling
     dosePrescribed: existingData?.dosePrescribed || "",
@@ -74,6 +86,13 @@ export const BaselineForm = memo(function BaselineForm({
 
   useEffect(() => {
     if (!existingData) return
+
+    const syncStamp = existingData.updatedAt || existingData.createdAt || ""
+    if (lastSyncedBaselineAtRef.current === syncStamp) return
+    if (submitLockRef.current || loading) return
+
+    lastSyncedBaselineAtRef.current = syncStamp
+    const urinalysis = parseUrinalysisFields(existingData.urinalysis)
 
     setFormData((prev) => ({
       ...prev,
@@ -87,8 +106,8 @@ export const BaselineForm = memo(function BaselineForm({
       heartRate: (existingData as any).heartRate?.toString() || "",
       serumCreatinine: existingData.serumCreatinine?.toString() || "",
       egfr: existingData.egfr?.toString() || "",
-      urinalysisType: existingData.urinalysis?.includes("Abnormal") ? "Abnormal" : (existingData.urinalysis || ""),
-      urinalysisSpecify: (existingData as any).urinalysisSpecify || "",
+      urinalysisType: urinalysis.urinalysisType,
+      urinalysisSpecify: urinalysis.urinalysisSpecify,
       dosePrescribed: existingData.dosePrescribed || "",
       treatmentInitiationDate: (existingData as any).treatmentInitiationDate || "",
     }))
@@ -99,7 +118,7 @@ export const BaselineForm = memo(function BaselineForm({
       utiGenitialInfectionAwareness: (existingData as any).counseling?.utiGenitialInfectionAwareness ?? false,
       hydrationAdvice: (existingData as any).counseling?.hydrationAdvice ?? false,
     })
-  }, [existingData])
+  }, [existingData, loading])
 
   useEffect(() => {
     // PREFILL logic moved to props-driven approach
@@ -175,12 +194,31 @@ export const BaselineForm = memo(function BaselineForm({
       // VALIDATION PHASE 1: Check required fields
       if (!formData.hba1c) validationErrors.push("HbA1c is required")
       if (!formData.fpg) validationErrors.push("FPG is required")
+      if (!formData.ppg) validationErrors.push("PPG is required")
       if (!formData.weight) validationErrors.push("Weight is required")
       if (!formData.baselineVisitDate) validationErrors.push("Baseline visit date is required")
+      const baselineDateError = validateBaselineVisitDate(
+        formData.baselineVisitDate,
+        formData.treatmentInitiationDate
+      )
+      if (baselineDateError) validationErrors.push(baselineDateError)
       if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
       if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
+      if (!formData.heartRate) validationErrors.push("Heart Rate is required")
+      if (!formData.serumCreatinine) validationErrors.push("Serum Creatinine is required")
+      if (!formData.egfr) validationErrors.push("eGFR is required")
+      if (!formData.urinalysisType) validationErrors.push("Urinalysis is required")
       if (!formData.dosePrescribed) validationErrors.push("Dose prescribed is required")
       if (!formData.treatmentInitiationDate) validationErrors.push("Treatment initiation date is required")
+      if (!hasAtLeastOneTrue(counseling)) {
+        validationErrors.push("At least one counseling option must be selected")
+      }
+
+      const treatmentDateError = validateTreatmentInitiationDate(
+        formData.treatmentInitiationDate,
+        formData.baselineVisitDate
+      )
+      if (treatmentDateError) validationErrors.push(treatmentDateError)
 
       if (validationErrors.length > 0) {
         toast({
@@ -210,7 +248,7 @@ export const BaselineForm = memo(function BaselineForm({
       if (isNaN(fpg) || fpg < ranges.fpg.min || fpg > ranges.fpg.max) {
         rangeErrors.push(`FPG must be between ${ranges.fpg.min}-${ranges.fpg.max} mg/dL`)
       }
-      if (formData.ppg && (isNaN(ppg) || ppg < ranges.ppg.min || ppg > ranges.ppg.max)) {
+      if (isNaN(ppg) || ppg < ranges.ppg.min || ppg > ranges.ppg.max) {
         rangeErrors.push(`PPG must be between ${ranges.ppg.min}-${ranges.ppg.max} mg/dL`)
       }
       if (isNaN(weight) || weight < ranges.weight.min || weight > ranges.weight.max) {
@@ -222,20 +260,21 @@ export const BaselineForm = memo(function BaselineForm({
       if (isNaN(bpDiastolic) || bpDiastolic < ranges.bpDiastolic.min || bpDiastolic > ranges.bpDiastolic.max) {
         rangeErrors.push(`BP Diastolic must be between ${ranges.bpDiastolic.min}-${ranges.bpDiastolic.max} mmHg`)
       }
-      if (formData.heartRate && (isNaN(heartRate) || heartRate < ranges.heartRate.min || heartRate > ranges.heartRate.max)) {
+      if (isNaN(heartRate) || heartRate < ranges.heartRate.min || heartRate > ranges.heartRate.max) {
         rangeErrors.push(`Heart Rate must be between ${ranges.heartRate.min}-${ranges.heartRate.max} bpm`)
       }
       if (
-        formData.serumCreatinine &&
-        (isNaN(serumCreatinine) || serumCreatinine < ranges.serumCreatinine.min || serumCreatinine > ranges.serumCreatinine.max)
+        isNaN(serumCreatinine) ||
+        serumCreatinine < ranges.serumCreatinine.min ||
+        serumCreatinine > ranges.serumCreatinine.max
       ) {
         rangeErrors.push(`Serum Creatinine must be between ${ranges.serumCreatinine.min}-${ranges.serumCreatinine.max} mg/dL`)
       }
-      if (formData.egfr && (isNaN(egfr) || egfr < ranges.egfr.min || egfr > ranges.egfr.max)) {
+      if (isNaN(egfr) || egfr < ranges.egfr.min || egfr > ranges.egfr.max) {
         rangeErrors.push(`eGFR must be between ${ranges.egfr.min}-${ranges.egfr.max} mL/min/1.73m2`)
       }
 
-      if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify) {
+      if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify.trim()) {
         rangeErrors.push("Please specify abnormality for urinalysis")
       }
 
@@ -266,13 +305,13 @@ export const BaselineForm = memo(function BaselineForm({
         // Clinical Parameters
         hba1c: hba1cValue,
         fpg: fpgValue,
-        ppg: formData.ppg ? Number.parseFloat(formData.ppg) : null,
+        ppg: Number.parseFloat(formData.ppg),
         weight: weightValue,
         bloodPressureSystolic: bpSystolicValue,
         bloodPressureDiastolic: bpDiastolicValue,
-        heartRate: formData.heartRate ? Number.parseInt(formData.heartRate) : null,
-        serumCreatinine: formData.serumCreatinine ? Number.parseFloat(formData.serumCreatinine) : null,
-        egfr: formData.egfr ? Number.parseFloat(formData.egfr) : null,
+        heartRate: Number.parseInt(formData.heartRate),
+        serumCreatinine: Number.parseFloat(formData.serumCreatinine),
+        egfr: Number.parseFloat(formData.egfr),
         urinalysis: formData.urinalysisType === "Abnormal" && sanitizedFormData.urinalysisSpecify 
           ? `Abnormal: ${sanitizedFormData.urinalysisSpecify}`
           : "Normal",
@@ -303,10 +342,7 @@ export const BaselineForm = memo(function BaselineForm({
         }, { merge: true })
 
         await batch.commit()
-
-        if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-          console.log('✓ Form saved to Firebase')
-        }
+        lastSyncedBaselineAtRef.current = data.updatedAt
       } catch (error) {
         const firebaseCode =
           typeof error === "object" && error && "code" in error
@@ -322,12 +358,11 @@ export const BaselineForm = memo(function BaselineForm({
         toast({
           variant: "destructive",
           title: "Error saving data",
-          description:
-            error instanceof Error
-              ? firebaseCode !== "unknown"
-                ? `${error.message} (${firebaseCode})`
-                : error.message
-              : "Please try again.",
+          description: getFirestoreSaveErrorMessage(error, {
+            isSectionLocked,
+            canOverrideLock,
+            lockMessage,
+          }),
         })
         return
       }
@@ -337,7 +372,7 @@ export const BaselineForm = memo(function BaselineForm({
         description: "Week 0 assessment has been recorded.",
       })
 
-      onSuccess()
+      preserveScrollPosition(onSuccess)
     } catch (error) {
       logError(error as Error, {
         action: "saveBaselineData",
@@ -346,7 +381,11 @@ export const BaselineForm = memo(function BaselineForm({
       toast({
         variant: "destructive",
         title: "Error saving data",
-        description: error instanceof Error ? error.message : "Please try again.",
+        description: getFirestoreSaveErrorMessage(error, {
+          isSectionLocked,
+          canOverrideLock,
+          lockMessage,
+        }),
       })
     } finally {
       // Ensure minimum loading time of 400ms for visual feedback
@@ -427,7 +466,7 @@ export const BaselineForm = memo(function BaselineForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="ppg">PPG (mg/dL)</Label>
+                <Label htmlFor="ppg">PPG (mg/dL) *</Label>
                 <Input
                   id="ppg"
                   type="number"
@@ -436,6 +475,7 @@ export const BaselineForm = memo(function BaselineForm({
                   placeholder="180"
                   value={formData.ppg}
                   onChange={(e) => setFormData({ ...formData, ppg: e.target.value })}
+                  required
                 />
               </div>
             </div>
@@ -486,7 +526,7 @@ export const BaselineForm = memo(function BaselineForm({
 
             <div className="grid md:grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="heartRate">Heart Rate (bpm)</Label>
+                <Label htmlFor="heartRate">Heart Rate (bpm) *</Label>
                 <Input
                   id="heartRate"
                   type="number"
@@ -495,10 +535,11 @@ export const BaselineForm = memo(function BaselineForm({
                   placeholder="72"
                   value={formData.heartRate}
                   onChange={(e) => setFormData({ ...formData, heartRate: e.target.value })}
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="creatinine">Serum Creatinine (mg/dL)</Label>
+                <Label htmlFor="creatinine">Serum Creatinine (mg/dL) *</Label>
                 <Input
                   id="creatinine"
                   type="number"
@@ -508,10 +549,11 @@ export const BaselineForm = memo(function BaselineForm({
                   placeholder="1.0"
                   value={formData.serumCreatinine}
                   onChange={(e) => setFormData({ ...formData, serumCreatinine: e.target.value })}
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="egfr">eGFR (mL/min/1.73m²)</Label>
+                <Label htmlFor="egfr">eGFR (mL/min/1.73m²) *</Label>
                 <Input
                   id="egfr"
                   type="number"
@@ -520,6 +562,7 @@ export const BaselineForm = memo(function BaselineForm({
                   placeholder="90"
                   value={formData.egfr}
                   onChange={(e) => setFormData({ ...formData, egfr: e.target.value })}
+                  required
                 />
               </div>
             </div>
@@ -534,7 +577,7 @@ export const BaselineForm = memo(function BaselineForm({
                     name="urinalysis"
                     value="Normal"
                     checked={formData.urinalysisType === "Normal"}
-                    onChange={(e) => setFormData({ ...formData, urinalysisType: e.target.value, urinalysisSpecify: "" })}
+                    onChange={() => setFormData({ ...formData, urinalysisType: "Normal", urinalysisSpecify: "" })}
                     className="h-4 w-4"
                   />
                   <Label htmlFor="urinalysisNormal" className="font-normal cursor-pointer">Normal</Label>
@@ -546,7 +589,7 @@ export const BaselineForm = memo(function BaselineForm({
                     name="urinalysis"
                     value="Abnormal"
                     checked={formData.urinalysisType === "Abnormal"}
-                    onChange={(e) => setFormData({ ...formData, urinalysisType: e.target.value })}
+                    onChange={() => setFormData({ ...formData, urinalysisType: "Abnormal" })}
                     className="h-4 w-4"
                   />
                   <Label htmlFor="urinalysisAbnormal" className="font-normal cursor-pointer">Abnormal (specify)</Label>
@@ -589,15 +632,15 @@ export const BaselineForm = memo(function BaselineForm({
                 id="initDate"
                 value={formData.treatmentInitiationDate}
                 onChangeAction={(value) => setFormData((prev) => ({ ...prev, treatmentInitiationDate: value }))}
-                min="1900-01-01"
-                max="2100-12-31"
+                min={TREATMENT_INITIATION_MIN}
+                max={todayIsoDate()}
                 ariaLabel="Date when treatment was initiated required"
                 required
               />
             </div>
 
             <div className="space-y-3">
-              <Label className="text-base font-semibold">Counseling Provided (select all applicable)</Label>
+              <Label className="text-base font-semibold">Counseling Provided * (select at least one)</Label>
               <div className="space-y-2 pl-4">
                 <div className="flex items-center gap-2">
                   <Checkbox

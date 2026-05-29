@@ -55,6 +55,7 @@ export interface Patient {
     ascvd: boolean
     heartFailure: boolean
     chronicKidneyDisease: boolean
+    none?: boolean
     ckdEgfrCategory?: "≥90" | "60–89" | "45–59" | "30–44"
     other: string[]
   }
@@ -68,6 +69,7 @@ export interface Patient {
     sglt2Inhibitor: boolean
     tzd: boolean
     insulin: boolean
+    none?: boolean
     other: string[]
   }
   
@@ -144,6 +146,7 @@ export interface StructuredAdverseEvent {
 // FOLLOW-UP ASSESSMENT - Week 12 ± 2 weeks
 export interface FollowUpData {
   patientId: string
+  doctorId?: string
   visitNumber?: number                // Visit week number (1, 2, 3, etc., calculated from date)
   visitDate?: string                  // Week 12 visit date (NEW)
   
@@ -197,6 +200,7 @@ export interface FollowUpData {
     dizzinessDehydrationSymptoms: boolean
     hospitalizationOrErVisit: boolean
     hospitalizationReason?: string
+    none?: boolean
   }
 
   adverseEventsPresent?: boolean
@@ -214,6 +218,8 @@ export interface FollowUpData {
       ckdPatients: boolean
       htnPlusT2dm: boolean
       elderlyPatients: boolean
+      other?: boolean
+      otherDetails?: string
     }
   }
   

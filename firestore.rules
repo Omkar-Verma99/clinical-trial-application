@@ -93,7 +93,9 @@ service cloud.firestore {
           baselineLockedGuard() &&
           (!sectionLocked('followup_1') || followupUnchanged(0)) &&
           (!sectionLocked('followup_2') || followupUnchanged(1)) &&
-          (!sectionLocked('followup_3') || followupUnchanged(2)));
+          (!sectionLocked('followup_3') || followupUnchanged(2)) &&
+          (!sectionLocked('followup_4') || followupUnchanged(3)) &&
+          (!sectionLocked('followup_5') || followupUnchanged(4)));
       }
 
       // Doctors can see their own patients; admins can see all
@@ -102,9 +104,11 @@ service cloud.firestore {
       // Doctors create their own patients; doctorId must match auth
       allow create: if request.resource.data.doctorId == request.auth.uid;
 
-      // Temporary stabilization: rely on strict owner check to avoid false permission denials.
-      // We can re-tighten with additional guards after validating payload-shape behavior in production.
-      allow update: if isAdmin() || isDoctorOwner(resource.data);
+      allow update: if isAdmin() ||
+        (isDoctorOwner(resource.data) &&
+          immutableGovernanceGuard() &&
+          immutableOwnershipGuard() &&
+          doctorLockGuard());
 
       allow delete: if isDoctorOwner(resource.data);
     }

@@ -114,6 +114,12 @@ export default function AdminPatientDetailPage() {
 
   const baseline = useMemo(() => patient?.baseline || null, [patient]);
   const followups = useMemo(() => patient?.followups || [], [patient]);
+  const followupsWithDefault = useMemo(() => {
+    if (baseline && followups.length === 0) {
+      return [{} as FollowUpData];
+    }
+    return followups;
+  }, [baseline, followups]);
   const sectionLocks = useMemo(() => patient?.sectionLocks || {}, [patient]);
   const canManageSectionLocks = hasPermission('manage_section_locks');
 
@@ -208,16 +214,22 @@ export default function AdminPatientDetailPage() {
         <div className="border-b border-border overflow-x-auto">
           <TabsList className="flex w-max min-w-full gap-0 bg-transparent p-0 h-auto">
             <TabsTrigger value="overview" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all">Overview</TabsTrigger>
-            <TabsTrigger value="patient-info" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all">Patient Info</TabsTrigger>
-            <TabsTrigger value="baseline" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all">Baseline</TabsTrigger>
-            {followups.map((_, index) => (
+            <TabsTrigger value="patient-info" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all">
+              Patient Info{isSectionLocked(sectionLocks, 'patient_info') ? ' 🔒' : ''}
+            </TabsTrigger>
+            <TabsTrigger value="baseline" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all">
+              Baseline{isSectionLocked(sectionLocks, 'baseline') ? ' 🔒' : ''}
+            </TabsTrigger>
+            {followupsWithDefault.map((_, index) => (
               <TabsTrigger key={`visit-${index}`} value={`visit-${index}`} className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all">
                 Follow Up {index + 1}
+                {isSectionLocked(sectionLocks, followupSectionKey(index)) ? ' 🔒' : ''}
               </TabsTrigger>
             ))}
             {creatingFollowUp && (
               <TabsTrigger value="new-followup" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all">
                 Follow Up {followups.length + 1}
+                {isSectionLocked(sectionLocks, followupSectionKey(followups.length)) ? ' 🔒' : ''}
               </TabsTrigger>
             )}
             <TabsTrigger value="comparison" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all" disabled={!baseline || followups.length === 0}>
@@ -281,7 +293,7 @@ export default function AdminPatientDetailPage() {
                         {isSectionLocked(sectionLocks, 'baseline') ? 'Locked' : 'Unlocked'}
                       </span>
                     </div>
-                    {followups.map((_, index) => (
+                    {followupsWithDefault.map((_, index) => (
                       <div key={`lock-detail-${index}`} className="flex justify-between items-center py-1">
                         <span>Follow Up {index + 1}</span>
                         <span className={`font-semibold ${isSectionLocked(sectionLocks, followupSectionKey(index)) ? 'text-red-500' : 'text-green-500'}`}>
@@ -398,7 +410,7 @@ export default function AdminPatientDetailPage() {
             allowAnyDoctorEdit
             isSectionLocked={isSectionLocked(sectionLocks, 'patient_info')}
             canOverrideLock
-            onSaved={() => setActiveTab('overview')}
+            onSaved={() => {}}
           />
         </TabsContent>
 
@@ -423,11 +435,11 @@ export default function AdminPatientDetailPage() {
             doctorIdOverride={patient.doctorId}
             isSectionLocked={isSectionLocked(sectionLocks, 'baseline')}
             canOverrideLock
-            onSuccess={() => setActiveTab('overview')}
+            onSuccess={() => {}}
           />
         </TabsContent>
 
-        {followups.map((followup, index) => (
+        {followupsWithDefault.map((followup, index) => (
           <TabsContent key={`visit-content-${index}`} value={`visit-${index}`} forceMount>
             {canManageSectionLocks && (
               <div className="mb-4 flex justify-end">
@@ -443,14 +455,14 @@ export default function AdminPatientDetailPage() {
             )}
             <FollowUpForm
               patientId={patient.id}
-              existingData={followup}
+              existingData={Object.keys(followup).length === 0 ? null : followup}
               baselineDate={baseline?.baselineVisitDate}
               allFollowUps={followups}
               followUpIndex={index}
               doctorIdOverride={patient.doctorId}
               isSectionLocked={isSectionLocked(sectionLocks, followupSectionKey(index))}
               canOverrideLock
-              onSuccess={() => setActiveTab('overview')}
+              onSuccess={() => {}}
             />
           </TabsContent>
         ))}
@@ -468,7 +480,7 @@ export default function AdminPatientDetailPage() {
               canOverrideLock
               onSuccess={() => {
                 setCreatingFollowUp(false);
-                setActiveTab('overview');
+                setActiveTab(`visit-${followups.length}`);
               }}
             />
           </TabsContent>
