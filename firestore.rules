@@ -13,6 +13,246 @@ service cloud.firestore {
     function isDoctorOwner(doc) {
       return isAuthenticated() && doc.doctorId == request.auth.uid;
     }
+
+    function baselineCounselingOk(baseline) {
+      return baseline != null && (
+        baseline.counselingProvided == true ||
+        (baseline.counseling != null && (
+          baseline.counseling.dietAndLifestyle == true ||
+          baseline.counseling.hypoglycemiaAwareness == true ||
+          baseline.counseling.utiGenitialInfectionAwareness == true ||
+          baseline.counseling.hydrationAdvice == true
+        ))
+      );
+    }
+
+    function baselineIsComplete(baseline) {
+      return baseline != null &&
+        baseline.keys().hasAll([
+          'hba1c',
+          'fpg',
+          'ppg',
+          'weight',
+          'bloodPressureSystolic',
+          'bloodPressureDiastolic',
+          'heartRate',
+          'serumCreatinine',
+          'egfr',
+          'urinalysis',
+          'dosePrescribed',
+          'treatmentInitiationDate',
+          'baselineVisitDate'
+        ]) &&
+        baseline.hba1c is number &&
+        baseline.fpg is number &&
+        baseline.ppg is number &&
+        baseline.weight is number &&
+        baseline.bloodPressureSystolic is number &&
+        baseline.bloodPressureDiastolic is number &&
+        baseline.heartRate is number &&
+        baseline.serumCreatinine is number &&
+        baseline.egfr is number &&
+        baseline.urinalysis is string &&
+        baseline.urinalysis.size() > 0 &&
+        baseline.dosePrescribed is string &&
+        baseline.dosePrescribed.size() > 0 &&
+        baseline.treatmentInitiationDate is string &&
+        baseline.treatmentInitiationDate.size() > 0 &&
+        baseline.baselineVisitDate is string &&
+        baseline.baselineVisitDate.size() > 0 &&
+        baselineCounselingOk(baseline);
+    }
+
+    function baselineCompleteForFollowup(data) {
+      return data.baselineComplete == true || baselineIsComplete(data.baseline);
+    }
+
+    function checkboxGroupHasSelection(map) {
+      return map != null && (
+        map.hypertension == true ||
+        map.dyslipidemia == true ||
+        map.obesity == true ||
+        map.ascvd == true ||
+        map.heartFailure == true ||
+        map.chronicKidneyDisease == true ||
+        map.none == true ||
+        map.neuropathy == true ||
+        map.retinopathy == true ||
+        map.nephropathy == true ||
+        map.cadOrStroke == true ||
+        map.metformin == true ||
+        map.sulfonylurea == true ||
+        map.dpp4Inhibitor == true ||
+        map.sglt2Inhibitor == true ||
+        map.tzd == true ||
+        map.insulin == true ||
+        map.inadequateGlycemicControl == true ||
+        map.weightConcerns == true ||
+        map.hypoglycemiaOnPriorTherapy == true ||
+        map.highPillBurden == true ||
+        map.poorAdherence == true ||
+        map.costConsiderations == true ||
+        map.physicianClinicalJudgment == true
+      );
+    }
+
+    function reasonForKcMeSempaOk(reasons) {
+      return reasons != null && (
+        checkboxGroupHasSelection(reasons) ||
+        (reasons.other is list && reasons.other.size() > 0) ||
+        (reasons.other is string && reasons.other.size() > 0)
+      );
+    }
+
+    function comorbiditiesOk(comorbidities) {
+      return checkboxGroupHasSelection(comorbidities) &&
+        (
+          comorbidities.chronicKidneyDisease != true ||
+          (
+            comorbidities.ckdEgfrCategory is string &&
+            comorbidities.ckdEgfrCategory.size() > 0
+          )
+        );
+    }
+
+    function patientInfoIsComplete(data) {
+      return data.patientCode is string && data.patientCode.size() > 0 &&
+        data.baselineVisitDate is string && data.baselineVisitDate.size() > 0 &&
+        data.age is number &&
+        data.gender is string && data.gender.size() > 0 &&
+        data.height is number &&
+        data.weight is number &&
+        data.durationOfDiabetes is number &&
+        data.baselineGlycemicSeverity is string && data.baselineGlycemicSeverity.size() > 0 &&
+        data.smokingStatus is string && data.smokingStatus.size() > 0 &&
+        data.alcoholIntake is string && data.alcoholIntake.size() > 0 &&
+        data.physicalActivityLevel is string && data.physicalActivityLevel.size() > 0 &&
+        data.previousTreatmentType is string && data.previousTreatmentType.size() > 0 &&
+        checkboxGroupHasSelection(data.diabetesComplications) &&
+        comorbiditiesOk(data.comorbidities) &&
+        checkboxGroupHasSelection(data.previousDrugClasses) &&
+        reasonForKcMeSempaOk(data.reasonForTripleFDC);
+    }
+
+    function patientInfoCompleteForPatient(data) {
+      return data.patientInfoComplete == true || patientInfoIsComplete(data);
+    }
+
+    function eventsOfSpecialInterestOk(events) {
+      return events != null && (
+        events.none == true ||
+        events.hypoglycemiaMild == true ||
+        events.hypoglycemiaModerate == true ||
+        events.hypoglycemiaSevere == true ||
+        events.uti == true ||
+        events.genitalMycoticInfection == true ||
+        events.dizzinessDehydrationSymptoms == true ||
+        events.hospitalizationOrErVisit == true
+      );
+    }
+
+    function preferredProfilesOk(profiles) {
+      return profiles != null && (
+        profiles.uncontrolledT2dm == true ||
+        profiles.obeseT2dm == true ||
+        profiles.ckdPatients == true ||
+        profiles.htnPlusT2dm == true ||
+        profiles.elderlyPatients == true ||
+        profiles.other == true
+      ) && (
+        profiles.other != true ||
+        (
+          profiles.otherDetails is string &&
+          profiles.otherDetails.size() > 0 &&
+          profiles.otherDetails != 'NA'
+        )
+      );
+    }
+
+    function followupIsComplete(f) {
+      return f != null &&
+        f.visitDate is string && f.visitDate.size() > 0 &&
+        f.hba1c is number &&
+        f.fpg is number &&
+        f.ppg is number &&
+        f.weight is number &&
+        f.bloodPressureSystolic is number &&
+        f.bloodPressureDiastolic is number &&
+        f.heartRate is number &&
+        f.serumCreatinine is number &&
+        f.egfr is number &&
+        f.urinalysis is string && f.urinalysis.size() > 0 &&
+        f.glycemicResponse != null &&
+        f.glycemicResponse.category is string &&
+        f.glycemicResponse.category.size() > 0 &&
+        f.outcomes != null &&
+        f.outcomes.weightChange is string &&
+        f.outcomes.weightChange.size() > 0 &&
+        f.outcomes.bpControlAchieved is bool &&
+        f.outcomes.renalOutcome is string &&
+        f.outcomes.renalOutcome.size() > 0 &&
+        f.adherence != null &&
+        f.adherence.patientContinuingTreatment is bool &&
+        f.adherence.missedDosesInLast7Days != null &&
+        f.adherence.addOnOrChangedTherapy is bool &&
+        (
+          f.adherence.addOnOrChangedTherapy != true ||
+          (
+            f.adherence.addOnOrChangedTherapyDetails is string &&
+            f.adherence.addOnOrChangedTherapyDetails.size() > 0
+          )
+        ) &&
+        (
+          f.adherence.patientContinuingTreatment != false ||
+          (
+            f.adherence.discontinuationReason is string &&
+            f.adherence.discontinuationReason.size() > 0
+          )
+        ) &&
+        f.adverseEventsPresent is bool &&
+        (
+          f.adverseEventsPresent != true ||
+          (f.adverseEvents is list && f.adverseEvents.size() > 0) ||
+          (f.adverseEventsStructured is list && f.adverseEventsStructured.size() > 0)
+        ) &&
+        eventsOfSpecialInterestOk(f.eventsOfSpecialInterest) &&
+        (
+          f.eventsOfSpecialInterest.hospitalizationOrErVisit != true ||
+          (
+            f.eventsOfSpecialInterest.hospitalizationReason is string &&
+            f.eventsOfSpecialInterest.hospitalizationReason.size() > 0
+          )
+        ) &&
+        f.physicianAssessment != null &&
+        f.physicianAssessment.overallEfficacy is string &&
+        f.physicianAssessment.overallTolerability is string &&
+        f.physicianAssessment.complianceJudgment is string &&
+        f.physicianAssessment.preferKcMeSempaForLongTerm is bool &&
+        preferredProfilesOk(f.physicianAssessment.preferredPatientProfiles) &&
+        f.dataPrivacy != null &&
+        f.dataPrivacy.noPersonalIdentifiersRecorded == true &&
+        f.dataPrivacy.dataCollectedAsRoutineClinicalPractice == true &&
+        f.dataPrivacy.patientIdentityMappingAtClinicOnly == true &&
+        f.physicianDeclaration != null &&
+        f.physicianDeclaration.confirmationCheckbox == true &&
+        f.comments is string &&
+        f.comments.size() > 0;
+    }
+
+    function followupAtComplete(followups, index) {
+      return followups == null || followups.size() <= index || followupIsComplete(followups[index]);
+    }
+
+    function allFollowupsComplete(followups) {
+      return followups == null || followups.size() == 0 ||
+        (
+          followupAtComplete(followups, 0) &&
+          followupAtComplete(followups, 1) &&
+          followupAtComplete(followups, 2) &&
+          followupAtComplete(followups, 3) &&
+          followupAtComplete(followups, 4)
+        );
+    }
     
     // ===== UNIFIED PATIENTS COLLECTION =====
     // ONE document per patient with all data (patientInfo + baseline + followups)
@@ -39,7 +279,10 @@ service cloud.firestore {
         // Patient info is represented by top-level fields not part of baseline/follow-up modules.
         return !changedKeys().hasOnly([
           'baseline',
+          'baselineComplete',
+          'baselineVisitDate',
           'followups',
+          'patientInfoComplete',
           'updatedAt'
         ]);
       }
@@ -64,13 +307,57 @@ service cloud.firestore {
         return baselineChangedKeys().hasOnly(['baselineVisitDate', 'weight', 'updatedAt']);
       }
 
+      function followupsTouched() {
+        return changedKeys().hasAny(['followups']);
+      }
+
+      function followupsGuard() {
+        return !followupsTouched() ||
+          (
+            baselineCompleteForFollowup(resource.data) &&
+            patientInfoCompleteForPatient(resource.data) &&
+            allFollowupsComplete(request.resource.data.followups)
+          );
+      }
+
+      function moduleOnlyWrite() {
+        // Baseline / follow-up saves only touch these top-level keys (+ nested maps).
+        return changedKeys().hasOnly([
+          'baseline',
+          'baselineComplete',
+          'baselineVisitDate',
+          'followups',
+          'patientInfoComplete',
+          'updatedAt'
+        ]);
+      }
+
+      function patientInfoWriteGuard() {
+        return moduleOnlyWrite() ||
+          (
+            patientInfoIsComplete(request.resource.data) &&
+            request.resource.data.patientInfoComplete == true
+          );
+      }
+
+      function baselineWriteGuard() {
+        return !baselineFieldsTouched() ||
+          baselinePatientInfoSyncOnly() ||
+          (
+            baselineIsComplete(request.resource.data.baseline) &&
+            request.resource.data.baselineComplete == true
+          );
+      }
+
       function baselineLockedGuard() {
         return !sectionLocked('baseline') || !baselineFieldsTouched() || baselinePatientInfoSyncOnly();
       }
 
       function immutableGovernanceGuard() {
         // Doctors must never mutate lock metadata from client writes.
-        return request.resource.data.sectionLocks == resource.data.sectionLocks;
+        // Missing map fields compare unequal to null in rules; treat both-absent as unchanged.
+        return (!('sectionLocks' in resource.data) && !('sectionLocks' in request.resource.data)) ||
+          request.resource.data.sectionLocks == resource.data.sectionLocks;
       }
 
       function immutableOwnershipGuard() {
@@ -88,27 +375,36 @@ service cloud.firestore {
       }
 
       function doctorLockGuard() {
-        return resource.data.sectionLocks == null ||
+        return !('sectionLocks' in resource.data) || resource.data.sectionLocks == null ||
           (patientInfoLockedGuard() &&
           baselineLockedGuard() &&
-          (!sectionLocked('followup_1') || followupUnchanged(0)) &&
-          (!sectionLocked('followup_2') || followupUnchanged(1)) &&
-          (!sectionLocked('followup_3') || followupUnchanged(2)) &&
-          (!sectionLocked('followup_4') || followupUnchanged(3)) &&
-          (!sectionLocked('followup_5') || followupUnchanged(4)));
+          (!sectionLocked('followup_1') || !changedKeys().hasAny(['followups']) || followupUnchanged(0)) &&
+          (!sectionLocked('followup_2') || !changedKeys().hasAny(['followups']) || followupUnchanged(1)) &&
+          (!sectionLocked('followup_3') || !changedKeys().hasAny(['followups']) || followupUnchanged(2)) &&
+          (!sectionLocked('followup_4') || !changedKeys().hasAny(['followups']) || followupUnchanged(3)) &&
+          (!sectionLocked('followup_5') || !changedKeys().hasAny(['followups']) || followupUnchanged(4)));
       }
 
       // Doctors can see their own patients; admins can see all
       allow read: if isDoctorOwner(resource.data) || isAdmin();
 
       // Doctors create their own patients; doctorId must match auth
-      allow create: if request.resource.data.doctorId == request.auth.uid;
+      allow create: if request.resource.data.doctorId == request.auth.uid &&
+        patientInfoIsComplete(request.resource.data) &&
+        request.resource.data.patientInfoComplete == true;
 
-      allow update: if isAdmin() ||
-        (isDoctorOwner(resource.data) &&
-          immutableGovernanceGuard() &&
-          immutableOwnershipGuard() &&
-          doctorLockGuard());
+      allow update: if followupsGuard() &&
+        baselineWriteGuard() &&
+        patientInfoWriteGuard() &&
+        (
+          isAdmin() ||
+          (
+            isDoctorOwner(resource.data) &&
+            immutableGovernanceGuard() &&
+            immutableOwnershipGuard() &&
+            doctorLockGuard()
+          )
+        );
 
       allow delete: if isDoctorOwner(resource.data);
     }
@@ -123,7 +419,8 @@ service cloud.firestore {
       
       allow create, update: if request.resource.data.patientId != null &&
         exists(/databases/$(database)/documents/patients/$(request.resource.data.patientId)) &&
-        isDoctorOwner(get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data);
+        isDoctorOwner(get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data) &&
+        baselineCompleteForFollowup(get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data);
       
       allow delete: if resource.data.patientId != null &&
         exists(/databases/$(database)/documents/patients/$(resource.data.patientId)) &&
@@ -140,7 +437,8 @@ service cloud.firestore {
       
       allow create, update: if request.resource.data.patientId != null &&
         exists(/databases/$(database)/documents/patients/$(request.resource.data.patientId)) &&
-        isDoctorOwner(get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data);
+        isDoctorOwner(get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data) &&
+        baselineCompleteForFollowup(get(/databases/$(database)/documents/patients/$(request.resource.data.patientId)).data);
       
       allow delete: if resource.data.patientId != null &&
         exists(/databases/$(database)/documents/patients/$(resource.data.patientId)) &&

@@ -2,11 +2,26 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { Suspense, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { LoginFormWrapper } from "@/components/login-form"
+
+function LoginRedirectIfAuthenticated() {
+  const { user, loading } = useAuth()
+  const searchParams = useSearchParams()
+  const redirectTo = searchParams?.get("from") || "/dashboard"
+
+  useEffect(() => {
+    if (!loading && user) {
+      window.location.assign(redirectTo)
+    }
+  }, [loading, user, redirectTo])
+
+  return null
+}
 
 export default function LoginPage() {
   const { loading: authLoading } = useAuth()
@@ -47,6 +62,9 @@ export default function LoginPage() {
           </div>
         </CardHeader>
         <CardContent>
+          <Suspense fallback={null}>
+            <LoginRedirectIfAuthenticated />
+          </Suspense>
           <LoginFormWrapper />
         </CardContent>
       </Card>

@@ -89,7 +89,11 @@ export interface Patient {
   previousTherapy?: string[]
   
   // Data Sections
+  /** Set true only after Patient Info (sections A–E) passes validation (also enforced in Firestore). */
+  patientInfoComplete?: boolean
   baseline?: BaselineData
+  /** Set true only after a full baseline save passes validation (also enforced in Firestore). */
+  baselineComplete?: boolean
   followups?: FollowUpData[]
   sectionLocks?: SectionLockMap
 

@@ -30,6 +30,7 @@ import {
   validateBaselineVisitDate,
   validateTreatmentInitiationDate,
 } from "@/lib/study-dates"
+import { isBaselineComplete } from "@/lib/baseline-validation"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
 
 interface BaselineFormProps {
@@ -187,11 +188,10 @@ export const BaselineForm = memo(function BaselineForm({
     setLoading(true)
     const startTime = Date.now()
 
-    // Define validationErrors outside conditional so it's always available
     const validationErrors: string[] = []
 
     try {
-      // VALIDATION PHASE 1: Check required fields
+      // VALIDATION PHASE 1: Check required fields (shared with Firestore rules)
       if (!formData.hba1c) validationErrors.push("HbA1c is required")
       if (!formData.fpg) validationErrors.push("FPG is required")
       if (!formData.ppg) validationErrors.push("PPG is required")
@@ -331,15 +331,26 @@ export const BaselineForm = memo(function BaselineForm({
         updatedAt: new Date().toISOString(),
       }
 
+      if (!isBaselineComplete(data)) {
+        toast({
+          variant: "destructive",
+          title: "Baseline incomplete",
+          description: "All required baseline fields must be filled before saving.",
+        })
+        return
+      }
+
       try {
         // Save to Firebase in a single batch (merge to preserve other fields)
         const patientDocRef = doc(db, "patients", patientId)
         const batch = writeBatch(db)
-        batch.set(patientDocRef, {
+        const baselinePayload = {
           baseline: data,
+          baselineComplete: true,
           baselineVisitDate: formData.baselineVisitDate,
-          updatedAt: new Date().toISOString()
-        }, { merge: true })
+          updatedAt: new Date().toISOString(),
+        }
+        batch.set(patientDocRef, baselinePayload, { merge: true })
 
         await batch.commit()
         lastSyncedBaselineAtRef.current = data.updatedAt

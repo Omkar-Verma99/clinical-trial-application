@@ -14,6 +14,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Edit2, Save, X, CheckCircle2, AlertCircle, Calendar } from "lucide-react"
+import { hasDoctorSessionCookies } from "@/lib/doctor-session"
 
 function ProfileField({ 
   label, 
@@ -91,7 +92,7 @@ export default function ProfilePage() {
   const [passwordSuccess, setPasswordSuccess] = useState("")
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !hasDoctorSessionCookies()) {
       router.push("/login")
     }
   }, [loading, user, router])

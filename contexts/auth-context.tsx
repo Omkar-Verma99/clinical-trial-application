@@ -92,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      setLoading(true)
       setUser(currentUser)
 
       if (currentUser && db) {
@@ -172,6 +173,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const normalizedEmail = email.trim().toLowerCase()
     const userCredential = await signInWithEmailAndPassword(auth, normalizedEmail, password)
+    // Set user immediately so protected routes don't redirect before onAuthStateChanged fires.
+    setUser(userCredential.user)
 
     // Prevent non-doctor accounts from entering doctor flow.
     if (db) {
@@ -332,12 +335,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // IMPORTANT: Immediately fetch and set the doctor data after signup
     // This ensures doctor context is available immediately after registration
+    setUser(user)
+    setDoctorSessionCookies()
+
     try {
       const doctorDoc = await getDoc(doc(db, "doctors", user.uid))
       if (doctorDoc.exists()) {
         const docData = doctorDoc.data()
         setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
-        void syncRoleClaim(user)
+        await syncRoleClaim(user)
         logInfo("Doctor data fetched immediately after signup", { userId: user.uid })
       } else {
         // Document exists but data is missing - set error for UI
@@ -360,7 +366,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     logInfo("Doctor account created successfully", { email, userId: user.uid })
-  }, [syncRoleClaim])
+  }, [setDoctorSessionCookies, syncRoleClaim])
 
   const logout = useCallback(async () => {
     if (!auth) {

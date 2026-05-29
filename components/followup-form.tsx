@@ -8,7 +8,7 @@ import { doc, arrayUnion, writeBatch, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Loader2 } from "lucide-react"
 import DOMPurify from "dompurify"
-import type { FollowUpData, StructuredAdverseEvent } from "@/lib/types"
+import type { FollowUpData, Patient, StructuredAdverseEvent } from "@/lib/types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DateField } from "@/components/ui/date-field"
@@ -24,6 +24,15 @@ import {
   DEFAULT_CLINICAL_VALIDATION_RANGES,
   normalizeClinicalValidationRanges,
 } from "@/lib/clinical-ranges"
+import {
+  BASELINE_INCOMPLETE_MESSAGE,
+  isBaselineCompleteForPatient,
+} from "@/lib/baseline-validation"
+import {
+  FOLLOWUP_INCOMPLETE_MESSAGE,
+  isFollowUpComplete,
+} from "@/lib/followup-validation"
+import { isPatientInfoCompleteForPatient } from "@/lib/patient-info-validation"
 import { hasAtLeastOneCheckbox, hasDuplicateVisitDate } from "@/lib/form-validation"
 import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import { todayIsoDate, validateFollowUpVisitDate } from "@/lib/study-dates"
@@ -614,13 +623,45 @@ export const FollowUpForm = memo(function FollowUpForm({
         updatedAt: new Date().toISOString(),
       } as FollowUpData & { doctorId: string; updatedAt: string }
 
+      const followUpComplete = isFollowUpComplete(data)
+      if (!followUpComplete) {
+        toast({
+          variant: "destructive",
+          title: "Follow-up incomplete",
+          description: FOLLOWUP_INCOMPLETE_MESSAGE,
+        })
+        return
+      }
+
       try {
         // FIX: Check if this follow-up already exists (for editing)
         // A follow-up is uniquely identified by: visitNumber + doctorId
         // Doctor can change visitDate, but visitNumber stays the same (Week 12, Week 24, etc.)
         const patientDocRef = doc(db, "patients", patientId)
         const patientSnap = await getDoc(patientDocRef)
-        
+
+        const patientDoc = patientSnap.exists() ? (patientSnap.data() as Patient) : null
+        const baselineOk = isBaselineCompleteForPatient(patientDoc)
+        const patientInfoOk = isPatientInfoCompleteForPatient(patientDoc)
+        if (!patientSnap.exists() || !baselineOk) {
+          toast({
+            variant: "destructive",
+            title: "Baseline incomplete",
+            description: BASELINE_INCOMPLETE_MESSAGE,
+          })
+          return
+        }
+
+        if (!patientInfoOk) {
+          toast({
+            variant: "destructive",
+            title: "Patient information incomplete",
+            description:
+              "Complete and save all required Patient Information fields before adding a follow-up.",
+          })
+          return
+        }
+
         let updateData: any = { updatedAt: new Date().toISOString() }
         
         if (patientSnap.exists()) {
@@ -663,6 +704,10 @@ export const FollowUpForm = memo(function FollowUpForm({
         batch.set(patientDocRef, updateData, { merge: true })
         await batch.commit()
       } catch (error) {
+        const firebaseCode =
+          typeof error === "object" && error && "code" in error
+            ? String((error as any).code)
+            : "unknown"
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.error("Error saving follow-up data:", error)
         }

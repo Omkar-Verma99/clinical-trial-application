@@ -28,6 +28,8 @@ import { useToast } from "@/hooks/use-toast"
 import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
 import { hasAtLeastOneCheckbox, normalizeOtherArray } from "@/lib/form-validation"
+import { isBaselineCompleteForPatient } from "@/lib/baseline-validation"
+import { isPatientInfoComplete } from "@/lib/patient-info-validation"
 import { validateBaselineVisitDate, BASELINE_VISIT_MIN, BASELINE_VISIT_MAX } from "@/lib/study-dates"
 import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
@@ -64,6 +66,7 @@ export function PatientFormPage({
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const submitLockRef = useRef(false)
+  const existingPatientRef = useRef<Patient | null>(null)
   const [loadingPatientData, setLoadingPatientData] = useState(false)
   const [ownerDoctorId, setOwnerDoctorId] = useState<string>("")
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
@@ -191,6 +194,7 @@ export function PatientFormPage({
   }
 
   const hydrateFormFromPatientData = (patientData: Patient) => {
+    existingPatientRef.current = patientData
     setFormData((prev) => ({
       ...prev,
       patientCode: patientData.patientCode || "",
@@ -776,6 +780,18 @@ export function PatientFormPage({
         previousTherapy: selectedDrugClasses,
         
         createdAt: isEditMode ? undefined : new Date().toISOString(),
+        patientInfoComplete: true,
+      }
+
+      if (!isPatientInfoComplete(patientData)) {
+        toast({
+          variant: "destructive",
+          title: "Patient info incomplete",
+          description: "All required Patient Info fields must be filled before saving.",
+        })
+        setLoading(false)
+        submitLockRef.current = false
+        return
       }
 
       try {
@@ -796,13 +812,14 @@ export function PatientFormPage({
             delete updatePayload.baseline
           }
 
-          // Keep baseline date/weight synced with Patient Info edits for consistency.
-          // Avoid read-before-write here so transient read permission states don't block valid updates.
-          updatePayload["baseline.baselineVisitDate"] = sanitizedFormData.baselineVisitDate
-          if (weightValue !== null) {
-            updatePayload["baseline.weight"] = weightValue
+          // Sync into nested baseline only after baseline assessment is complete (prevents stub baseline).
+          if (isBaselineCompleteForPatient(existingPatientRef.current)) {
+            updatePayload["baseline.baselineVisitDate"] = sanitizedFormData.baselineVisitDate
+            if (weightValue !== null) {
+              updatePayload["baseline.weight"] = weightValue
+            }
+            updatePayload["baseline.updatedAt"] = nowIso
           }
-          updatePayload["baseline.updatedAt"] = nowIso
 
           await updateDoc(patientDocRef, updatePayload)
 

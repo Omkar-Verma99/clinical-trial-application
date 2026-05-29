@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, Suspense } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,13 +11,14 @@ import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { getAuthErrorMessage } from "@/lib/auth-errors"
+import { auth } from "@/lib/firebase"
+import { hasDoctorSessionCookies } from "@/lib/doctor-session"
 
 function LoginFormContent() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
-  const router = useRouter()
   const searchParams = useSearchParams()
   const { toast } = useToast()
   
@@ -30,13 +31,24 @@ function LoginFormContent() {
     const deadline = Date.now() + timeoutMs
 
     while (Date.now() < deadline) {
-      if (typeof document !== "undefined") {
-        const cookie = document.cookie || ""
-        const hasDoctorAuth = cookie.includes("doctorAuth=true")
-        const hasDoctorRole = cookie.includes("appRole=doctor")
-        if (hasDoctorAuth && hasDoctorRole) {
-          return true
-        }
+      if (hasDoctorSessionCookies()) {
+        return true
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs))
+    }
+
+    return false
+  }
+
+  /** Wait until AuthProvider has applied Firebase user (avoids dashboard bounce to /login). */
+  const waitForAuthUser = async () => {
+    const timeoutMs = 8000
+    const intervalMs = 125
+    const deadline = Date.now() + timeoutMs
+
+    while (Date.now() < deadline) {
+      if (auth?.currentUser) {
+        return true
       }
       await new Promise((resolve) => setTimeout(resolve, intervalMs))
     }
@@ -67,7 +79,8 @@ function LoginFormContent() {
 
       // Give auth listeners/cookies a short window to settle before middleware-protected navigation.
       const hasSession = await waitForDoctorSession()
-      if (!hasSession) {
+      const hasUser = await waitForAuthUser()
+      if (!hasSession || !hasUser) {
         toast({
           variant: "destructive",
           title: "Session setup delayed",
@@ -75,7 +88,8 @@ function LoginFormContent() {
         })
         return
       }
-      router.push(redirectTo)
+      // Full navigation so middleware + AuthProvider load with cookies and Firebase user in sync.
+      window.location.assign(redirectTo)
     } catch (error: any) {
       const errorInfo = getAuthErrorMessage(error)
       toast({

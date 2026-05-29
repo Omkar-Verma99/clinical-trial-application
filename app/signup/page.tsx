@@ -3,7 +3,6 @@
 import type React from "react"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -31,8 +30,7 @@ export default function SignupPage() {
     confirmPassword: "",
   })
   const [loading, setLoading] = useState(false)
-  const { signup, loading: authLoading } = useAuth()
-  const router = useRouter()
+  const { signup, logout, loading: authLoading } = useAuth()
   const { toast } = useToast()
 
   const formatStudySiteCodeInput = (rawValue: string) => {
@@ -149,9 +147,10 @@ export default function SignupPage() {
       })
       toast({
         title: "Registration Successful! 🎉",
-        description: "Your account has been created. Welcome to Kollectcare!",
+        description: "Your account has been created. Please sign in to continue.",
       })
-      router.push("/dashboard")
+      // End signup session so first login runs a clean sign-in + cookie flow.
+      await logout()
     } catch (error: any) {
       const errorInfo = getAuthErrorMessage(error)
       toast({

@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ComparisonView } from '@/components/comparison-view';
 import { downloadPatientPDF, downloadCSV, downloadExcel } from '@/lib/pdf-export';
 import type { Patient, BaselineData, FollowUpData, Doctor } from '@/lib/types';
+import { isBaselineCompleteForPatient } from '@/lib/baseline-validation';
 import { BaselineForm } from '@/components/baseline-form';
 import { FollowUpForm } from '@/components/followup-form';
 import { PatientFormPage } from '@/components/patients/PatientForm';
@@ -113,13 +114,14 @@ export default function AdminPatientDetailPage() {
   }, [patientId]);
 
   const baseline = useMemo(() => patient?.baseline || null, [patient]);
+  const baselineComplete = useMemo(() => isBaselineCompleteForPatient(patient), [patient]);
   const followups = useMemo(() => patient?.followups || [], [patient]);
   const followupsWithDefault = useMemo(() => {
-    if (baseline && followups.length === 0) {
+    if (baselineComplete && followups.length === 0) {
       return [{} as FollowUpData];
     }
     return followups;
-  }, [baseline, followups]);
+  }, [baselineComplete, followups]);
   const sectionLocks = useMemo(() => patient?.sectionLocks || {}, [patient]);
   const canManageSectionLocks = hasPermission('manage_section_locks');
 
@@ -149,7 +151,7 @@ export default function AdminPatientDetailPage() {
   }, [patient, baseline, followups, doctor]);
 
   const openNewFollowup = () => {
-    if (!baseline) return;
+    if (!baselineComplete) return;
     setCreatingFollowUp(true);
     setActiveTab('new-followup');
   };
@@ -232,7 +234,7 @@ export default function AdminPatientDetailPage() {
                 {isSectionLocked(sectionLocks, followupSectionKey(followups.length)) ? ' 🔒' : ''}
               </TabsTrigger>
             )}
-            <TabsTrigger value="comparison" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all" disabled={!baseline || followups.length === 0}>
+            <TabsTrigger value="comparison" className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent px-6 py-3 text-sm font-medium transition-all" disabled={!baselineComplete || followups.length === 0}>
               Comparison
             </TabsTrigger>
           </TabsList>
@@ -258,7 +260,7 @@ export default function AdminPatientDetailPage() {
                   <div className="mt-6 space-y-2">
                     <div className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700">
                       <span className="text-xs font-medium text-muted-foreground">Baseline</span>
-                      <span className="text-base">{baseline ? "✅" : "⭕"}</span>
+                      <span className="text-base">{baselineComplete ? "✅" : "⭕"}</span>
                     </div>
                     <div className="flex items-center justify-between p-2.5 bg-gray-50 dark:bg-gray-800/50 rounded-lg border border-gray-100 dark:border-gray-700">
                       <span className="text-xs font-medium text-muted-foreground">Follow-ups</span>
@@ -268,7 +270,7 @@ export default function AdminPatientDetailPage() {
 
                   <div className="mt-6 space-y-2">
                     <Button variant="outline" className="w-full text-xs h-9" onClick={() => setActiveTab('patient-info')}>Patient Details</Button>
-                    <Button variant="secondary" className="w-full text-xs h-9" onClick={openNewFollowup} disabled={!baseline}>New Follow Up</Button>
+                    <Button variant="secondary" className="w-full text-xs h-9" onClick={openNewFollowup} disabled={!baselineComplete}>New Follow Up</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -501,7 +503,7 @@ export default function AdminPatientDetailPage() {
             </CardContent>
           </Card>
 
-          {baseline && followups.length > 0 ? (
+          {baselineComplete && baseline && followups.length > 0 ? (
             <ComparisonView
               baseline={baseline}
               followUp={followups[0]}

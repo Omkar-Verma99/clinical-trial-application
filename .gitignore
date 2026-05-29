@@ -25,4 +25,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# generated audit reports (may contain patient metadata)
+/scripts/output/
 .vercel

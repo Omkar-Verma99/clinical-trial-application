@@ -20,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
+import { hasDoctorSessionCookies } from "@/lib/doctor-session"
 
 interface PatientWithStatus extends Patient {
   id: string
@@ -295,10 +296,12 @@ export default function DashboardPage() {
     debouncedPaginationChange(Math.max(0, pagination.offset - pagination.limit))
   }, [pagination, debouncedPaginationChange])
 
-  // Redirect to login if the session expires before loading completes
+  // Redirect only after auth has finished initializing (avoids bounce during login navigation).
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login?from=/dashboard")
+      if (!hasDoctorSessionCookies()) {
+        router.push("/login?from=/dashboard")
+      }
     }
   }, [user, loading, router])
 

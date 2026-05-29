@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -9,13 +8,11 @@ import Link from "next/link"
 
 export default function HomePage() {
   const { user, loading } = useAuth()
-  const router = useRouter()
-
   useEffect(() => {
     if (!loading && user) {
-      router.push("/dashboard")
+      window.location.assign("/dashboard")
     }
-  }, [user, loading, router])
+  }, [user, loading])
 
   if (loading) {
     return (

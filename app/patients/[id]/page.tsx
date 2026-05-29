@@ -16,7 +16,9 @@ import { toast } from "@/hooks/use-toast"
 import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"
 import { PatientFormPage } from "@/components/patients/PatientForm"
+import { isBaselineCompleteForPatient } from "@/lib/baseline-validation"
 import { followupSectionKey, getDoctorLockMessage, isSectionLocked, SectionLockMap } from "@/lib/section-locks"
+import { hasDoctorSessionCookies } from "@/lib/doctor-session"
 
 // OPTIMIZED: Memoize form components to prevent unnecessary re-renders
 const MemoizedBaselineForm = memo(BaselineForm)
@@ -45,14 +47,15 @@ export default function PatientDetailPage({ params }: Props) {
 
   // OPTIMIZED: Derive baseline and followUps from the patient object
   const baseline = useMemo(() => patient?.baseline || null, [patient])
+  const baselineComplete = useMemo(() => isBaselineCompleteForPatient(patient), [patient])
   const followUps = useMemo(() => patient?.followups || [], [patient])
 
   const followUpsWithDefault = useMemo(() => {
-    if (baseline && followUps.length === 0) {
+    if (baselineComplete && followUps.length === 0) {
       return [{} as FollowUpData]
     }
     return followUps
-  }, [baseline, followUps])
+  }, [baselineComplete, followUps])
 
   const getPatientCodeInitials = (code?: string) => {
     const patientCodeText = String(code || "").trim().toUpperCase()
@@ -78,8 +81,8 @@ export default function PatientDetailPage({ params }: Props) {
 
   // Auth guard: redirect to login if not authenticated
   useEffect(() => {
-    if (!loading && !user) {
-      const currentPath = `/patients/${patientId || '[id]'}`
+    if (!loading && !user && !hasDoctorSessionCookies()) {
+      const currentPath = `/patients/${patientId || "[id]"}`
       router.push(`/login?from=${encodeURIComponent(currentPath)}`)
     }
   }, [user, loading, patientId, router])
@@ -93,13 +96,13 @@ export default function PatientDetailPage({ params }: Props) {
   }, [params])
 
   useEffect(() => {
-    if (!baseline && creatingFollowUp) {
+    if (!baselineComplete && creatingFollowUp) {
       setCreatingFollowUp(false)
       if (activeTab === "new-followup") {
         setActiveTab("overview")
       }
     }
-  }, [baseline, creatingFollowUp, activeTab])
+  }, [baselineComplete, creatingFollowUp, activeTab])
 
   useEffect(() => {
     if (!patient?.id || typeof window === "undefined") {
@@ -124,7 +127,7 @@ export default function PatientDetailPage({ params }: Props) {
       return
     }
 
-    if (!baseline) {
+    if (!baselineComplete) {
       toast({
         title: "Baseline required",
         description: "Please complete the baseline assessment before adding a follow-up.",
@@ -145,7 +148,7 @@ export default function PatientDetailPage({ params }: Props) {
 
     setCreatingFollowUp(true)
     setActiveTab("new-followup")
-  }, [baseline, creatingFollowUp, followUps.length, sectionLocks])
+  }, [baselineComplete, creatingFollowUp, followUps.length, sectionLocks])
 
   useEffect(() => {
     // CRITICAL: Check authentication BEFORE setting up any listeners
@@ -399,7 +402,7 @@ export default function PatientDetailPage({ params }: Props) {
               </TabsTrigger>
             )}
             
-            <TabsTrigger value="comparison" disabled={!baseline || followUps.length === 0} className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
+            <TabsTrigger value="comparison" disabled={!baselineComplete || followUps.length === 0} className="rounded-none text-xs sm:text-sm data-[state=active]:rounded-none">
               Comparison
             </TabsTrigger>
           </TabsList>
@@ -425,7 +428,7 @@ export default function PatientDetailPage({ params }: Props) {
                     <div className="mt-3 space-y-1.5">
                       <div className="flex items-center justify-between text-xs p-2 bg-blue-50 dark:bg-blue-950 rounded">
                         <span className="text-muted-foreground">Baseline</span>
-                        <span className="text-lg">{baseline ? "✅" : "⭕"}</span>
+                        <span className="text-lg">{baselineComplete ? "✅" : "⭕"}</span>
                       </div>
                       <div className="flex items-center justify-between text-xs p-2 bg-blue-50 dark:bg-blue-950 rounded">
                         <span className="text-muted-foreground">Follow-ups</span>
@@ -433,13 +436,13 @@ export default function PatientDetailPage({ params }: Props) {
                       </div>
                       <div className="flex items-center justify-between text-xs p-2 bg-blue-50 dark:bg-blue-950 rounded">
                         <span className="text-muted-foreground">Comparison</span>
-                        <span className="text-lg">{baseline && followUps.length > 0 ? "✅" : "⭕"}</span>
+                        <span className="text-lg">{baselineComplete && followUps.length > 0 ? "✅" : "⭕"}</span>
                       </div>
                     </div>
 
                     {/* Action Buttons */}
                     <div className="mt-4 space-y-1.5">
-                      {!baseline && (
+                      {!baselineComplete && (
                         <Button 
                           onClick={() => setActiveTab("baseline")}
                           className="w-full bg-blue-600 hover:bg-blue-700 text-xs h-8"
@@ -448,7 +451,7 @@ export default function PatientDetailPage({ params }: Props) {
                         </Button>
                       )}
                       
-                      {baseline && (
+                      {baselineComplete && (
                         <Button 
                           onClick={startNewFollowUp}
                           className="w-full bg-green-600 hover:bg-green-700 text-xs h-8"
@@ -458,7 +461,7 @@ export default function PatientDetailPage({ params }: Props) {
                         </Button>
                       )}
                       
-                      {baseline && followUps.length > 0 && (
+                      {baselineComplete && followUps.length > 0 && (
                         <>
                           <Button 
                             onClick={() => setActiveTab("visit-0")}
@@ -591,7 +594,7 @@ export default function PatientDetailPage({ params }: Props) {
           {/* Dynamic Visit Tabs */}
           {followUpsWithDefault.map((visit, visitIndex) => (
             <TabsContent key={`visit-content-${visitIndex}`} value={`visit-${visitIndex}`}>
-              {baseline ? (
+              {baselineComplete ? (
                 <div className="space-y-6">
                   {/* Form for this visit */}
                   <MemoizedFollowUpForm
@@ -635,7 +638,7 @@ export default function PatientDetailPage({ params }: Props) {
 
           {creatingFollowUp && (
             <TabsContent value="new-followup">
-              {baseline ? (
+              {baselineComplete ? (
                 <div className="space-y-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -681,7 +684,7 @@ export default function PatientDetailPage({ params }: Props) {
 
           {activeTab === "comparison" && (
             <TabsContent value="comparison">
-              {baseline && followUps.length > 0 ? (
+              {baselineComplete && followUps.length > 0 ? (
                 <div className="space-y-6">
                   {/* Export Buttons */}
                   <Card>

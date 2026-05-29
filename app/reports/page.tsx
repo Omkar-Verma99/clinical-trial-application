@@ -14,6 +14,7 @@ import {
   downloadQuestionAnswerDynamicCsv,
   downloadQuestionAnswerDynamicExcel,
 } from "@/lib/flat-export"
+import { hasDoctorSessionCookies } from "@/lib/doctor-session"
 
 export default function ReportsPage() {
   const { user, doctor, loading } = useAuth()
@@ -24,7 +25,7 @@ export default function ReportsPage() {
   const [followUpData, setFollowUpData] = useState<Map<string, any>>(new Map())
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !hasDoctorSessionCookies()) {
       router.push("/login")
     }
   }, [user, loading, router])

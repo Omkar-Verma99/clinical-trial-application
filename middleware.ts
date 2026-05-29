@@ -11,7 +11,7 @@ export function middleware(request: NextRequest) {
 
   // DOCTOR ROUTES PROTECTION
   // NOTE: /forgot-password is NOT protected - users can access it without login
-  const doctorProtectedRoutes = ['/dashboard', '/patients', '/reports'];
+  const doctorProtectedRoutes = ['/dashboard', '/patients', '/reports', '/profile'];
   
   if (doctorProtectedRoutes.some((route) => pathname.startsWith(route))) {
     if (!isDoctorSession) {
@@ -64,6 +64,7 @@ export const config = {
     '/dashboard/:path*',
     '/patients/:path*',
     '/reports/:path*',
+    '/profile',
     '/login',
     '/signup',
     '/admin/:path*',
