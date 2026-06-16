@@ -438,7 +438,9 @@ export const BaselineForm = memo(function BaselineForm({
                 ariaLabel="Baseline visit date at week zero required"
                 onChangeAction={() => {}}
               />
-              <p className="text-xs text-muted-foreground">Managed from Patient Info tab.</p>
+              <p className="text-xs text-muted-foreground">
+                Read-only here. Set or change the baseline visit date on the Patient Info tab (format dd/mm/yyyy, e.g. 11/04/2026).
+              </p>
             </div>
           </div>
 

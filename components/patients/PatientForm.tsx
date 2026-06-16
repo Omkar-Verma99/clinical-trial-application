@@ -30,7 +30,13 @@ import { logError } from "@/lib/error-tracking"
 import { hasAtLeastOneCheckbox, normalizeOtherArray } from "@/lib/form-validation"
 import { isBaselineCompleteForPatient } from "@/lib/baseline-validation"
 import { isPatientInfoComplete } from "@/lib/patient-info-validation"
-import { validateBaselineVisitDate, BASELINE_VISIT_MIN, BASELINE_VISIT_MAX } from "@/lib/study-dates"
+import {
+  validateBaselineVisitDate,
+  BASELINE_VISIT_MIN,
+  BASELINE_VISIT_MAX,
+  normalizeStudyDate,
+  resolvePatientBaselineVisitDate,
+} from "@/lib/study-dates"
 import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
 import Link from "next/link"
@@ -67,6 +73,7 @@ export function PatientFormPage({
   const [loading, setLoading] = useState(false)
   const submitLockRef = useRef(false)
   const existingPatientRef = useRef<Patient | null>(null)
+  const originalBaselineVisitDateRef = useRef("")
   const [loadingPatientData, setLoadingPatientData] = useState(false)
   const [ownerDoctorId, setOwnerDoctorId] = useState<string>("")
   const [bmiMismatchWarning, setBmiMismatchWarning] = useState(false)
@@ -195,12 +202,16 @@ export function PatientFormPage({
 
   const hydrateFormFromPatientData = (patientData: Patient) => {
     existingPatientRef.current = patientData
+    const resolvedBaselineVisitDate = resolvePatientBaselineVisitDate(
+      patientData as unknown as Record<string, unknown>
+    )
+    originalBaselineVisitDateRef.current = resolvedBaselineVisitDate
     setFormData((prev) => ({
       ...prev,
       patientCode: patientData.patientCode || "",
       studySiteCode: patientData.studySiteCode || doctor?.studySiteCode || "",
       investigatorName: patientData.investigatorName || doctor?.name || "",
-      baselineVisitDate: patientData.baselineVisitDate || prev.baselineVisitDate,
+      baselineVisitDate: resolvedBaselineVisitDate || prev.baselineVisitDate,
       age: patientData.age?.toString() || "",
       gender: patientData.gender || "",
       height: patientData.height?.toString() || "",
@@ -252,7 +263,7 @@ export function PatientFormPage({
     }
 
     const baselineData = patientData.baseline as { treatmentInitiationDate?: string } | undefined
-    setTreatmentInitiationDate(baselineData?.treatmentInitiationDate || "")
+    setTreatmentInitiationDate(normalizeStudyDate(baselineData?.treatmentInitiationDate))
 
     setPreviousTreatmentType(patientData.previousTreatmentType || "")
 
@@ -447,28 +458,51 @@ export function PatientFormPage({
       return
     }
 
-    let latestTreatmentDate = treatmentInitiationDate
-    if (isEditMode && editPatientId && db) {
-      try {
-        const patientSnap = await getDoc(doc(db, "patients", editPatientId))
-        if (patientSnap.exists()) {
-          latestTreatmentDate = String((patientSnap.data() as { baseline?: { treatmentInitiationDate?: string } })?.baseline?.treatmentInitiationDate || "")
-        }
-      } catch {
-        // Fall back to cached value from initial load
-      }
-    }
-
-    const baselineDateError = validateBaselineVisitDate(formData.baselineVisitDate, latestTreatmentDate)
-    if (baselineDateError) {
+    const normalizedBaselineVisitDate = normalizeStudyDate(formData.baselineVisitDate)
+    if (!normalizedBaselineVisitDate) {
       toast({
         variant: "destructive",
         title: "Invalid Baseline Visit Date",
-        description: baselineDateError,
+        description: "Baseline visit date is required (use dd/mm/yyyy).",
       })
       setLoading(false)
       submitLockRef.current = false
       return
+    }
+
+    const baselineVisitDateChanged =
+      !isEditMode || normalizedBaselineVisitDate !== originalBaselineVisitDateRef.current
+
+    if (baselineVisitDateChanged) {
+      let latestTreatmentDate = normalizeStudyDate(treatmentInitiationDate)
+      if (isEditMode && editPatientId && db) {
+        try {
+          const patientSnap = await getDoc(doc(db, "patients", editPatientId))
+          if (patientSnap.exists()) {
+            latestTreatmentDate = normalizeStudyDate(
+              (patientSnap.data() as { baseline?: { treatmentInitiationDate?: string } })?.baseline
+                ?.treatmentInitiationDate
+            )
+          }
+        } catch {
+          // Fall back to cached value from initial load
+        }
+      }
+
+      const baselineDateError = validateBaselineVisitDate(
+        normalizedBaselineVisitDate,
+        latestTreatmentDate || undefined
+      )
+      if (baselineDateError) {
+        toast({
+          variant: "destructive",
+          title: "Invalid Baseline Visit Date",
+          description: baselineDateError,
+        })
+        setLoading(false)
+        submitLockRef.current = false
+        return
+      }
     }
 
     if (!hasAtLeastOneCheckbox(diabetesComplications)) {
@@ -723,7 +757,7 @@ export function PatientFormPage({
         patientCode: normalizedPatientCode,
         studySiteCode: sanitizedFormData.studySiteCode,
         investigatorName: sanitizedFormData.investigatorName,
-        baselineVisitDate: sanitizedFormData.baselineVisitDate,
+        baselineVisitDate: normalizedBaselineVisitDate,
         age: ageValue,
         gender: sanitizedFormData.gender,
         height: heightValue,
@@ -814,7 +848,7 @@ export function PatientFormPage({
 
           // Sync into nested baseline only after baseline assessment is complete (prevents stub baseline).
           if (isBaselineCompleteForPatient(existingPatientRef.current)) {
-            updatePayload["baseline.baselineVisitDate"] = sanitizedFormData.baselineVisitDate
+            updatePayload["baseline.baselineVisitDate"] = normalizedBaselineVisitDate
             if (weightValue !== null) {
               updatePayload["baseline.weight"] = weightValue
             }
@@ -822,6 +856,7 @@ export function PatientFormPage({
           }
 
           await updateDoc(patientDocRef, updatePayload)
+          originalBaselineVisitDateRef.current = normalizedBaselineVisitDate
 
           toast({
             title: "Patient updated successfully",
@@ -981,6 +1016,9 @@ export function PatientFormPage({
                       max={BASELINE_VISIT_MAX}
                       required
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Use dd/mm/yyyy (e.g. 11/04/2026). Allowed range: 26 Feb 2026 to 21 Apr 2026.
+                    </p>
                   </div>
                 </div>
 

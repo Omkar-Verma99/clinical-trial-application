@@ -102,7 +102,7 @@ function parseDisplayDate(display: string): Date | undefined {
   return d
 }
 
-function toIsoIfValid(display: string, min: string, max: string): string {
+function parseDisplayToIso(display: string): string {
   if (!/^\d{2}\/\d{2}\/\d{4}$/.test(display)) return ''
   const [dayStr, monthStr, yearStr] = display.split('/')
   const day = Number.parseInt(dayStr, 10)
@@ -116,10 +116,29 @@ function toIsoIfValid(display: string, min: string, max: string): string {
   const date = new Date(year, month - 1, day)
   if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return ''
 
-  const iso = `${year}-${pad2(month)}-${pad2(day)}`
-  if (iso < min || iso > max) return ''
+  return `${year}-${pad2(month)}-${pad2(day)}`
+}
 
+function toIsoIfValid(display: string, min: string, max: string): string {
+  const iso = parseDisplayToIso(display)
+  if (!iso) return ''
+  if (iso < min || iso > max) return ''
   return iso
+}
+
+function formatIsoForHint(iso: string): string {
+  const parsed = parseIsoDate(iso)
+  if (!parsed) return iso
+  return parsed.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+function getDateRangeError(display: string, min: string, max: string): string | null {
+  const iso = parseDisplayToIso(display)
+  if (!iso) return 'Enter a valid date as dd/mm/yyyy'
+  if (iso < min || iso > max) {
+    return `Date must be between ${formatIsoForHint(min)} and ${formatIsoForHint(max)}`
+  }
+  return null
 }
 
 export function DateField({
@@ -137,11 +156,21 @@ export function DateField({
   ariaLabel,
 }: DateFieldProps) {
   const [displayValue, setDisplayValue] = React.useState<string>(formatIsoToDisplay(value))
+  const [rangeError, setRangeError] = React.useState<string | null>(null)
   const [open, setOpen] = React.useState(false)
   const [calendarMonth, setCalendarMonth] = React.useState<Date | undefined>(parseIsoDate(value))
 
+  const isDateDisabled = React.useCallback(
+    (date: Date) => {
+      const iso = formatDateToIso(date)
+      return iso < min || iso > max
+    },
+    [min, max],
+  )
+
   React.useEffect(() => {
     setDisplayValue(formatIsoToDisplay(value))
+    setRangeError(null)
   }, [value])
 
   const selectedDate = React.useMemo(() => parseDisplayDate(displayValue) ?? parseIsoDate(value), [displayValue, value])
@@ -161,40 +190,57 @@ export function DateField({
       : sanitizeFreeformInput(raw)
     setDisplayValue(next)
 
+    if (!next) {
+      setRangeError(null)
+      onChangeAction('')
+      setCalendarMonth(undefined)
+      return
+    }
+
+    if (next.length < 10) {
+      setRangeError(null)
+      return
+    }
+
     const iso = toIsoIfValid(next, min, max)
     if (iso) {
+      setRangeError(null)
       onChangeAction(iso)
       setCalendarMonth(parseIsoDate(iso))
       return
     }
 
-    // Do not clear parent value during partial edits; this prevents full input reset on backspace.
-    if (!next) {
-      onChangeAction('')
-      setCalendarMonth(undefined)
-    }
+    setRangeError(getDateRangeError(next, min, max))
   }
 
   const handleBlur = () => {
     if (!displayValue) {
+      setRangeError(null)
       onChangeAction('')
       return
     }
 
     if (displayValue.length < 10) {
+      setRangeError('Enter a valid date as dd/mm/yyyy')
       return
     }
 
     const iso = toIsoIfValid(displayValue, min, max)
     if (iso) {
+      setRangeError(null)
       onChangeAction(iso)
       setDisplayValue(formatIsoToDisplay(iso))
       return
     }
 
-    // Reset only after full date is entered and invalid.
-    setDisplayValue('')
-    onChangeAction('')
+    const error = getDateRangeError(displayValue, min, max)
+    setRangeError(error)
+    if (value) {
+      setDisplayValue(formatIsoToDisplay(value))
+    } else {
+      setDisplayValue('')
+      onChangeAction('')
+    }
   }
 
   const handleCalendarSelect = (date: Date | undefined) => {
@@ -207,6 +253,7 @@ export function DateField({
       return
     }
 
+    setRangeError(null)
     onChangeAction(iso)
     setDisplayValue(formatIsoToDisplay(iso))
     setCalendarMonth(date)
@@ -230,8 +277,11 @@ export function DateField({
         readOnly={readOnly}
         required={required}
         aria-label={ariaLabel}
-        className="pr-10"
+        className={cn('pr-10', rangeError && 'border-destructive')}
+        aria-invalid={rangeError ? true : undefined}
       />
+
+      {rangeError && <p className="mt-1 text-xs text-destructive">{rangeError}</p>}
 
       {!readOnly && !disabled && (
         <Popover open={open} onOpenChange={setOpen}>
@@ -254,6 +304,9 @@ export function DateField({
               onMonthChange={setCalendarMonth}
               onSelect={handleCalendarSelect}
               captionLayout="dropdown"
+              startMonth={parseIsoDate(min)}
+              endMonth={parseIsoDate(max)}
+              disabled={isDateDisabled}
             />
           </PopoverContent>
         </Popover>
