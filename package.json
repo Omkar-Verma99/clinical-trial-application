@@ -6,7 +6,8 @@
     "build": "next build",
     "dev": "node suppress-sourcemap-warnings.js && next dev",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "e2e:full": "node scripts/full-doctor-e2e.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

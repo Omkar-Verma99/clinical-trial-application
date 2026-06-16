@@ -49,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [doctor, setDoctor] = useState<Doctor | null>(null)
   const [loading, setLoading] = useState(true)
   const [doctorDataError, setDoctorDataError] = useState<string | null>(null)
+  const AUTH_INIT_TIMEOUT_MS = 6000
+  const DOCTOR_FETCH_TIMEOUT_MS = 7000
 
   const setDoctorSessionCookies = useCallback(() => {
     if (typeof document === "undefined") return
@@ -91,13 +93,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return
     }
 
+    const initTimeout = window.setTimeout(() => {
+      setLoading(false)
+    }, AUTH_INIT_TIMEOUT_MS)
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      window.clearTimeout(initTimeout)
       setLoading(true)
       setUser(currentUser)
 
       if (currentUser && db) {
         try {
-          const doctorDoc = await getDoc(doc(db, "doctors", currentUser.uid))
+          const doctorDoc = await Promise.race([
+            getDoc(doc(db, "doctors", currentUser.uid)),
+            new Promise<never>((_, reject) =>
+              window.setTimeout(() => reject(new Error("Doctor profile fetch timeout")), DOCTOR_FETCH_TIMEOUT_MS)
+            ),
+          ])
           if (doctorDoc.exists()) {
             const docData = doctorDoc.data()
             setDoctor({ id: doctorDoc.id, ...docData } as Doctor)
@@ -127,9 +139,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })
 
     return () => {
+      window.clearTimeout(initTimeout)
       unsubscribe()
     }
-  }, [clearDoctorSessionCookies, setDoctorSessionCookies, syncRoleClaim])
+  }, [clearDoctorSessionCookies, setDoctorSessionCookies, syncRoleClaim, AUTH_INIT_TIMEOUT_MS, DOCTOR_FETCH_TIMEOUT_MS])
 
   const retryDoctorDataFetch = useCallback(async () => {
     if (!user || !db) {
