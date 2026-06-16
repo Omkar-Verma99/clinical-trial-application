@@ -1,7 +1,7 @@
 /** Study enrollment date windows for KC MeSempa RWE trial */
 
 export const BASELINE_VISIT_MIN = "2026-02-26"
-export const BASELINE_VISIT_MAX = "2026-04-10"
+export const BASELINE_VISIT_MAX = "2026-04-21"
 export const TREATMENT_INITIATION_MIN = "2026-02-10"
 
 export function todayIsoDate(): string {
@@ -37,7 +37,7 @@ export function validateBaselineVisitDate(
   if (!value) return "Baseline visit date is required"
   if (!isNotFutureDate(value)) return "Baseline visit date cannot be in the future"
   if (!isDateInRange(value, BASELINE_VISIT_MIN, BASELINE_VISIT_MAX)) {
-    return `Baseline visit date must be between 26 Feb 2026 and 10 Apr 2026`
+    return `Baseline visit date must be between 26 Feb 2026 and 21 Apr 2026`
   }
   if (treatmentInitiationDate && compareIsoDates(value, treatmentInitiationDate) < 0) {
     return "Baseline visit date cannot be before the treatment initiation date"
