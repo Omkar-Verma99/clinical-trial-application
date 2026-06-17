@@ -42,6 +42,9 @@ import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
 import { reportFormFieldIssues, type FormFieldIssue } from "@/lib/form-field-navigation"
 import { usePersistentFieldHighlights } from "@/hooks/use-persistent-field-highlights"
+import {
+  isPatientInfoFieldValidInSavedRecord,
+} from "@/lib/readiness-field-highlights"
 import Link from "next/link"
 import type { Patient } from "@/lib/types"
 
@@ -57,6 +60,7 @@ interface PatientFormPageProps {
   canOverrideLock?: boolean
   focusFieldId?: string
   highlightFieldIds?: string[]
+  savedInvalidFieldIds?: string[]
   onFocusFieldHandled?: () => void
   onSaved?: () => void
 }
@@ -70,6 +74,7 @@ export function PatientFormPage({
   canOverrideLock = false,
   focusFieldId,
   highlightFieldIds,
+  savedInvalidFieldIds,
   onFocusFieldHandled,
   onSaved,
 }: PatientFormPageProps = {}) {
@@ -211,13 +216,20 @@ export function PatientFormPage({
   )
 
   const externalHighlightIds = useMemo(() => {
-    if (highlightFieldIds?.length) return highlightFieldIds
+    const merged = [
+      ...new Set([...(highlightFieldIds ?? []), ...(savedInvalidFieldIds ?? [])]),
+    ]
+    if (merged.length) return merged
     if (focusFieldId) return [focusFieldId]
     return undefined
-  }, [focusFieldId, highlightFieldIds])
+  }, [focusFieldId, highlightFieldIds, savedInvalidFieldIds])
 
   const isPatientInfoFieldValid = useCallback(
     (fieldId: string): boolean => {
+      if (savedInvalidFieldIds?.includes(fieldId)) {
+        return isPatientInfoFieldValidInSavedRecord(fieldId, existingPatientRef.current)
+      }
+
       switch (fieldId) {
         case "patientCode":
           return !!formData.patientCode.trim() && !patientCodeValidationError
@@ -284,6 +296,7 @@ export function PatientFormPage({
       patientCodeValidationError,
       previousDrugClasses,
       previousTreatmentType,
+      savedInvalidFieldIds,
     ]
   )
 
@@ -354,17 +367,10 @@ export function PatientFormPage({
       const otherText = Array.isArray(otherRaw)
         ? otherRaw.filter((v) => v && v !== "NA").join(", ")
         : (otherRaw as string) || ""
-      const hasAnyCondition =
-        patientData.comorbidities.hypertension ||
-        patientData.comorbidities.dyslipidemia ||
-        patientData.comorbidities.obesity ||
-        patientData.comorbidities.ascvd ||
-        patientData.comorbidities.heartFailure ||
-        patientData.comorbidities.chronicKidneyDisease
       setComorbidities((prev) => ({
         ...prev,
         ...patientData.comorbidities,
-        none: (patientData.comorbidities as { none?: boolean }).none ?? (!hasAnyCondition && !otherText),
+        none: (patientData.comorbidities as { none?: boolean }).none === true,
         other: otherText,
         ckdEgfrCategory: patientData.comorbidities?.ckdEgfrCategory || "",
       }))
@@ -380,14 +386,10 @@ export function PatientFormPage({
       const drugOtherText = Array.isArray(drugOtherRaw)
         ? drugOtherRaw.filter((v) => v && v !== "NA").join(", ")
         : (drugOtherRaw as string) || ""
-      const hasAnyDrugClass = Object.entries(patientData.previousDrugClasses).some(
-        ([key, value]) => key !== "other" && key !== "none" && value === true
-      )
       setPreviousDrugClasses((prev) => ({
         ...prev,
         ...patientData.previousDrugClasses,
-        none:
-          (patientData.previousDrugClasses as { none?: boolean }).none ?? (!hasAnyDrugClass && !drugOtherText),
+        none: (patientData.previousDrugClasses as { none?: boolean }).none === true,
         other: drugOtherText,
       }))
     }
@@ -937,6 +939,11 @@ export function PatientFormPage({
 
           await updateDoc(patientDocRef, updatePayload)
           originalBaselineVisitDateRef.current = normalizedBaselineVisitDate
+          existingPatientRef.current = {
+            ...(existingPatientRef.current ?? {}),
+            ...patientData,
+            id: editPatientId,
+          } as Patient
           clearAllHighlights()
 
           toast({

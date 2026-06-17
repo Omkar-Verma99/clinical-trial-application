@@ -27,10 +27,20 @@ export function usePersistentFieldHighlights({
 
   useEffect(() => {
     const externalKey = (externalFieldIds ?? []).join("|")
-    if (!externalKey || externalKey === mergedExternalRef.current) return
+    if (externalKey === mergedExternalRef.current) return
 
+    const previousExternalIds = mergedExternalRef.current
+      ? mergedExternalRef.current.split("|").filter(Boolean)
+      : []
     mergedExternalRef.current = externalKey
-    setInvalidFieldIds((prev) => [...new Set([...(externalFieldIds ?? []), ...prev])])
+    const nextExternalIds = externalFieldIds ?? []
+
+    setInvalidFieldIds((prev) => {
+      const withoutPreviousExternal = prev.filter((id) => !previousExternalIds.includes(id))
+      return nextExternalIds.length > 0
+        ? [...new Set([...nextExternalIds, ...withoutPreviousExternal])]
+        : withoutPreviousExternal
+    })
     shouldScrollRef.current = true
 
     const timer = window.setTimeout(() => {
@@ -48,12 +58,19 @@ export function usePersistentFieldHighlights({
       return
     }
 
-    clearFormFieldHighlights()
-    highlightFormFields(activeFieldIds, {
-      scrollToFirst: shouldScrollRef.current,
-      persistent: true,
-    })
-    shouldScrollRef.current = false
+    const applyHighlights = () => {
+      clearFormFieldHighlights()
+      highlightFormFields(activeFieldIds, {
+        scrollToFirst: shouldScrollRef.current,
+        persistent: true,
+      })
+      shouldScrollRef.current = false
+    }
+
+    applyHighlights()
+    const retryTimer = window.setTimeout(applyHighlights, 150)
+
+    return () => window.clearTimeout(retryTimer)
   }, [activeFieldIds])
 
   useEffect(() => {

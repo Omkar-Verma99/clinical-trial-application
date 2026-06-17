@@ -13,6 +13,10 @@ import { ComparisonView } from '@/components/comparison-view';
 import { downloadPatientPDF, downloadCSV, downloadExcel } from '@/lib/pdf-export';
 import type { Patient, BaselineData, FollowUpData, Doctor } from '@/lib/types';
 import { isBaselineReadyStrict, isReadyForFollowUp } from '@/lib/patient-readiness';
+import {
+  getBaselineReadinessFieldIds,
+  getPatientInfoReadinessFieldIds,
+} from '@/lib/readiness-field-highlights';
 import { shouldUpdatePatientState } from '@/lib/patient-snapshot';
 import { followupSectionKey, isSectionLocked, SectionLockMap } from '@/lib/section-locks';
 import { BaselineForm } from '@/components/baseline-form';
@@ -124,13 +128,20 @@ export default function AdminPatientDetailPage() {
   const baseline = useMemo(() => patient?.baseline || null, [patient]);
   const baselineComplete = useMemo(() => isBaselineReadyStrict(patient), [patient]);
   const readyForFollowUp = useMemo(() => isReadyForFollowUp(patient), [patient]);
+  const patientInfoReadinessFieldIds = useMemo(
+    () => getPatientInfoReadinessFieldIds(patient),
+    [patient]
+  );
+  const baselineReadinessFieldIds = useMemo(
+    () => getBaselineReadinessFieldIds(patient),
+    [patient]
+  );
   const followups = useMemo(() => patient?.followups || [], [patient]);
   const followupsWithDefault = useMemo(() => {
-    if (baselineComplete && followups.length === 0) {
-      return [{} as FollowUpData];
-    }
+    if (!patient) return [];
+    if (followups.length === 0) return [{} as FollowUpData];
     return followups;
-  }, [baselineComplete, followups]);
+  }, [patient, followups]);
   const sectionLocks = useMemo(() => patient?.sectionLocks || {}, [patient]);
   const canManageSectionLocks = hasPermission('manage_section_locks');
 
@@ -174,26 +185,29 @@ export default function AdminPatientDetailPage() {
   }, [patient, baseline, followups, doctor]);
 
   const openNewFollowup = () => {
-    if (!baselineComplete || !readyForFollowUp) {
-      if (!baselineComplete) {
-        setActiveTab('baseline');
-      } else {
-        setActiveTab(followups.length > 0 ? `visit-${followups.length - 1}` : 'patient-info');
-      }
+    if (followups.length === 0) {
+      setActiveTab('visit-0');
       return;
     }
-    setCreatingFollowUp(true);
-    setActiveTab('new-followup');
+    if (baselineComplete && readyForFollowUp) {
+      setCreatingFollowUp(true);
+      setActiveTab('new-followup');
+      return;
+    }
+    setActiveTab(`visit-${followups.length - 1}`);
   };
 
   useEffect(() => {
+    if (readyForFollowUp && baselineComplete && creatingFollowUp) {
+      return;
+    }
     if ((!baselineComplete || !readyForFollowUp) && creatingFollowUp) {
       setCreatingFollowUp(false);
       if (activeTab === 'new-followup') {
-        setActiveTab('overview');
+        setActiveTab(followups.length > 0 ? `visit-${followups.length - 1}` : 'visit-0');
       }
     }
-  }, [baselineComplete, readyForFollowUp, creatingFollowUp, activeTab]);
+  }, [baselineComplete, readyForFollowUp, creatingFollowUp, activeTab, followups.length]);
 
   const toggleSectionLock = useCallback(
     async (section: string, nextLocked: boolean) => {
@@ -310,7 +324,14 @@ export default function AdminPatientDetailPage() {
 
                   <div className="mt-6 space-y-2">
                     <Button variant="outline" className="w-full text-xs h-9" onClick={() => setActiveTab('patient-info')}>Patient Details</Button>
-                    <Button variant="secondary" className="w-full text-xs h-9" onClick={openNewFollowup} disabled={!baselineComplete || !readyForFollowUp}>New Follow Up</Button>
+                    <Button variant="secondary" className="w-full text-xs h-9" onClick={openNewFollowup}>
+                      {readyForFollowUp && baselineComplete ? 'New Follow Up' : 'Open Follow Up 1'}
+                    </Button>
+                    {!readyForFollowUp && (
+                      <p className="text-[10px] text-amber-700 dark:text-amber-400 text-center px-1">
+                        Complete items flagged on Follow Up 1 before saving.
+                      </p>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -455,6 +476,9 @@ export default function AdminPatientDetailPage() {
             allowAnyDoctorEdit
             focusFieldId={activeTab === 'patient-info' ? focusFieldId : undefined}
             highlightFieldIds={activeTab === 'patient-info' ? highlightFieldIds : undefined}
+            savedInvalidFieldIds={
+              activeTab === 'patient-info' ? patientInfoReadinessFieldIds : undefined
+            }
             onFocusFieldHandled={handleFocusFieldHandled}
             isSectionLocked={isSectionLocked(sectionLocks, 'patient_info')}
             canOverrideLock
@@ -487,6 +511,7 @@ export default function AdminPatientDetailPage() {
             doctorIdOverride={patient.doctorId}
             focusFieldId={activeTab === 'baseline' ? focusFieldId : undefined}
             highlightFieldIds={activeTab === 'baseline' ? highlightFieldIds : undefined}
+            savedInvalidFieldIds={activeTab === 'baseline' ? baselineReadinessFieldIds : undefined}
             onFocusFieldHandled={handleFocusFieldHandled}
             isSectionLocked={isSectionLocked(sectionLocks, 'baseline')}
             canOverrideLock

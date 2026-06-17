@@ -14,6 +14,33 @@ function mapHasAnyTrue(map: Record<string, boolean> | undefined | null): boolean
   return hasAtLeastOneCheckbox(map)
 }
 
+const COMORBIDITY_CONDITION_KEYS = [
+  "hypertension",
+  "dyslipidemia",
+  "obesity",
+  "ascvd",
+  "heartFailure",
+  "chronicKidneyDisease",
+] as const
+
+function comorbidityOtherHasText(other: unknown): boolean {
+  if (Array.isArray(other)) {
+    return other.some((v) => typeof v === "string" && v.trim().length > 0 && v !== "NA")
+  }
+  return typeof other === "string" && other.trim().length > 0 && other !== "NA"
+}
+
+/** Requires explicit none, a selected condition, or other text — empty/legacy maps are missing. */
+export function comorbiditySelectionOk(comorbidities: Record<string, unknown> | undefined): boolean {
+  if (!comorbidities) return false
+  if (comorbidities.none === true) return true
+
+  const hasSelectedCondition = COMORBIDITY_CONDITION_KEYS.some((key) => comorbidities[key] === true)
+  if (hasSelectedCondition) return true
+
+  return comorbidityOtherHasText(comorbidities.other)
+}
+
 /** True when all mandatory patient-info (sections A–E) fields are present. */
 export function isPatientInfoComplete(patient: unknown): boolean {
   if (!patient || typeof patient !== "object") return false
@@ -37,12 +64,7 @@ export function isPatientInfoComplete(patient: unknown): boolean {
   if (!mapHasAnyTrue(complications)) return false
 
   const comorbidities = data.comorbidities as Record<string, unknown> | undefined
-  const hasComorbidity =
-    comorbidities &&
-    Object.entries(comorbidities).some(
-      ([key, value]) => key !== "ckdEgfrCategory" && value === true
-    )
-  if (!hasComorbidity) return false
+  if (!comorbiditySelectionOk(comorbidities)) return false
   if (
     comorbidities?.chronicKidneyDisease === true &&
     !isNonEmptyString(comorbidities.ckdEgfrCategory)
@@ -115,12 +137,7 @@ export function getPatientInfoValidationErrors(patient: unknown): string[] {
   }
 
   const comorbidities = data.comorbidities as Record<string, unknown> | undefined
-  const hasComorbidity =
-    comorbidities &&
-    Object.entries(comorbidities).some(
-      ([key, value]) => key !== "ckdEgfrCategory" && value === true
-    )
-  if (!hasComorbidity) {
+  if (!comorbiditySelectionOk(comorbidities)) {
     errors.push("At least one comorbidity (or None) is required")
   }
   if (

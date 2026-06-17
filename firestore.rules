@@ -138,7 +138,11 @@ service cloud.firestore {
     }
 
     function comorbiditiesOk(comorbidities) {
-      return checkboxGroupHasSelection(comorbidities) &&
+      return comorbidities != null &&
+        (
+          comorbidities.none == true ||
+          checkboxGroupHasSelection(comorbidities)
+        ) &&
         (
           comorbidities.chronicKidneyDisease != true ||
           (

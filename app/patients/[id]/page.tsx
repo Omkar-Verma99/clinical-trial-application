@@ -17,6 +17,10 @@ import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"
 import { PatientFormPage } from "@/components/patients/PatientForm"
 import { isBaselineReadyStrict, isReadyForFollowUp } from "@/lib/patient-readiness"
+import {
+  getBaselineReadinessFieldIds,
+  getPatientInfoReadinessFieldIds,
+} from "@/lib/readiness-field-highlights"
 import { shouldUpdatePatientState } from "@/lib/patient-snapshot"
 import { followupSectionKey, getDoctorLockMessage, isSectionLocked, SectionLockMap } from "@/lib/section-locks"
 import { hasDoctorSessionCookies } from "@/lib/doctor-session"
@@ -51,14 +55,21 @@ export default function PatientDetailPage({ params }: Props) {
   const baseline = useMemo(() => patient?.baseline || null, [patient])
   const baselineComplete = useMemo(() => isBaselineReadyStrict(patient), [patient])
   const readyForFollowUp = useMemo(() => isReadyForFollowUp(patient), [patient])
+  const patientInfoReadinessFieldIds = useMemo(
+    () => getPatientInfoReadinessFieldIds(patient),
+    [patient]
+  )
+  const baselineReadinessFieldIds = useMemo(
+    () => getBaselineReadinessFieldIds(patient),
+    [patient]
+  )
   const followUps = useMemo(() => patient?.followups || [], [patient])
 
   const followUpsWithDefault = useMemo(() => {
-    if (baselineComplete && followUps.length === 0) {
-      return [{} as FollowUpData]
-    }
+    if (!patient) return []
+    if (followUps.length === 0) return [{} as FollowUpData]
     return followUps
-  }, [baselineComplete, followUps])
+  }, [patient, followUps])
 
   const getPatientCodeInitials = (code?: string) => {
     const patientCodeText = String(code || "").trim().toUpperCase()
@@ -117,13 +128,16 @@ export default function PatientDetailPage({ params }: Props) {
   }, [params])
 
   useEffect(() => {
-    if (!baselineComplete && creatingFollowUp) {
+    if (readyForFollowUp && baselineComplete && creatingFollowUp) {
+      return
+    }
+    if ((!baselineComplete || !readyForFollowUp) && creatingFollowUp) {
       setCreatingFollowUp(false)
       if (activeTab === "new-followup") {
-        setActiveTab("overview")
+        setActiveTab(followUps.length > 0 ? `visit-${followUps.length - 1}` : "visit-0")
       }
     }
-  }, [baselineComplete, creatingFollowUp, activeTab])
+  }, [baselineComplete, readyForFollowUp, creatingFollowUp, activeTab, followUps.length])
 
   useEffect(() => {
     if (!patient?.id || typeof window === "undefined") {
@@ -148,19 +162,13 @@ export default function PatientDetailPage({ params }: Props) {
       return
     }
 
+    if (followUps.length === 0) {
+      setActiveTab("visit-0")
+      return
+    }
+
     if (!baselineComplete || !readyForFollowUp) {
-      toast({
-        title: baselineComplete ? "Patient Info / Baseline needs correction" : "Baseline required",
-        description: baselineComplete
-          ? "Open the Follow-up tab for details, then fix Patient Info or Baseline before adding a follow-up."
-          : "Please complete the baseline assessment before adding a follow-up.",
-        variant: "destructive",
-      })
-      if (!baselineComplete) {
-        setActiveTab("baseline")
-      } else {
-        setActiveTab(followUps.length > 0 ? `visit-${followUps.length - 1}` : "patient-info")
-      }
+      setActiveTab(`visit-${followUps.length - 1}`)
       return
     }
 
@@ -471,25 +479,24 @@ export default function PatientDetailPage({ params }: Props) {
 
                     {/* Action Buttons */}
                     <div className="mt-4 space-y-1.5">
-                      {!baselineComplete && (
-                        <Button 
-                          onClick={() => setActiveTab("baseline")}
-                          className="w-full bg-blue-600 hover:bg-blue-700 text-xs h-8"
-                        >
-                          + Add Baseline
-                        </Button>
+                      <Button
+                        onClick={startNewFollowUp}
+                        className="w-full bg-green-600 hover:bg-green-700 text-xs h-8"
+                        disabled={creatingFollowUp}
+                      >
+                        {followUps.length === 0
+                          ? readyForFollowUp && baselineComplete
+                            ? "+ Add Follow-up"
+                            : "Open Follow Up 1"
+                          : "+ New Follow-up"}
+                      </Button>
+
+                      {!readyForFollowUp && (
+                        <p className="text-[10px] text-amber-700 dark:text-amber-400 text-center">
+                          Fix flagged fields on Follow Up 1 before saving.
+                        </p>
                       )}
-                      
-                      {baselineComplete && (
-                        <Button 
-                          onClick={startNewFollowUp}
-                          className="w-full bg-green-600 hover:bg-green-700 text-xs h-8"
-                          disabled={creatingFollowUp}
-                        >
-                          {followUps.length === 0 ? "+ Add Follow-up" : "+ New Follow-up"}
-                        </Button>
-                      )}
-                      
+
                       {baselineComplete && followUps.length > 0 && (
                         <>
                           <Button 
@@ -605,6 +612,7 @@ export default function PatientDetailPage({ params }: Props) {
                 patientWeight={typeof patient.weight === "number" ? patient.weight : null}
                 focusFieldId={activeTab === "baseline" ? focusFieldId : undefined}
                 highlightFieldIds={activeTab === "baseline" ? highlightFieldIds : undefined}
+                savedInvalidFieldIds={activeTab === "baseline" ? baselineReadinessFieldIds : undefined}
                 onFocusFieldHandled={handleFocusFieldHandled}
                 isSectionLocked={baselineLocked}
                 lockMessage={baselineLockMessage}
@@ -620,6 +628,9 @@ export default function PatientDetailPage({ params }: Props) {
               forceEmbedded={true}
               focusFieldId={activeTab === "patient-info" ? focusFieldId : undefined}
               highlightFieldIds={activeTab === "patient-info" ? highlightFieldIds : undefined}
+              savedInvalidFieldIds={
+                activeTab === "patient-info" ? patientInfoReadinessFieldIds : undefined
+              }
               onFocusFieldHandled={handleFocusFieldHandled}
               isSectionLocked={patientInfoLocked}
               lockMessage={patientInfoLockMessage}
@@ -632,9 +643,7 @@ export default function PatientDetailPage({ params }: Props) {
           {followUpsWithDefault.map((visit, visitIndex) => (
             <TabsContent key={`visit-content-${visitIndex}`} value={`visit-${visitIndex}`}>
               {activeTab === `visit-${visitIndex}` && (
-                baselineComplete ? (
                 <div className="space-y-6">
-                  {/* Form for this visit */}
                   <MemoizedFollowUpForm
                     patientId={patient.id}
                     patientSnapshot={patient}
@@ -648,12 +657,8 @@ export default function PatientDetailPage({ params }: Props) {
                     onSuccess={() => {}}
                   />
 
-                  {/* Divider */}
-                  <div className="border-t pt-6" />
-
-                  {/* Add New FollowUp Button */}
                   {visitIndex === followUpsWithDefault.length - 1 && (
-                    <div className="flex justify-center">
+                    <div className="flex justify-center border-t pt-6">
                       <Button
                         onClick={startNewFollowUp}
                         size="lg"
@@ -665,14 +670,6 @@ export default function PatientDetailPage({ params }: Props) {
                     </div>
                   )}
                 </div>
-              ) : (
-                <Card className="p-8 text-center">
-                  <p className="text-muted-foreground">Please complete baseline assessment first</p>
-                  <Button className="mt-4" onClick={() => setActiveTab("baseline")}> 
-                    Go to Baseline
-                  </Button>
-                </Card>
-              )
               )}
             </TabsContent>
           ))}
@@ -680,7 +677,6 @@ export default function PatientDetailPage({ params }: Props) {
           {creatingFollowUp && (
             <TabsContent value="new-followup">
               {activeTab === "new-followup" && (
-              baselineComplete ? (
                 <div className="space-y-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -692,7 +688,7 @@ export default function PatientDetailPage({ params }: Props) {
                       variant="outline"
                       onClick={() => {
                         setCreatingFollowUp(false)
-                        setActiveTab(followUps.length > 0 ? `visit-${followUps.length - 1}` : "overview")
+                        setActiveTab(followUps.length > 0 ? `visit-${followUps.length - 1}` : "visit-0")
                       }}
                     >
                       Cancel
@@ -715,14 +711,6 @@ export default function PatientDetailPage({ params }: Props) {
                     }}
                   />
                 </div>
-              ) : (
-                <Card className="p-8 text-center">
-                  <p className="text-muted-foreground">Please complete baseline assessment first</p>
-                  <Button className="mt-4" onClick={() => setActiveTab("baseline")}>
-                    Go to Baseline
-                  </Button>
-                </Card>
-              )
               )}
             </TabsContent>
           )}

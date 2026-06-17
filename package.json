@@ -8,6 +8,7 @@
     "lint": "eslint .",
     "start": "next start",
     "e2e:full": "node scripts/full-doctor-e2e.mjs",
+    "e2e:comprehensive": "npx tsx scripts/comprehensive-doctor-e2e.ts",
     "audit:patients": "node scripts/audit-patient-validation.mjs"
   },
   "dependencies": {

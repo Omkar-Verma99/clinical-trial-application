@@ -34,6 +34,7 @@ import { isBaselineComplete } from "@/lib/baseline-validation"
 import { buildBaselineSavePatch } from "@/lib/patient-save"
 import { reportFormFieldIssues, type FormFieldIssue } from "@/lib/form-field-navigation"
 import { usePersistentFieldHighlights } from "@/hooks/use-persistent-field-highlights"
+import { isBaselineFieldValidInSavedRecord } from "@/lib/readiness-field-highlights"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 
@@ -48,6 +49,8 @@ interface BaselineFormProps {
   canOverrideLock?: boolean
   focusFieldId?: string
   highlightFieldIds?: string[]
+  /** Fields invalid in Firestore — stay red until saved record passes validation. */
+  savedInvalidFieldIds?: string[]
   onFocusFieldHandled?: () => void
   onSuccess: () => void
 }
@@ -63,6 +66,7 @@ export const BaselineForm = memo(function BaselineForm({
   canOverrideLock = false,
   focusFieldId,
   highlightFieldIds,
+  savedInvalidFieldIds,
   onFocusFieldHandled,
   onSuccess,
 }: BaselineFormProps) {
@@ -168,13 +172,20 @@ export const BaselineForm = memo(function BaselineForm({
   })
 
   const externalHighlightIds = useMemo(() => {
-    if (highlightFieldIds?.length) return highlightFieldIds
+    const merged = [
+      ...new Set([...(highlightFieldIds ?? []), ...(savedInvalidFieldIds ?? [])]),
+    ]
+    if (merged.length) return merged
     if (focusFieldId) return [focusFieldId]
     return undefined
-  }, [focusFieldId, highlightFieldIds])
+  }, [focusFieldId, highlightFieldIds, savedInvalidFieldIds])
 
   const isBaselineFieldValid = useCallback(
     (fieldId: string): boolean => {
+      if (savedInvalidFieldIds?.includes(fieldId)) {
+        return isBaselineFieldValidInSavedRecord(fieldId, existingData, patientBaselineVisitDate)
+      }
+
       const inRange = (value: string, min: number, max: number) => {
         const parsed = Number.parseFloat(value)
         return !!value && Number.isFinite(parsed) && parsed >= min && parsed <= max
@@ -222,7 +233,7 @@ export const BaselineForm = memo(function BaselineForm({
           return true
       }
     },
-    [counseling, formData, ranges]
+    [counseling, existingData, formData, patientBaselineVisitDate, ranges, savedInvalidFieldIds]
   )
 
   const { showHighlightBanner, setValidationIssues, clearAllHighlights } = usePersistentFieldHighlights({
@@ -620,10 +631,10 @@ export const BaselineForm = memo(function BaselineForm({
             </div>
 
             <div className="grid md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="heartRate">Heart Rate (bpm) *</Label>
+              <div id="heartRate" className="space-y-2">
+                <Label htmlFor="heartRate-input">Heart Rate (bpm) *</Label>
                 <Input
-                  id="heartRate"
+                  id="heartRate-input"
                   type="number"
                   min={ranges.heartRate.min}
                   max={ranges.heartRate.max}
