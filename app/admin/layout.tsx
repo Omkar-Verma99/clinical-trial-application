@@ -43,17 +43,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-background via-muted/10 to-background">
+    <div className="flex h-dvh max-h-dvh overflow-hidden bg-gradient-to-br from-background via-muted/10 to-background">
       {/* Sidebar */}
       <AdminSidebar />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {/* Header */}
         <AdminHeader />
 
-        {/* Page Content */}
-        <main className="flex-1 overflow-auto bg-gradient-to-b from-background to-muted/20">
+        {/* Page Content — only this area scrolls */}
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-gradient-to-b from-background to-muted/20">
           <div className="p-6">
             {children}
           </div>

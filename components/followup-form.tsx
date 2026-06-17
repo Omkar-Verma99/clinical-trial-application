@@ -736,16 +736,37 @@ export const FollowUpForm = memo(function FollowUpForm({
           return
         }
 
-        if (!auth?.currentUser?.uid) {
+        if (!auth?.currentUser?.uid && !isAdminAuthenticated) {
           toast({
             variant: "destructive",
             title: "Session expired",
-            description: "Your Firebase session is missing. Sign out and sign in again, then retry.",
+            description: "Your session is missing. Sign out and sign in again, then retry.",
           })
           return
         }
 
-        await updateDoc(patientDocRef, buildFollowUpSavePatch(buildResult.followups))
+        if (isAdminAuthenticated) {
+          const response = await fetch(`/api/admin/patients/${patientId}/followups`, {
+            method: "PATCH",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ followups: buildResult.followups }),
+          })
+          const result = (await response.json().catch(() => ({}))) as {
+            success?: boolean
+            error?: string
+          }
+          if (!response.ok || !result.success) {
+            toast({
+              variant: "destructive",
+              title: "Error saving data",
+              description: result.error || "Admin follow-up save failed. Please try again.",
+            })
+            return
+          }
+        } else {
+          await updateDoc(patientDocRef, buildFollowUpSavePatch(buildResult.followups))
+        }
       } catch (error) {
         const firebaseCode =
           typeof error === "object" && error && "code" in error

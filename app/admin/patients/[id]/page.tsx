@@ -263,6 +263,7 @@ export default function AdminPatientDetailPage() {
           </TabsList>
         </div>
 
+        {activeTab === "overview" && (
         <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Left Column - Patient Summary */}
@@ -415,6 +416,7 @@ export default function AdminPatientDetailPage() {
             </div>
           </div>
         </TabsContent>
+        )}
 
         <TabsContent value="patient-info">
           {activeTab === "patient-info" && (
@@ -533,6 +535,7 @@ export default function AdminPatientDetailPage() {
           </TabsContent>
         )}
 
+        {activeTab === "comparison" && (
         <TabsContent value="comparison" className="space-y-6">
           <Card>
             <CardHeader>
@@ -561,6 +564,7 @@ export default function AdminPatientDetailPage() {
             </Card>
           )}
         </TabsContent>
+        )}
       </Tabs>
     </div>
   );

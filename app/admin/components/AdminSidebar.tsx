@@ -125,7 +125,7 @@ export default function AdminSidebar() {
     <div
       className={`${
         isOpen ? 'w-64' : 'w-20'
-      } bg-card border-r border-border transition-all duration-300 flex flex-col`}
+      } flex h-full min-h-0 shrink-0 flex-col overflow-hidden border-r border-border bg-card transition-all duration-300`}
     >
       {/* Header */}
       <div className="p-4 border-b border-border bg-card">
@@ -141,7 +141,7 @@ export default function AdminSidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-4 space-y-2 bg-background">
+      <nav className="min-h-0 flex-1 overflow-y-auto p-4 space-y-2 bg-background">
         {/* Main Navigation */}
         <div className="space-y-1">
           {isOpen && <p className="text-xs text-muted-foreground font-semibold px-2 py-2">MAIN</p>}
@@ -198,7 +198,7 @@ export default function AdminSidebar() {
       </nav>
 
       {/* Footer - User Info & Logout */}
-      <div className="border-t border-border p-4 space-y-3 bg-muted/20">
+      <div className="shrink-0 border-t border-border bg-muted/20 p-4 space-y-3">
         {isOpen && (
           <div className="rounded-lg p-3 border border-border bg-background">
             <p className="text-xs text-muted-foreground">Logged in as</p>
