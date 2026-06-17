@@ -64,6 +64,17 @@ function adverseEventsOk(followup: FollowUpData): boolean {
   )
 }
 
+/** True when a follow-up array slot contains real saved data (not an empty UI placeholder). */
+export function isMeaningfulFollowUp(followup: unknown): boolean {
+  if (!followup || typeof followup !== "object") return false
+  const f = followup as FollowUpData
+  return Boolean(
+    (typeof f.visitDate === "string" && f.visitDate.trim().length > 0) ||
+      typeof f.hba1c === "number" ||
+      typeof f.visitNumber === "number"
+  )
+}
+
 /** True when all mandatory follow-up fields are present on a saved record. */
 export function isFollowUpComplete(followup: unknown): followup is FollowUpData {
   if (!followup || typeof followup !== "object") return false
@@ -143,7 +154,9 @@ export function isFollowUpComplete(followup: unknown): followup is FollowUpData 
 
 export function areAllFollowUpsComplete(followups: unknown): boolean {
   if (!Array.isArray(followups)) return false
-  return followups.every((entry) => isFollowUpComplete(entry))
+  const meaningful = followups.filter(isMeaningfulFollowUp)
+  if (meaningful.length === 0) return false
+  return meaningful.every((entry) => isFollowUpComplete(entry))
 }
 
 export const FOLLOWUP_INCOMPLETE_MESSAGE =

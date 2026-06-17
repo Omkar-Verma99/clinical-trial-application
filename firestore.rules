@@ -239,8 +239,27 @@ service cloud.firestore {
         f.comments.size() > 0;
     }
 
+    function followupHasStarted(f) {
+      return f != null && (
+        (f.visitDate is string && f.visitDate.size() > 0) ||
+        f.hba1c is number ||
+        f.visitNumber is number
+      );
+    }
+
     function followupAtComplete(followups, index) {
-      return followups == null || followups.size() <= index || followupIsComplete(followups[index]);
+      return followups == null ||
+        followups.size() <= index ||
+        !followupHasStarted(followups[index]) ||
+        followupIsComplete(followups[index]);
+    }
+
+    function patientReadyForFollowup(data) {
+      return patientInfoCompleteForPatient(data) ||
+        (
+          data.patientCode is string && data.patientCode.size() > 0 &&
+          baselineCompleteForFollowup(data)
+        );
     }
 
     function allFollowupsComplete(followups) {
@@ -315,7 +334,7 @@ service cloud.firestore {
         return !followupsTouched() ||
           (
             baselineCompleteForFollowup(resource.data) &&
-            patientInfoCompleteForPatient(resource.data) &&
+            patientReadyForFollowup(resource.data) &&
             allFollowupsComplete(request.resource.data.followups)
           );
       }

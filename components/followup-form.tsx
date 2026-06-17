@@ -2,9 +2,9 @@
 
 import type React from "react"
 
-import { useState, memo, useRef, useEffect } from "react"
+import { useState, memo, useRef, useEffect, useMemo } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, arrayUnion, writeBatch, getDoc } from "firebase/firestore"
+import { doc, updateDoc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Loader2 } from "lucide-react"
 import DOMPurify from "dompurify"
@@ -25,14 +25,21 @@ import {
   normalizeClinicalValidationRanges,
 } from "@/lib/clinical-ranges"
 import {
-  BASELINE_INCOMPLETE_MESSAGE,
-  isBaselineCompleteForPatient,
-} from "@/lib/baseline-validation"
-import {
   FOLLOWUP_INCOMPLETE_MESSAGE,
+  areAllFollowUpsComplete,
+  getFollowUpIncompleteReasons,
   isFollowUpComplete,
+  isMeaningfulFollowUp,
 } from "@/lib/followup-validation"
-import { isPatientInfoCompleteForPatient } from "@/lib/patient-info-validation"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
+import {
+  formatPrerequisiteIssueList,
+  getFollowUpPrerequisiteIssues,
+  getPrimaryPrerequisiteSection,
+  type PrerequisiteIssue,
+  type PrerequisiteSection,
+} from "@/lib/patient-prerequisites"
+import { buildFollowUpsForSave, buildFollowUpSavePatch } from "@/lib/patient-save"
 import { hasAtLeastOneCheckbox, hasDuplicateVisitDate } from "@/lib/form-validation"
 import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import { todayIsoDate, validateFollowUpVisitDate } from "@/lib/study-dates"
@@ -46,6 +53,8 @@ interface FollowUpFormProps {
   allFollowUps?: FollowUpData[] // Track all existing visits
   followUpIndex?: number
   doctorIdOverride?: string
+  patientSnapshot?: Patient | null
+  onNavigateToSection?: (section: PrerequisiteSection) => void
   isSectionLocked?: boolean
   lockMessage?: string
   canOverrideLock?: boolean
@@ -59,12 +68,15 @@ export const FollowUpForm = memo(function FollowUpForm({
   allFollowUps = [],
   followUpIndex = 0,
   doctorIdOverride,
+  patientSnapshot = null,
+  onNavigateToSection,
   isSectionLocked = false,
   lockMessage = "Locked. You cannot edit this section.",
   canOverrideLock = false,
 }: FollowUpFormProps) {
   const { toast } = useToast()
   const { user, doctor } = useAuth()
+  const { adminUser, isAuthenticated: isAdminAuthenticated } = useAdminAuth()
   const [loading, setLoading] = useState(false)
   const [ranges, setRanges] = useState<ClinicalValidationRanges>(DEFAULT_CLINICAL_VALIDATION_RANGES)
   const submitLockRef = useRef(false)
@@ -81,6 +93,33 @@ export const FollowUpForm = memo(function FollowUpForm({
     message: "",
   })
   const resolvedDoctorId = doctorIdOverride || user?.uid || ""
+
+  const prerequisiteIssues = useMemo(
+    () => getFollowUpPrerequisiteIssues(patientSnapshot),
+    [patientSnapshot]
+  )
+  const patientInfoPrerequisiteIssues = useMemo(
+    () => prerequisiteIssues.filter((issue) => issue.section === "patient-info"),
+    [prerequisiteIssues]
+  )
+  const baselinePrerequisiteIssues = useMemo(
+    () => prerequisiteIssues.filter((issue) => issue.section === "baseline"),
+    [prerequisiteIssues]
+  )
+
+  const notifyPrerequisiteBlocked = (issues: PrerequisiteIssue[]) => {
+    if (issues.length === 0) return
+    const section = getPrimaryPrerequisiteSection(issues)
+    toast({
+      variant: "destructive",
+      title:
+        section === "patient-info"
+          ? "Patient Info needs correction"
+          : "Baseline needs correction",
+      description: `Fix these before saving follow-up: ${formatPrerequisiteIssueList(issues)}`,
+    })
+    onNavigateToSection?.(section)
+  }
   
   // Calculate visitNumber based on date difference from baseline (in weeks)
   // For editing, use existing; for new, calculate from dates
@@ -314,7 +353,7 @@ export const FollowUpForm = memo(function FollowUpForm({
     submitLockRef.current = true
 
     // CRITICAL: Verify user is loaded and has uid before saving
-    if (!user?.uid) {
+    if (!user?.uid && !isAdminAuthenticated) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -326,6 +365,13 @@ export const FollowUpForm = memo(function FollowUpForm({
 
     setLoading(true)
     const startTime = Date.now()
+
+    if (prerequisiteIssues.length > 0) {
+      notifyPrerequisiteBlocked(prerequisiteIssues)
+      setLoading(false)
+      submitLockRef.current = false
+      return
+    }
 
     try {
       // VALIDATION PHASE 1: Check required fields
@@ -611,7 +657,7 @@ export const FollowUpForm = memo(function FollowUpForm({
           patientIdentityMappingAtClinicOnly: formData.patientIdentityMapping === true,
         },
         physicianDeclaration: {
-          physicianName: doctor?.name || "",
+          physicianName: doctor?.name || (adminUser ? `${adminUser.firstName} ${adminUser.lastName}`.trim() : ""),
           qualification: doctor?.qualification || "",
           clinicHospitalName: doctor?.studySiteCode || "",
           confirmationCheckbox: formData.physicianConfirmation === true,
@@ -641,68 +687,44 @@ export const FollowUpForm = memo(function FollowUpForm({
         const patientSnap = await getDoc(patientDocRef)
 
         const patientDoc = patientSnap.exists() ? (patientSnap.data() as Patient) : null
-        const baselineOk = isBaselineCompleteForPatient(patientDoc)
-        const patientInfoOk = isPatientInfoCompleteForPatient(patientDoc)
-        if (!patientSnap.exists() || !baselineOk) {
+        const prerequisiteIssuesAtSave = getFollowUpPrerequisiteIssues(patientDoc)
+        if (!patientSnap.exists() || prerequisiteIssuesAtSave.length > 0) {
+          notifyPrerequisiteBlocked(
+            prerequisiteIssuesAtSave.length > 0
+              ? prerequisiteIssuesAtSave
+              : [{ section: "patient-info", message: "Patient record not found" }]
+          )
+          return
+        }
+
+        const buildResult = buildFollowUpsForSave({
+          rawFollowups: patientSnap.data().followups,
+          followUpIndex,
+          entry: data,
+        })
+
+        if (!buildResult.ok) {
           toast({
             variant: "destructive",
-            title: "Baseline incomplete",
-            description: BASELINE_INCOMPLETE_MESSAGE,
+            title: buildResult.code === "duplicate_date" ? "Duplicate visit date" : "Follow-up incomplete",
+            description: buildResult.error,
           })
           return
         }
 
-        if (!patientInfoOk) {
+        const incompleteReasons = getFollowUpIncompleteReasons(
+          buildResult.followups[buildResult.followups.length - 1]
+        )
+        if (incompleteReasons.length > 0) {
           toast({
             variant: "destructive",
-            title: "Patient information incomplete",
-            description:
-              "Complete and save all required Patient Information fields before adding a follow-up.",
+            title: "Follow-up incomplete",
+            description: `Missing or invalid: ${incompleteReasons.slice(0, 4).join(", ")}`,
           })
           return
         }
 
-        let updateData: any = { updatedAt: new Date().toISOString() }
-        
-        if (patientSnap.exists()) {
-          const existingFollowups: FollowUpData[] = [...(patientSnap.data().followups || [])]
-          const isUpdateByIndex =
-            followUpIndex >= 0 && followUpIndex < existingFollowups.length
-
-          if (isUpdateByIndex) {
-            if (hasDuplicateVisitDate(formData.visitDate, existingFollowups, followUpIndex)) {
-              toast({
-                variant: "destructive",
-                title: "Duplicate visit date",
-                description: "Another follow-up already uses this visit date. Choose a different date.",
-              })
-              return
-            }
-            const updatedFollowups = [...existingFollowups]
-            const prior = existingFollowups[followUpIndex]
-            updatedFollowups[followUpIndex] = {
-              ...data,
-              createdAt: prior?.createdAt || data.createdAt,
-            }
-            updateData.followups = updatedFollowups
-          } else {
-            if (hasDuplicateVisitDate(formData.visitDate, existingFollowups, -1)) {
-              toast({
-                variant: "destructive",
-                title: "Duplicate visit date",
-                description: "Another follow-up already uses this visit date. Choose a different date.",
-              })
-              return
-            }
-            updateData.followups = arrayUnion(data)
-          }
-        } else {
-          updateData.followups = arrayUnion(data)
-        }
-        
-        const batch = writeBatch(db)
-        batch.set(patientDocRef, updateData, { merge: true })
-        await batch.commit()
+        await updateDoc(patientDocRef, buildFollowUpSavePatch(buildResult.followups))
       } catch (error) {
         const firebaseCode =
           typeof error === "object" && error && "code" in error
@@ -767,6 +789,51 @@ export const FollowUpForm = memo(function FollowUpForm({
         <CardDescription>Record end-of-study clinical measurements and outcomes</CardDescription>
       </CardHeader>
       <CardContent>
+        {prerequisiteIssues.length > 0 && (
+          <div className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">
+            <p className="font-semibold">
+              Patient Info and Baseline must be complete and valid before saving this follow-up.
+            </p>
+            <p className="mt-1 text-xs text-red-800">
+              Legacy records may need corrections even if they were saved earlier.
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              {prerequisiteIssues.slice(0, 8).map((issue) => (
+                <li key={`${issue.section}-${issue.message}`}>
+                  <span className="font-medium">
+                    {issue.section === "patient-info" ? "Patient Info" : "Baseline"}:
+                  </span>{" "}
+                  {issue.message}
+                </li>
+              ))}
+              {prerequisiteIssues.length > 8 && (
+                <li>…and {prerequisiteIssues.length - 8} more issue(s)</li>
+              )}
+            </ul>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {patientInfoPrerequisiteIssues.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onNavigateToSection?.("patient-info")}
+                >
+                  Go to Patient Info
+                </Button>
+              )}
+              {baselinePrerequisiteIssues.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onNavigateToSection?.("baseline")}
+                >
+                  Go to Baseline
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
         {isSectionLocked && !canOverrideLock && (
           <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {lockMessage}

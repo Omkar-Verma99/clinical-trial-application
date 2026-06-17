@@ -12,12 +12,13 @@ import { Button } from '@/components/ui/button';
 import { ComparisonView } from '@/components/comparison-view';
 import { downloadPatientPDF, downloadCSV, downloadExcel } from '@/lib/pdf-export';
 import type { Patient, BaselineData, FollowUpData, Doctor } from '@/lib/types';
-import { isBaselineCompleteForPatient } from '@/lib/baseline-validation';
+import { isBaselineReadyStrict, isReadyForFollowUp } from '@/lib/patient-readiness';
+import { shouldUpdatePatientState } from '@/lib/patient-snapshot';
+import { followupSectionKey, isSectionLocked, SectionLockMap } from '@/lib/section-locks';
 import { BaselineForm } from '@/components/baseline-form';
 import { FollowUpForm } from '@/components/followup-form';
 import { PatientFormPage } from '@/components/patients/PatientForm';
 import { useAdminAuth } from '@/contexts/admin-auth-context';
-import { followupSectionKey, isSectionLocked, SectionLockMap } from '@/lib/section-locks';
 
 function asDateString(value: unknown): string {
   if (!value) return 'N/A';
@@ -75,7 +76,12 @@ export default function AdminPatientDetailPage() {
         }
 
         const patientData: Patient = { id: snap.id, ...data } as Patient;
-        setPatient(patientData);
+        setPatient((prevPatient) => {
+          if (prevPatient && !shouldUpdatePatientState(prevPatient, patientData)) {
+            return prevPatient;
+          }
+          return patientData;
+        });
 
         const ownerDoctorId = patientData.doctorId || '';
         if (ownerDoctorId) {
@@ -114,7 +120,8 @@ export default function AdminPatientDetailPage() {
   }, [patientId]);
 
   const baseline = useMemo(() => patient?.baseline || null, [patient]);
-  const baselineComplete = useMemo(() => isBaselineCompleteForPatient(patient), [patient]);
+  const baselineComplete = useMemo(() => isBaselineReadyStrict(patient), [patient]);
+  const readyForFollowUp = useMemo(() => isReadyForFollowUp(patient), [patient]);
   const followups = useMemo(() => patient?.followups || [], [patient]);
   const followupsWithDefault = useMemo(() => {
     if (baselineComplete && followups.length === 0) {
@@ -151,10 +158,26 @@ export default function AdminPatientDetailPage() {
   }, [patient, baseline, followups, doctor]);
 
   const openNewFollowup = () => {
-    if (!baselineComplete) return;
+    if (!baselineComplete || !readyForFollowUp) {
+      if (!baselineComplete) {
+        setActiveTab('baseline');
+      } else {
+        setActiveTab(followups.length > 0 ? `visit-${followups.length - 1}` : 'patient-info');
+      }
+      return;
+    }
     setCreatingFollowUp(true);
     setActiveTab('new-followup');
   };
+
+  useEffect(() => {
+    if ((!baselineComplete || !readyForFollowUp) && creatingFollowUp) {
+      setCreatingFollowUp(false);
+      if (activeTab === 'new-followup') {
+        setActiveTab('overview');
+      }
+    }
+  }, [baselineComplete, readyForFollowUp, creatingFollowUp, activeTab]);
 
   const toggleSectionLock = useCallback(
     async (section: string, nextLocked: boolean) => {
@@ -240,7 +263,7 @@ export default function AdminPatientDetailPage() {
           </TabsList>
         </div>
 
-        <TabsContent value="overview" className="space-y-6" forceMount>
+        <TabsContent value="overview" className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Left Column - Patient Summary */}
             <div className="md:col-span-1 space-y-6">
@@ -270,7 +293,7 @@ export default function AdminPatientDetailPage() {
 
                   <div className="mt-6 space-y-2">
                     <Button variant="outline" className="w-full text-xs h-9" onClick={() => setActiveTab('patient-info')}>Patient Details</Button>
-                    <Button variant="secondary" className="w-full text-xs h-9" onClick={openNewFollowup} disabled={!baselineComplete}>New Follow Up</Button>
+                    <Button variant="secondary" className="w-full text-xs h-9" onClick={openNewFollowup} disabled={!baselineComplete || !readyForFollowUp}>New Follow Up</Button>
                   </div>
                 </CardContent>
               </Card>
@@ -416,7 +439,7 @@ export default function AdminPatientDetailPage() {
           />
         </TabsContent>
 
-        <TabsContent value="baseline" forceMount>
+        <TabsContent value="baseline">
           {canManageSectionLocks && (
             <div className="mb-4 flex justify-end">
               <Button
@@ -442,7 +465,7 @@ export default function AdminPatientDetailPage() {
         </TabsContent>
 
         {followupsWithDefault.map((followup, index) => (
-          <TabsContent key={`visit-content-${index}`} value={`visit-${index}`} forceMount>
+          <TabsContent key={`visit-content-${index}`} value={`visit-${index}`}>
             {canManageSectionLocks && (
               <div className="mb-4 flex justify-end">
                 <Button
@@ -457,6 +480,10 @@ export default function AdminPatientDetailPage() {
             )}
             <FollowUpForm
               patientId={patient.id}
+              patientSnapshot={patient}
+              onNavigateToSection={(section) =>
+                setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
+              }
               existingData={Object.keys(followup).length === 0 ? null : followup}
               baselineDate={baseline?.baselineVisitDate}
               allFollowUps={followups}
@@ -470,9 +497,13 @@ export default function AdminPatientDetailPage() {
         ))}
 
         {creatingFollowUp && (
-          <TabsContent value="new-followup" forceMount>
+          <TabsContent value="new-followup">
             <FollowUpForm
               patientId={patient.id}
+              patientSnapshot={patient}
+              onNavigateToSection={(section) =>
+                setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
+              }
               existingData={null}
               baselineDate={baseline?.baselineVisitDate}
               allFollowUps={followups}
@@ -488,7 +519,7 @@ export default function AdminPatientDetailPage() {
           </TabsContent>
         )}
 
-        <TabsContent value="comparison" className="space-y-6" forceMount>
+        <TabsContent value="comparison" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle>Export Patient Data</CardTitle>

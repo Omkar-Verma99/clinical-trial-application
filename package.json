@@ -7,7 +7,8 @@
     "dev": "node suppress-sourcemap-warnings.js && next dev",
     "lint": "eslint .",
     "start": "next start",
-    "e2e:full": "node scripts/full-doctor-e2e.mjs"
+    "e2e:full": "node scripts/full-doctor-e2e.mjs",
+    "audit:patients": "node scripts/audit-patient-validation.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

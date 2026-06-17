@@ -167,19 +167,37 @@ export default function PatientManagementPage() {
   const [selectedFollowUpSections, setSelectedFollowUpSections] = useState<Set<number>>(new Set());
 
   const db = getFirestore();
+  const doctorsCacheRef = useRef<{
+    nameMap: Map<string, string>;
+    siteMap: Map<string, string>;
+  }>({ nameMap: new Map(), siteMap: new Map() });
+  const [doctorLookupVersion, setDoctorLookupVersion] = useState(0);
 
   useEffect(() => {
-    setLoading(true);
-    const unsubPatients = onSnapshot(collection(db, 'patients'), async (snapshot) => {
+    let cancelled = false;
+    const loadDoctors = async () => {
       const doctorsSnapshot = await getDocs(collection(db, 'doctors'));
+      if (cancelled) return;
       const nameMap = new Map<string, string>();
       const siteMap = new Map<string, string>();
-
       doctorsSnapshot.docs.forEach((doctorDoc) => {
         const d = doctorDoc.data();
         nameMap.set(doctorDoc.id, String(d.name || '').trim() || 'Unknown');
         siteMap.set(doctorDoc.id, String(d.studySiteCode || '').trim());
       });
+      doctorsCacheRef.current = { nameMap, siteMap };
+      setDoctorLookupVersion((v) => v + 1);
+    };
+    void loadDoctors();
+    return () => {
+      cancelled = true;
+    };
+  }, [db]);
+
+  useEffect(() => {
+    setLoading(true);
+    const unsubPatients = onSnapshot(collection(db, 'patients'), (snapshot) => {
+      const { nameMap, siteMap } = doctorsCacheRef.current;
 
       const patientsData = snapshot.docs.map((patientDoc) => {
         const data = patientDoc.data() as Record<string, any>;
@@ -204,7 +222,7 @@ export default function PatientManagementPage() {
       setLoading(false);
     });
     return () => unsubPatients();
-  }, []);
+  }, [db, doctorLookupVersion]);
 
   // When filters change, clear selected patients
   useEffect(() => { setSelectedPatientIds(new Set()); }, [searchTerm, selectedDoctors, selectedSites]);

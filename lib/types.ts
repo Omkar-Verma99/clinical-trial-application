@@ -98,6 +98,7 @@ export interface Patient {
   sectionLocks?: SectionLockMap
 
   createdAt: string
+  updatedAt?: string
 }
 
 // BASELINE ASSESSMENT - Week 0

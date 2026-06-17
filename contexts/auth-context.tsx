@@ -103,6 +103,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(currentUser)
 
       if (currentUser && db) {
+        const isAdminRoute =
+          typeof window !== "undefined" && window.location.pathname.startsWith("/admin")
+
+        if (isAdminRoute) {
+          setDoctor(null)
+          setDoctorDataError(null)
+          setLoading(false)
+          return
+        }
+
         try {
           const doctorDoc = await Promise.race([
             getDoc(doc(db, "doctors", currentUser.uid)),

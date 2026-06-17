@@ -16,7 +16,8 @@ import { toast } from "@/hooks/use-toast"
 import { BaselineForm } from "@/components/baseline-form"
 import { FollowUpForm } from "@/components/followup-form"
 import { PatientFormPage } from "@/components/patients/PatientForm"
-import { isBaselineCompleteForPatient } from "@/lib/baseline-validation"
+import { isBaselineReadyStrict, isReadyForFollowUp } from "@/lib/patient-readiness"
+import { shouldUpdatePatientState } from "@/lib/patient-snapshot"
 import { followupSectionKey, getDoctorLockMessage, isSectionLocked, SectionLockMap } from "@/lib/section-locks"
 import { hasDoctorSessionCookies } from "@/lib/doctor-session"
 
@@ -47,7 +48,8 @@ export default function PatientDetailPage({ params }: Props) {
 
   // OPTIMIZED: Derive baseline and followUps from the patient object
   const baseline = useMemo(() => patient?.baseline || null, [patient])
-  const baselineComplete = useMemo(() => isBaselineCompleteForPatient(patient), [patient])
+  const baselineComplete = useMemo(() => isBaselineReadyStrict(patient), [patient])
+  const readyForFollowUp = useMemo(() => isReadyForFollowUp(patient), [patient])
   const followUps = useMemo(() => patient?.followups || [], [patient])
 
   const followUpsWithDefault = useMemo(() => {
@@ -127,12 +129,19 @@ export default function PatientDetailPage({ params }: Props) {
       return
     }
 
-    if (!baselineComplete) {
+    if (!baselineComplete || !readyForFollowUp) {
       toast({
-        title: "Baseline required",
-        description: "Please complete the baseline assessment before adding a follow-up.",
+        title: baselineComplete ? "Patient Info / Baseline needs correction" : "Baseline required",
+        description: baselineComplete
+          ? "Open the Follow-up tab for details, then fix Patient Info or Baseline before adding a follow-up."
+          : "Please complete the baseline assessment before adding a follow-up.",
         variant: "destructive",
       })
+      if (!baselineComplete) {
+        setActiveTab("baseline")
+      } else {
+        setActiveTab(followUps.length > 0 ? `visit-${followUps.length - 1}` : "patient-info")
+      }
       return
     }
 
@@ -148,7 +157,7 @@ export default function PatientDetailPage({ params }: Props) {
 
     setCreatingFollowUp(true)
     setActiveTab("new-followup")
-  }, [baselineComplete, creatingFollowUp, followUps.length, sectionLocks])
+  }, [baselineComplete, readyForFollowUp, creatingFollowUp, followUps.length, sectionLocks, toast])
 
   useEffect(() => {
     // CRITICAL: Check authentication BEFORE setting up any listeners
@@ -169,8 +178,8 @@ export default function PatientDetailPage({ params }: Props) {
           const patientData = { ...snap.data(), id: snap.id } as Patient
           
           // OPTIMIZED: Only update if data actually changed - prevents unnecessary re-renders
-          setPatient(prevPatient => {
-            if (prevPatient && JSON.stringify(prevPatient) === JSON.stringify(patientData)) {
+          setPatient((prevPatient) => {
+            if (prevPatient && !shouldUpdatePatientState(prevPatient, patientData)) {
               return prevPatient
             }
             return patientData
@@ -599,6 +608,10 @@ export default function PatientDetailPage({ params }: Props) {
                   {/* Form for this visit */}
                   <MemoizedFollowUpForm
                     patientId={patient.id}
+                    patientSnapshot={patient}
+                    onNavigateToSection={(section) =>
+                      setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
+                    }
                     existingData={Object.keys(visit).length === 0 ? null : visit}
                     baselineDate={patient.baselineVisitDate}
                     followUpIndex={visitIndex}
@@ -658,6 +671,10 @@ export default function PatientDetailPage({ params }: Props) {
                   </div>
                   <MemoizedFollowUpForm
                     patientId={patient.id}
+                    patientSnapshot={patient}
+                    onNavigateToSection={(section) =>
+                      setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
+                    }
                     existingData={null}
                     baselineDate={patient.baselineVisitDate}
                     followUpIndex={followUps.length}

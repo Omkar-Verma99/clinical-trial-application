@@ -73,7 +73,7 @@ export function getFirestoreSaveErrorMessage(
     if (options?.isSectionLocked && !options?.canOverrideLock) {
       return options.lockMessage || doctorLockedMessage()
     }
-    return "You do not have permission to save these changes. This section may be locked."
+    return "Firestore rejected this save. Ensure baseline and patient info are complete, then try again. If this section is locked, ask an admin to unlock it."
   }
 
   return error instanceof Error ? error.message : "Please try again."

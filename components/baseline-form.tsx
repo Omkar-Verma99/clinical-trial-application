@@ -31,7 +31,9 @@ import {
   validateTreatmentInitiationDate,
 } from "@/lib/study-dates"
 import { isBaselineComplete } from "@/lib/baseline-validation"
+import { buildBaselineSavePatch } from "@/lib/patient-save"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 
 interface BaselineFormProps {
   patientId: string
@@ -58,6 +60,7 @@ export const BaselineForm = memo(function BaselineForm({
 }: BaselineFormProps) {
   const { toast } = useToast()
   const { user } = useAuth()
+  const { isAuthenticated: isAdminAuthenticated } = useAdminAuth()
   const [loading, setLoading] = useState(false)
   const [ranges, setRanges] = useState<ClinicalValidationRanges>(DEFAULT_CLINICAL_VALIDATION_RANGES)
   const submitLockRef = useRef(false)
@@ -173,8 +176,7 @@ export const BaselineForm = memo(function BaselineForm({
     }
     submitLockRef.current = true
 
-    // CRITICAL: Verify user is loaded and has uid before saving
-    if (!user?.uid) {
+    if (!user?.uid && !isAdminAuthenticated) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -344,12 +346,10 @@ export const BaselineForm = memo(function BaselineForm({
         // Save to Firebase in a single batch (merge to preserve other fields)
         const patientDocRef = doc(db, "patients", patientId)
         const batch = writeBatch(db)
-        const baselinePayload = {
+        const baselinePayload = buildBaselineSavePatch({
           baseline: data,
-          baselineComplete: true,
           baselineVisitDate: formData.baselineVisitDate,
-          updatedAt: new Date().toISOString(),
-        }
+        })
         batch.set(patientDocRef, baselinePayload, { merge: true })
 
         await batch.commit()
