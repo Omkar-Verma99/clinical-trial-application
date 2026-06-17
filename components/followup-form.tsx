@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, memo, useRef, useEffect, useMemo, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Loader2 } from "lucide-react"
 import DOMPurify from "dompurify"
@@ -39,7 +39,7 @@ import {
   type PrerequisiteIssue,
   type PrerequisiteSection,
 } from "@/lib/patient-prerequisites"
-import { buildFollowUpsForSave } from "@/lib/patient-save"
+import { buildFollowUpSavePatch, buildFollowUpsForSave } from "@/lib/patient-save"
 import { getFollowUpFirestoreGuardIssues } from "@/lib/firestore-guards"
 import { collectFollowUpFormIssues } from "@/lib/collect-followup-form-issues"
 import {
@@ -577,7 +577,7 @@ export const FollowUpForm = memo(function FollowUpForm({
             formData.patientContinuingTreatment === false && formData.discontinuationReason === "Other"
               ? DOMPurify.sanitize(formData.discontinuationReasonOther)
               : null,
-          missedDosesInLast7Days: formData.missedDoses || null,
+          missedDosesInLast7Days: formData.missedDoses,
           addOnOrChangedTherapy: formData.addOnTherapy === true,
           addOnOrChangedTherapyDetails: formData.addOnTherapy === true ? sanitizedFormData.addOnTherapyDetails : null,
         },
@@ -704,48 +704,10 @@ export const FollowUpForm = memo(function FollowUpForm({
           return
         }
 
-        const saveFollowupsViaApi = async (followups: FollowUpData[]) => {
-          const headers: Record<string, string> = { "Content-Type": "application/json" }
-
-          if (isAdminAuthenticated) {
-            const response = await fetch(`/api/admin/patients/${patientId}/followups`, {
-              method: "PATCH",
-              credentials: "include",
-              headers,
-              body: JSON.stringify({ followups }),
-            })
-            const result = (await response.json().catch(() => ({}))) as {
-              success?: boolean
-              error?: string
-            }
-            if (!response.ok || !result.success) {
-              throw new Error(result.error || "Admin follow-up save failed. Please try again.")
-            }
-            return
-          }
-
-          const idToken = await auth?.currentUser?.getIdToken()
-          if (!idToken) {
-            throw new Error("Your session is missing. Sign out and sign in again, then retry.")
-          }
-
-          headers.Authorization = `Bearer ${idToken}`
-          const response = await fetch(`/api/patients/${patientId}/followups`, {
-            method: "PATCH",
-            credentials: "include",
-            headers,
-            body: JSON.stringify({ followups }),
-          })
-          const result = (await response.json().catch(() => ({}))) as {
-            success?: boolean
-            error?: string
-          }
-          if (!response.ok || !result.success) {
-            throw new Error(result.error || "Follow-up save failed. Please try again.")
-          }
-        }
-
-        await saveFollowupsViaApi(buildResult.followups)
+        await updateDoc(
+          patientDocRef,
+          buildFollowUpSavePatch(buildResult.followups, patientDoc)
+        )
       } catch (error) {
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.error("Error saving follow-up data:", error)

@@ -1,6 +1,9 @@
-import type { FollowUpData } from "@/lib/types"
+import type { FollowUpData, Patient } from "@/lib/types"
 import { hasDuplicateVisitDate } from "@/lib/form-validation"
 import { areAllFollowUpsComplete, isMeaningfulFollowUp } from "@/lib/followup-validation"
+import { isBaselineCompleteForFollowupGuard } from "@/lib/firestore-guards"
+import { isPatientInfoCompleteForPatient } from "@/lib/patient-info-validation"
+import { resolvePatientBaselineVisitDate } from "@/lib/study-dates"
 
 export type BuildFollowUpsResult =
   | { ok: true; followups: FollowUpData[] }
@@ -72,15 +75,39 @@ export function buildFollowUpsForSave(params: {
   return { ok: true, followups: nextFollowups }
 }
 
-/** Merge-only patient patch for follow-up saves (no deletes of patient document). */
-export function buildFollowUpSavePatch(followups: FollowUpData[]): {
-  followups: FollowUpData[]
-  updatedAt: string
-} {
-  return {
+/**
+ * Merge-only patient patch for follow-up saves (no deletes of patient document).
+ * Syncs legacy readiness flags in the same write so Firestore rules see a ready patient.
+ */
+export function buildFollowUpSavePatch(
+  followups: FollowUpData[],
+  patient?: Patient | Record<string, unknown> | null
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {
     followups,
     updatedAt: new Date().toISOString(),
   }
+
+  if (!patient || typeof patient !== "object") {
+    return patch
+  }
+
+  const data = patient as Patient
+
+  if (isBaselineCompleteForFollowupGuard(data) && data.baselineComplete !== true) {
+    patch.baselineComplete = true
+  }
+
+  if (isPatientInfoCompleteForPatient(data) && data.patientInfoComplete !== true) {
+    patch.patientInfoComplete = true
+  }
+
+  const visitDate = resolvePatientBaselineVisitDate(data as unknown as Record<string, unknown>)
+  if (visitDate && data.baselineVisitDate !== visitDate) {
+    patch.baselineVisitDate = visitDate
+  }
+
+  return patch
 }
 
 /** Merge-only patient patch for baseline saves (no deletes of patient document). */

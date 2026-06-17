@@ -366,8 +366,8 @@ service cloud.firestore {
       function followupsGuard() {
         return !followupsTouched() ||
           (
-            baselineCompleteForFollowup(resource.data) &&
-            patientReadyForFollowup(resource.data) &&
+            baselineCompleteForFollowup(request.resource.data) &&
+            patientReadyForFollowup(request.resource.data) &&
             allFollowupsComplete(request.resource.data.followups)
           );
       }
