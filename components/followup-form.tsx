@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, memo, useRef, useEffect, useMemo, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, updateDoc, getDoc } from "firebase/firestore"
+import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Loader2 } from "lucide-react"
 import DOMPurify from "dompurify"
@@ -39,7 +39,7 @@ import {
   type PrerequisiteIssue,
   type PrerequisiteSection,
 } from "@/lib/patient-prerequisites"
-import { buildFollowUpsForSave, buildFollowUpSavePatch } from "@/lib/patient-save"
+import { buildFollowUpsForSave } from "@/lib/patient-save"
 import { getFollowUpFirestoreGuardIssues } from "@/lib/firestore-guards"
 import { collectFollowUpFormIssues } from "@/lib/collect-followup-form-issues"
 import {
@@ -704,33 +704,49 @@ export const FollowUpForm = memo(function FollowUpForm({
           return
         }
 
-        if (isAdminAuthenticated) {
-          const response = await fetch(`/api/admin/patients/${patientId}/followups`, {
+        const saveFollowupsViaApi = async (followups: FollowUpData[]) => {
+          const headers: Record<string, string> = { "Content-Type": "application/json" }
+
+          if (isAdminAuthenticated) {
+            const response = await fetch(`/api/admin/patients/${patientId}/followups`, {
+              method: "PATCH",
+              credentials: "include",
+              headers,
+              body: JSON.stringify({ followups }),
+            })
+            const result = (await response.json().catch(() => ({}))) as {
+              success?: boolean
+              error?: string
+            }
+            if (!response.ok || !result.success) {
+              throw new Error(result.error || "Admin follow-up save failed. Please try again.")
+            }
+            return
+          }
+
+          const idToken = await auth?.currentUser?.getIdToken()
+          if (!idToken) {
+            throw new Error("Your session is missing. Sign out and sign in again, then retry.")
+          }
+
+          headers.Authorization = `Bearer ${idToken}`
+          const response = await fetch(`/api/patients/${patientId}/followups`, {
             method: "PATCH",
             credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ followups: buildResult.followups }),
+            headers,
+            body: JSON.stringify({ followups }),
           })
           const result = (await response.json().catch(() => ({}))) as {
             success?: boolean
             error?: string
           }
           if (!response.ok || !result.success) {
-            toast({
-              variant: "destructive",
-              title: "Error saving data",
-              description: result.error || "Admin follow-up save failed. Please try again.",
-            })
-            return
+            throw new Error(result.error || "Follow-up save failed. Please try again.")
           }
-        } else {
-          await updateDoc(patientDocRef, buildFollowUpSavePatch(buildResult.followups))
         }
+
+        await saveFollowupsViaApi(buildResult.followups)
       } catch (error) {
-        const firebaseCode =
-          typeof error === "object" && error && "code" in error
-            ? String((error as any).code)
-            : "unknown"
         if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
           console.error("Error saving follow-up data:", error)
         }
@@ -741,11 +757,14 @@ export const FollowUpForm = memo(function FollowUpForm({
         toast({
           variant: "destructive",
           title: "Error saving data",
-          description: getFirestoreSaveErrorMessage(error, {
-            isSectionLocked,
-            canOverrideLock,
-            lockMessage,
-          }),
+          description:
+            error instanceof Error
+              ? error.message
+              : getFirestoreSaveErrorMessage(error, {
+                  isSectionLocked,
+                  canOverrideLock,
+                  lockMessage,
+                }),
         })
         return
       }
