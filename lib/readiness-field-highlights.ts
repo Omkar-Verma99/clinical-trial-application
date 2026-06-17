@@ -49,7 +49,7 @@ export function isBaselineFieldValidInSavedRecord(
 ): boolean {
   const errors = getBaselineValidationErrors(existingData ?? {}, {
     patient: {
-      baselineVisitDate: patientBaselineVisitDate,
+      baselineVisitDate: patientBaselineVisitDate ?? "",
       baseline: existingData ?? undefined,
     },
   })

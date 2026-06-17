@@ -243,7 +243,7 @@ function buildFollowUp(uid: string, patientId: string, overrides: Record<string,
     serumCreatinine: 1.0,
     egfr: 90,
     urinalysis: "Normal",
-    glycemicResponse: { category: "Responder" },
+    glycemicResponse: { category: "Responder", hba1cChange: -0.5, hba1cPercentageChange: -6.5 },
     outcomes: {
       weightChange: "Decreased",
       bpControlAchieved: true,
