@@ -50,6 +50,8 @@ export default function AdminPatientDetailPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [exporting, setExporting] = useState(false);
   const [creatingFollowUp, setCreatingFollowUp] = useState(false);
+  const [focusFieldId, setFocusFieldId] = useState<string | undefined>();
+  const [highlightFieldIds, setHighlightFieldIds] = useState<string[] | undefined>();
   const [lockBusySection, setLockBusySection] = useState<string | null>(null);
   const loadedDoctorIdRef = useRef<string>('');
 
@@ -131,6 +133,20 @@ export default function AdminPatientDetailPage() {
   }, [baselineComplete, followups]);
   const sectionLocks = useMemo(() => patient?.sectionLocks || {}, [patient]);
   const canManageSectionLocks = hasPermission('manage_section_locks');
+
+  const handleNavigateToSection = useCallback(
+    (section: 'patient-info' | 'baseline', fieldId?: string, fieldIds?: string[]) => {
+      const ids = fieldIds?.length ? fieldIds : fieldId ? [fieldId] : undefined;
+      setHighlightFieldIds(ids);
+      setFocusFieldId(ids?.[0]);
+      setActiveTab(section === 'patient-info' ? 'patient-info' : 'baseline');
+    },
+    []
+  );
+
+  const handleFocusFieldHandled = useCallback(() => {
+    setFocusFieldId(undefined);
+  }, []);
 
   const handleExportPDF = useCallback(async () => {
     if (!patient) return;
@@ -437,9 +453,12 @@ export default function AdminPatientDetailPage() {
             presetEditPatientId={patient.id}
             forceEmbedded
             allowAnyDoctorEdit
+            focusFieldId={activeTab === 'patient-info' ? focusFieldId : undefined}
+            highlightFieldIds={activeTab === 'patient-info' ? highlightFieldIds : undefined}
+            onFocusFieldHandled={handleFocusFieldHandled}
             isSectionLocked={isSectionLocked(sectionLocks, 'patient_info')}
             canOverrideLock
-            onSaved={() => {}}
+            onSaved={() => setHighlightFieldIds(undefined)}
           />
             </>
           )}
@@ -466,9 +485,12 @@ export default function AdminPatientDetailPage() {
             patientBaselineVisitDate={patient.baselineVisitDate || ''}
             patientWeight={typeof patient.weight === 'number' ? patient.weight : null}
             doctorIdOverride={patient.doctorId}
+            focusFieldId={activeTab === 'baseline' ? focusFieldId : undefined}
+            highlightFieldIds={activeTab === 'baseline' ? highlightFieldIds : undefined}
+            onFocusFieldHandled={handleFocusFieldHandled}
             isSectionLocked={isSectionLocked(sectionLocks, 'baseline')}
             canOverrideLock
-            onSuccess={() => {}}
+            onSuccess={() => setHighlightFieldIds(undefined)}
           />
           </>
           )}
@@ -493,9 +515,7 @@ export default function AdminPatientDetailPage() {
             <FollowUpForm
               patientId={patient.id}
               patientSnapshot={patient}
-              onNavigateToSection={(section) =>
-                setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
-              }
+              onNavigateToSection={handleNavigateToSection}
               existingData={Object.keys(followup).length === 0 ? null : followup}
               baselineDate={baseline?.baselineVisitDate}
               allFollowUps={followups}
@@ -516,9 +536,7 @@ export default function AdminPatientDetailPage() {
             <FollowUpForm
               patientId={patient.id}
               patientSnapshot={patient}
-              onNavigateToSection={(section) =>
-                setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
-              }
+              onNavigateToSection={handleNavigateToSection}
               existingData={null}
               baselineDate={baseline?.baselineVisitDate}
               allFollowUps={followups}

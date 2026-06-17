@@ -35,7 +35,7 @@ export default function AdminHeader() {
   };
 
   return (
-    <header className="border-b border-border bg-card sticky top-0 z-40">
+    <header className="shrink-0 border-b border-border bg-card sticky top-0 z-40">
       <div className="flex items-center justify-between h-16 px-6">
         {/* Logo / Title */}
         <div className="flex items-center gap-3">

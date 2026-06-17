@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
@@ -40,6 +40,8 @@ import {
 } from "@/lib/study-dates"
 import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
+import { reportFormFieldIssues, type FormFieldIssue } from "@/lib/form-field-navigation"
+import { usePersistentFieldHighlights } from "@/hooks/use-persistent-field-highlights"
 import Link from "next/link"
 import type { Patient } from "@/lib/types"
 
@@ -53,6 +55,9 @@ interface PatientFormPageProps {
   isSectionLocked?: boolean
   lockMessage?: string
   canOverrideLock?: boolean
+  focusFieldId?: string
+  highlightFieldIds?: string[]
+  onFocusFieldHandled?: () => void
   onSaved?: () => void
 }
 
@@ -63,6 +68,9 @@ export function PatientFormPage({
   isSectionLocked = false,
   lockMessage = "Locked. You cannot edit this section.",
   canOverrideLock = false,
+  focusFieldId,
+  highlightFieldIds,
+  onFocusFieldHandled,
   onSaved,
 }: PatientFormPageProps = {}) {
   const { user, doctor } = useAuth()
@@ -74,6 +82,7 @@ export function PatientFormPage({
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
   const submitLockRef = useRef(false)
+  const formRef = useRef<HTMLFormElement>(null)
   const existingPatientRef = useRef<Patient | null>(null)
   const originalBaselineVisitDateRef = useRef("")
   const [loadingPatientData, setLoadingPatientData] = useState(false)
@@ -187,6 +196,103 @@ export function PatientFormPage({
   const isCkdIneligible = useMemo(() => {
     return Boolean(comorbidities.chronicKidneyDisease && comorbidities.ckdEgfrCategory.startsWith("30"))
   }, [comorbidities.chronicKidneyDisease, comorbidities.ckdEgfrCategory])
+
+  const hasReasonForKcMeSempa = useMemo(
+    () =>
+      reasonForTripleFDC.inadequateGlycemicControl ||
+      reasonForTripleFDC.weightConcerns ||
+      reasonForTripleFDC.hypoglycemiaOnPriorTherapy ||
+      reasonForTripleFDC.highPillBurden ||
+      reasonForTripleFDC.poorAdherence ||
+      reasonForTripleFDC.costConsiderations ||
+      reasonForTripleFDC.physicianClinicalJudgment ||
+      Boolean(reasonForTripleFDC.other.trim()),
+    [reasonForTripleFDC]
+  )
+
+  const externalHighlightIds = useMemo(() => {
+    if (highlightFieldIds?.length) return highlightFieldIds
+    if (focusFieldId) return [focusFieldId]
+    return undefined
+  }, [focusFieldId, highlightFieldIds])
+
+  const isPatientInfoFieldValid = useCallback(
+    (fieldId: string): boolean => {
+      switch (fieldId) {
+        case "patientCode":
+          return !!formData.patientCode.trim() && !patientCodeValidationError
+        case "baselineVisitDate":
+          return !!normalizeStudyDate(formData.baselineVisitDate)
+        case "age":
+          return !!formData.age && !ageValidationError
+        case "field-gender":
+          return !!formData.gender
+        case "height":
+          return !!formData.height
+        case "weight":
+          return !!formData.weight && !(bmiMismatchWarning && formData.bmi)
+        case "durationOfDiabetes":
+          return !!formData.durationOfDiabetes && !durationValidationError
+        case "field-baselineGlycemicSeverity":
+          return !!formData.baselineGlycemicSeverity
+        case "field-smokingStatus":
+          return !!formData.smokingStatus
+        case "field-alcoholIntake":
+          return !!formData.alcoholIntake
+        case "field-physicalActivityLevel":
+          return !!formData.physicalActivityLevel
+        case "field-previousTreatmentType":
+          return !!previousTreatmentType
+        case "field-diabetesComplications":
+          return hasAtLeastOneCheckbox(diabetesComplications)
+        case "field-comorbidities":
+          return hasAtLeastOneCheckbox({
+            hypertension: comorbidities.hypertension,
+            dyslipidemia: comorbidities.dyslipidemia,
+            obesity: comorbidities.obesity,
+            ascvd: comorbidities.ascvd,
+            heartFailure: comorbidities.heartFailure,
+            chronicKidneyDisease: comorbidities.chronicKidneyDisease,
+            none: comorbidities.none,
+          })
+        case "field-ckdEgfrCategory":
+          return !comorbidities.chronicKidneyDisease || !!comorbidities.ckdEgfrCategory
+        case "field-previousDrugClasses":
+          return hasAtLeastOneCheckbox({
+            metformin: previousDrugClasses.metformin,
+            sulfonylurea: previousDrugClasses.sulfonylurea,
+            dpp4Inhibitor: previousDrugClasses.dpp4Inhibitor,
+            sglt2Inhibitor: previousDrugClasses.sglt2Inhibitor,
+            tzd: previousDrugClasses.tzd,
+            insulin: previousDrugClasses.insulin,
+            none: previousDrugClasses.none,
+          })
+        case "field-reasonForTripleFDC":
+          return hasReasonForKcMeSempa
+        default:
+          return true
+      }
+    },
+    [
+      ageValidationError,
+      bmiMismatchWarning,
+      comorbidities,
+      diabetesComplications,
+      durationValidationError,
+      formData,
+      hasReasonForKcMeSempa,
+      patientCodeValidationError,
+      previousDrugClasses,
+      previousTreatmentType,
+    ]
+  )
+
+  const { showHighlightBanner, setValidationIssues, clearAllHighlights } = usePersistentFieldHighlights({
+    formRef,
+    externalFieldIds: externalHighlightIds,
+    isFieldValid: isPatientInfoFieldValid,
+    onExternalHandled: onFocusFieldHandled,
+  })
 
   useEffect(() => {
     setShowIneligibleModal(isCkdIneligible)
@@ -431,44 +537,44 @@ export function PatientFormPage({
       return Number.isFinite(n) ? n : null
     }
 
-    // Validate required fields before saving to Firestore
-    const requiredFields = [
-      { field: formData.patientCode, name: "Patient Code" },
-      { field: formData.baselineVisitDate, name: "Baseline Visit Date" },
-      { field: formData.age, name: "Age" },
-      { field: formData.gender, name: "Gender" },
-      { field: formData.height, name: "Height" },
-      { field: formData.weight, name: "Weight" },
-      { field: formData.durationOfDiabetes, name: "Duration of Diabetes" },
-      { field: formData.baselineGlycemicSeverity, name: "Baseline Glycemic Severity" },
-      { field: formData.smokingStatus, name: "Smoking Status" },
-      { field: formData.alcoholIntake, name: "Alcohol Intake" },
-      { field: formData.physicalActivityLevel, name: "Physical Activity Level" },
-      { field: previousTreatmentType, name: "Previous Treatment Type" },
-    ]
-
-    const missingFields = requiredFields.filter(f => !f.field).map(f => f.name)
-
-    if (missingFields.length > 0) {
-      toast({
-        variant: "destructive",
-        title: "Missing Required Fields",
-        description: `Please fill in: ${missingFields.join(", ")}`,
-      })
+    const abortValidation = (issues: FormFieldIssue[], title?: string) => {
+      setValidationIssues(issues)
+      reportFormFieldIssues(issues, toast, title, { skipHighlight: true })
       setLoading(false)
       submitLockRef.current = false
+    }
+
+    // Validate required fields before saving to Firestore
+    const requiredChecks: { ok: boolean; fieldId: string; message: string }[] = [
+      { ok: !!formData.patientCode, fieldId: "patientCode", message: "Patient code is required (e.g. 001-ABC)." },
+      { ok: !!formData.baselineVisitDate, fieldId: "baselineVisitDate", message: "Baseline visit date is required (dd/mm/yyyy)." },
+      { ok: !!formData.age, fieldId: "age", message: "Age (years) is required." },
+      { ok: !!formData.gender, fieldId: "field-gender", message: "Select gender: Male, Female, or Other." },
+      { ok: !!formData.height, fieldId: "height", message: "Height (cm) is required." },
+      { ok: !!formData.weight, fieldId: "weight", message: "Weight (kg) is required." },
+      { ok: !!formData.durationOfDiabetes, fieldId: "durationOfDiabetes", message: "Duration of Type 2 diabetes (years) is required." },
+      { ok: !!formData.baselineGlycemicSeverity, fieldId: "field-baselineGlycemicSeverity", message: "Select baseline glycemic severity." },
+      { ok: !!formData.smokingStatus, fieldId: "field-smokingStatus", message: "Select smoking status." },
+      { ok: !!formData.alcoholIntake, fieldId: "field-alcoholIntake", message: "Select alcohol intake." },
+      { ok: !!formData.physicalActivityLevel, fieldId: "field-physicalActivityLevel", message: "Select physical activity level." },
+      { ok: !!previousTreatmentType, fieldId: "field-previousTreatmentType", message: "Select previous treatment type." },
+    ]
+
+    const missingRequired = requiredChecks
+      .filter((check) => !check.ok)
+      .map(({ fieldId, message }) => ({ fieldId, message }))
+
+    if (missingRequired.length > 0) {
+      abortValidation(missingRequired, "Missing required fields")
       return
     }
 
     const normalizedBaselineVisitDate = normalizeStudyDate(formData.baselineVisitDate)
     if (!normalizedBaselineVisitDate) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Baseline Visit Date",
-        description: "Baseline visit date is required (use dd/mm/yyyy).",
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation(
+        [{ fieldId: "baselineVisitDate", message: "Baseline visit date is required (use dd/mm/yyyy)." }],
+        "Invalid baseline visit date"
+      )
       return
     }
 
@@ -496,25 +602,19 @@ export function PatientFormPage({
         latestTreatmentDate || undefined
       )
       if (baselineDateError) {
-        toast({
-          variant: "destructive",
-          title: "Invalid Baseline Visit Date",
-          description: baselineDateError,
-        })
-        setLoading(false)
-        submitLockRef.current = false
+        abortValidation(
+          [{ fieldId: "baselineVisitDate", message: baselineDateError }],
+          "Invalid baseline visit date"
+        )
         return
       }
     }
 
     if (!hasAtLeastOneCheckbox(diabetesComplications)) {
-      toast({
-        variant: "destructive",
-        title: "Missing Selection",
-        description: "Please select at least one diabetes-related complication (or None).",
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation(
+        [{ fieldId: "field-diabetesComplications", message: "Select at least one diabetes-related complication (or None)." }],
+        "Missing selection"
+      )
       return
     }
 
@@ -528,24 +628,18 @@ export function PatientFormPage({
       none: comorbidities.none,
     }
     if (!hasAtLeastOneCheckbox(comorbidityChecks)) {
-      toast({
-        variant: "destructive",
-        title: "Missing Selection",
-        description: "Please select at least one comorbidity (or None).",
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation(
+        [{ fieldId: "field-comorbidities", message: "Select at least one comorbidity (or None)." }],
+        "Missing selection"
+      )
       return
     }
 
     if (comorbidities.chronicKidneyDisease && !comorbidities.ckdEgfrCategory) {
-      toast({
-        variant: "destructive",
-        title: "Missing CKD Category",
-        description: "Please select the baseline eGFR category when Chronic Kidney Disease is checked.",
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation(
+        [{ fieldId: "field-ckdEgfrCategory", message: "Select the baseline eGFR category when Chronic Kidney Disease is checked." }],
+        "Missing CKD category"
+      )
       return
     }
 
@@ -559,47 +653,32 @@ export function PatientFormPage({
       none: previousDrugClasses.none,
     }
     if (!hasAtLeastOneCheckbox(drugClassChecks)) {
-      toast({
-        variant: "destructive",
-        title: "Missing Selection",
-        description: "Please select at least one previously used drug class (or None).",
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation(
+        [{ fieldId: "field-previousDrugClasses", message: "Select at least one previously used drug class (or None)." }],
+        "Missing selection"
+      )
       return
     }
 
     if (ageValidationError) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Age",
-        description: ageValidationError,
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation([{ fieldId: "age", message: ageValidationError }], "Invalid age")
       return
     }
 
     if (durationValidationError) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Duration",
-        description: durationValidationError,
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation(
+        [{ fieldId: "durationOfDiabetes", message: durationValidationError }],
+        "Invalid duration"
+      )
       return
     }
 
     const normalizedPatientCode = formData.patientCode.trim().toUpperCase()
     if (patientCodeValidationError) {
-      toast({
-        variant: "destructive",
-        title: "Invalid Participant Code",
-        description: patientCodeValidationError,
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation(
+        [{ fieldId: "patientCode", message: patientCodeValidationError }],
+        "Invalid participant code"
+      )
       return
     }
 
@@ -688,24 +767,13 @@ export function PatientFormPage({
       return
     }
 
-    const hasReasonForKcMeSempa =
-      reasonForTripleFDC.inadequateGlycemicControl ||
-      reasonForTripleFDC.weightConcerns ||
-      reasonForTripleFDC.hypoglycemiaOnPriorTherapy ||
-      reasonForTripleFDC.highPillBurden ||
-      reasonForTripleFDC.poorAdherence ||
-      reasonForTripleFDC.costConsiderations ||
-      reasonForTripleFDC.physicianClinicalJudgment ||
-      Boolean(reasonForTripleFDC.other.trim())
+    const hasReasonForKcMeSempaLocal = hasReasonForKcMeSempa
 
-    if (!hasReasonForKcMeSempa) {
-      toast({
-        variant: "destructive",
-        title: "Missing Selection",
-        description: "Please select at least one reason for KC MeSempa initiation",
-      })
-      setLoading(false)
-      submitLockRef.current = false
+    if (!hasReasonForKcMeSempaLocal) {
+      abortValidation(
+        [{ fieldId: "field-reasonForTripleFDC", message: "Select at least one reason for KC MeSempa initiation." }],
+        "Missing selection"
+      )
       return
     }
 
@@ -713,13 +781,10 @@ export function PatientFormPage({
     const height = parseFloat(formData.height)
     const bmiValue = parseFloat(formData.bmi)
     if (height && bmiValue && bmiMismatchWarning) {
-      toast({
-        variant: "destructive",
-        title: "BMI Validation Error",
-        description: "The entered BMI does not match the calculated value from height/weight. Please correct the values.",
-      })
-      setLoading(false)
-      submitLockRef.current = false
+      abortValidation(
+        [{ fieldId: "weight", message: "BMI does not match height and weight. Please correct the values." }],
+        "BMI validation error"
+      )
       return
     }
 
@@ -872,6 +937,7 @@ export function PatientFormPage({
 
           await updateDoc(patientDocRef, updatePayload)
           originalBaselineVisitDateRef.current = normalizedBaselineVisitDate
+          clearAllHighlights()
 
           toast({
             title: "Patient updated successfully",
@@ -900,6 +966,7 @@ export function PatientFormPage({
           const batch = writeBatch(db)
           batch.set(patientDocRef, patientDataWithId)
           await batch.commit()
+          clearAllHighlights()
 
           if (isDevelopmentEnv()) {
             console.log(`✓ Patient saved to Firebase: ${patientId}`)
@@ -998,7 +1065,12 @@ export function PatientFormPage({
                 {lockMessage}
               </div>
             )}
-            <form onSubmit={handleSubmit} className="space-y-8">
+            {showHighlightBanner && (
+              <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                Fields marked in <span className="font-semibold">red</span> below must be corrected before saving.
+              </div>
+            )}
+            <form ref={formRef} onSubmit={handleSubmit} className="space-y-8">
               {loadingPatientData && !isEmbedded && (
                 <div className="rounded-md border border-border bg-muted/40 px-4 py-3 text-sm">
                   Loading patient data...
@@ -1127,7 +1199,7 @@ export function PatientFormPage({
                   </div>
                 </div>
 
-                <div className="space-y-2 mt-4">
+                <div id="field-gender" className="space-y-2 mt-4">
                   <Label>Gender *</Label>
                   <div className="flex gap-4">
                     {["Male", "Female", "Other"].map((gender) => (
@@ -1154,9 +1226,10 @@ export function PatientFormPage({
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-4 mt-4">
-                  <div className="space-y-2">
+                  <div id="field-smokingStatus" className="space-y-2">
                     <Label>Smoking Status *</Label>
                     <select
+                      id="smokingStatus"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={formData.smokingStatus}
                       onChange={(e) => setFormData({ ...formData, smokingStatus: e.target.value })}
@@ -1168,9 +1241,10 @@ export function PatientFormPage({
                       <option value="Current">Current</option>
                     </select>
                   </div>
-                  <div className="space-y-2">
+                  <div id="field-alcoholIntake" className="space-y-2">
                     <Label>Alcohol Intake *</Label>
                     <select
+                      id="alcoholIntake"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={formData.alcoholIntake}
                       onChange={(e) => setFormData({ ...formData, alcoholIntake: e.target.value })}
@@ -1182,9 +1256,10 @@ export function PatientFormPage({
                       <option value="Regular">Regular</option>
                     </select>
                   </div>
-                  <div className="space-y-2">
+                  <div id="field-physicalActivityLevel" className="space-y-2">
                     <Label>Physical Activity Level *</Label>
                     <select
+                      id="physicalActivityLevel"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={formData.physicalActivityLevel}
                       onChange={(e) => setFormData({ ...formData, physicalActivityLevel: e.target.value })}
@@ -1217,9 +1292,10 @@ export function PatientFormPage({
                   {durationValidationError && <p className="text-xs text-red-600">{durationValidationError}</p>}
                 </div>
 
-                <div className="space-y-2 mb-4">
+                <div id="field-baselineGlycemicSeverity" className="space-y-2 mb-4">
                   <Label>Baseline Glycemic Severity *</Label>
                   <select
+                    id="baselineGlycemicSeverity"
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={formData.baselineGlycemicSeverity}
                     onChange={(e) => setFormData({ ...formData, baselineGlycemicSeverity: e.target.value })}
@@ -1233,7 +1309,7 @@ export function PatientFormPage({
                   </select>
                 </div>
 
-                <div className="space-y-3">
+                <div id="field-diabetesComplications" className="space-y-3">
                   <Label>Diabetes-Related Complications *</Label>
                   <div className="space-y-2">
                     {Object.entries(diabetesComplications).map(([key, value]) => (
@@ -1275,7 +1351,7 @@ export function PatientFormPage({
               </div>
 
               {/* Comorbidities */}
-              <div className="border-t pt-6">
+              <div id="field-comorbidities" className="border-t pt-6">
                 <h3 className="text-lg font-bold mb-4">Comorbidities *</h3>
                 <div className="space-y-3">
                   {["hypertension", "dyslipidemia", "obesity", "ascvd", "heartFailure", "chronicKidneyDisease"].map((condition) => (
@@ -1327,9 +1403,10 @@ export function PatientFormPage({
                 </div>
 
                 {comorbidities.chronicKidneyDisease && (
-                  <div className="space-y-2 mt-4">
+                  <div id="field-ckdEgfrCategory" className="space-y-2 mt-4">
                     <Label>If CKD present - Baseline eGFR Category</Label>
                     <select
+                      id="ckdEgfrCategory"
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       value={comorbidities.ckdEgfrCategory}
                       onChange={(e) => setComorbidities({ ...comorbidities, ckdEgfrCategory: e.target.value })}
@@ -1358,9 +1435,10 @@ export function PatientFormPage({
               <div className="border-t pt-6">
                 <h3 className="text-lg font-bold mb-4">Prior Anti-Diabetic Therapy</h3>
 
-                <div className="space-y-2 mb-6">
+                <div id="field-previousTreatmentType" className="space-y-2 mb-6">
                   <Label>Previous Treatment Type *</Label>
                   <select
+                    id="previousTreatmentType"
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={previousTreatmentType}
                     onChange={(e) => setPreviousTreatmentType(e.target.value)}
@@ -1374,7 +1452,7 @@ export function PatientFormPage({
                   </select>
                 </div>
 
-                <div className="space-y-3 mb-6">
+                <div id="field-previousDrugClasses" className="space-y-3 mb-6">
                   <Label>Previously Used Drug Classes *</Label>
                   <div className="space-y-2">
                     {["metformin", "sulfonylurea", "dpp4Inhibitor", "sglt2Inhibitor", "tzd", "insulin"].map((drug) => (
@@ -1436,7 +1514,7 @@ export function PatientFormPage({
                   />
                 </div>
 
-                <div className="space-y-3">
+                <div id="field-reasonForTripleFDC" className="space-y-3">
                   <Label>Reason for Initiating KC MeSempa *</Label>
                   <div className="space-y-2">
                     {[

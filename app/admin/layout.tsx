@@ -5,12 +5,14 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, ReactNode } from 'react';
 import AdminHeader from '@/app/admin/components/AdminHeader';
 import AdminSidebar from '@/app/admin/components/AdminSidebar';
+import { useLockViewportScroll } from '@/hooks/use-lock-viewport';
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { isAuthenticated, isLoading } = useAdminAuth();
   const router = useRouter();
   const pathname = usePathname();
   const isLoginRoute = pathname === '/admin/login';
+  useLockViewportScroll(!isLoginRoute && isAuthenticated && !isLoading);
 
   useEffect(() => {
     if (!isLoginRoute && !isLoading && !isAuthenticated) {

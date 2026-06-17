@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, memo, useRef, useEffect, useMemo } from "react"
+import { useState, memo, useRef, useEffect, useMemo, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { doc, updateDoc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
@@ -41,6 +41,15 @@ import {
 } from "@/lib/patient-prerequisites"
 import { buildFollowUpsForSave, buildFollowUpSavePatch } from "@/lib/patient-save"
 import { getFollowUpFirestoreGuardIssues } from "@/lib/firestore-guards"
+import { collectFollowUpFormIssues } from "@/lib/collect-followup-form-issues"
+import {
+  followUpReasonToFieldId,
+  highlightFormFields,
+  prerequisiteIssuesToFieldIds,
+  reportFormFieldIssues,
+  type FormFieldIssue,
+} from "@/lib/form-field-navigation"
+import { usePersistentFieldHighlights } from "@/hooks/use-persistent-field-highlights"
 import { auth } from "@/lib/firebase"
 import { hasAtLeastOneCheckbox, hasDuplicateVisitDate } from "@/lib/form-validation"
 import { preserveScrollPosition } from "@/lib/scroll-preserve"
@@ -56,7 +65,11 @@ interface FollowUpFormProps {
   followUpIndex?: number
   doctorIdOverride?: string
   patientSnapshot?: Patient | null
-  onNavigateToSection?: (section: PrerequisiteSection) => void
+  onNavigateToSection?: (
+    section: PrerequisiteSection,
+    focusFieldId?: string,
+    highlightFieldIds?: string[]
+  ) => void
   isSectionLocked?: boolean
   lockMessage?: string
   canOverrideLock?: boolean
@@ -82,6 +95,7 @@ export const FollowUpForm = memo(function FollowUpForm({
   const [loading, setLoading] = useState(false)
   const [ranges, setRanges] = useState<ClinicalValidationRanges>(DEFAULT_CLINICAL_VALIDATION_RANGES)
   const submitLockRef = useRef(false)
+  const formRef = useRef<HTMLFormElement>(null)
   const [timelinePopup, setTimelinePopup] = useState<{ open: boolean; title: string; message: string }>({
     open: false,
     title: "",
@@ -112,6 +126,8 @@ export const FollowUpForm = memo(function FollowUpForm({
   const notifyPrerequisiteBlocked = (issues: PrerequisiteIssue[]) => {
     if (issues.length === 0) return
     const section = getPrimaryPrerequisiteSection(issues)
+    const highlightFieldIds = prerequisiteIssuesToFieldIds(section, issues)
+
     toast({
       variant: "destructive",
       title:
@@ -120,7 +136,13 @@ export const FollowUpForm = memo(function FollowUpForm({
           : "Baseline needs correction",
       description: `Fix these before saving follow-up: ${formatPrerequisiteIssueList(issues)}`,
     })
-    onNavigateToSection?.(section)
+    onNavigateToSection?.(section, highlightFieldIds[0], highlightFieldIds)
+    if (highlightFieldIds.length > 0) {
+      window.setTimeout(
+        () => highlightFormFields(highlightFieldIds, { scrollToFirst: true, persistent: true }),
+        350
+      )
+    }
   }
   
   // Calculate visitNumber based on date difference from baseline (in weeks)
@@ -319,6 +341,24 @@ export const FollowUpForm = memo(function FollowUpForm({
     loadRanges()
   }, [])
 
+  const isFollowUpFieldValid = useCallback(
+    (fieldId: string) => {
+      const issues = collectFollowUpFormIssues({
+        formData,
+        adverseEvents,
+        allFollowUps,
+        followUpIndex,
+      })
+      return !issues.some((issue) => issue.fieldId === fieldId)
+    },
+    [adverseEvents, allFollowUps, followUpIndex, formData]
+  )
+
+  const { showHighlightBanner, setValidationIssues, clearAllHighlights } = usePersistentFieldHighlights({
+    formRef,
+    isFieldValid: isFollowUpFieldValid,
+  })
+
   const updateAdverseEvent = (id: string, patch: Partial<StructuredAdverseEvent>) => {
     setAdverseEvents((prev) => prev.map((event) => (event.id === id ? { ...event, ...patch } : event)))
   }
@@ -368,6 +408,13 @@ export const FollowUpForm = memo(function FollowUpForm({
     setLoading(true)
     const startTime = Date.now()
 
+    const abortValidation = (issues: FormFieldIssue[], title?: string) => {
+      setValidationIssues(issues)
+      reportFormFieldIssues(issues, toast, title, { skipHighlight: true })
+      setLoading(false)
+      submitLockRef.current = false
+    }
+
     if (prerequisiteIssues.length > 0) {
       notifyPrerequisiteBlocked(prerequisiteIssues)
       setLoading(false)
@@ -376,110 +423,15 @@ export const FollowUpForm = memo(function FollowUpForm({
     }
 
     try {
-      // VALIDATION PHASE 1: Check required fields
-      const validationErrors: string[] = []
-      
-      if (!formData.visitDate) {
-        validationErrors.push("Visit date is required")
-      } else {
-        const visitDateError = validateFollowUpVisitDate(formData.visitDate)
-        if (visitDateError) validationErrors.push(visitDateError)
-        if (hasDuplicateVisitDate(formData.visitDate, allFollowUps, followUpIndex)) {
-          validationErrors.push("Another follow-up already uses this visit date")
-        }
-      }
-      if (!formData.hba1c) validationErrors.push("HbA1c is required")
-      if (!formData.fpg) validationErrors.push("FPG is required")
-      if (!formData.ppg) validationErrors.push("PPG is required")
-      if (!formData.weight) validationErrors.push("Weight is required")
-      if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
-      if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
-      if (!formData.heartRate) validationErrors.push("Heart Rate is required")
-      if (!formData.serumCreatinine) validationErrors.push("Serum Creatinine is required")
-      if (!formData.egfr) validationErrors.push("eGFR is required")
-      if (!formData.urinalysisType) validationErrors.push("Urinalysis is required")
-      if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify.trim()) {
-        validationErrors.push("Please specify abnormality for urinalysis")
-      }
-      if (!formData.hba1cResponse) validationErrors.push("HbA1c response category is required")
-      if (!formData.weightChange) validationErrors.push("Weight change is required")
-      if (formData.patientContinuingTreatment === null) validationErrors.push("Please select patient continuing treatment status")
-      if (formData.bpControlAchieved === null) validationErrors.push("Please select blood pressure control status")
-      if (!formData.renalOutcome) validationErrors.push("Renal outcome is required")
-      if (formData.addOnTherapy === null) validationErrors.push("Please select add-on/change therapy status")
-      if (formData.addOnTherapy === true && !formData.addOnTherapyDetails.trim()) {
-        validationErrors.push("Please specify add-on/changed therapy details")
-      }
-      if (formData.adverseEventsPresent === null) validationErrors.push("Please select adverse event status")
-      if (formData.preferLongTerm === null) validationErrors.push("Please select long-term KC MeSempa preference")
-      if (!formData.additionalComments.trim()) validationErrors.push("Additional comments are required")
+      const validationIssues = collectFollowUpFormIssues({
+        formData,
+        adverseEvents,
+        allFollowUps,
+        followUpIndex,
+      })
 
-      const profileChecks = {
-        uncontrolledT2dm: formData.uncontrolledT2dm,
-        obeseT2dm: formData.obeseT2dm,
-        ckdPatients: formData.ckdPatients,
-        htnT2dm: formData.htnT2dm,
-        elderlyPatients: formData.elderlyPatients,
-        other: formData.profileOther,
-      }
-      if (!hasAtLeastOneCheckbox(profileChecks)) {
-        validationErrors.push("Please select at least one preferred patient profile (or Other)")
-      }
-      if (formData.profileOther && !formData.profileOtherText.trim()) {
-        validationErrors.push("Please specify the other preferred patient profile")
-      }
-
-      const eventChecks = {
-        hypoglycemiaMild: formData.hypoglycemiaMild,
-        hypoglycemiaModerate: formData.hypoglycemiaModerate,
-        hypoglycemiaSevere: formData.hypoglycemiaSevere,
-        uti: formData.uti,
-        genitalInfection: formData.genitalInfection,
-        dizzinessDehydration: formData.dizzinessDehydration,
-        hospitalizationErVisit: formData.hospitalizationErVisit,
-        none: formData.eventsNone,
-      }
-      if (!hasAtLeastOneCheckbox(eventChecks)) {
-        validationErrors.push("Please select at least one event of special interest (or None)")
-      }
-      if (formData.hospitalizationErVisit && !formData.hospitalizationReason.trim()) {
-        validationErrors.push("Please specify the reason for hospitalization/ER visit")
-      }
-      if (formData.patientContinuingTreatment === false && !formData.discontinuationReason) validationErrors.push("Please specify discontinuation reason")
-      if (formData.patientContinuingTreatment === false && formData.discontinuationReason === "Other" && !formData.discontinuationReasonOther.trim()) {
-        validationErrors.push("Please specify discontinuation reason details")
-      }
-      if (formData.missedDoses === "") validationErrors.push("Missed doses information is required")
-      if (!formData.overallEfficacy) validationErrors.push("Overall efficacy is required")
-      if (!formData.overallTolerability) validationErrors.push("Overall tolerability is required")
-      if (!formData.complianceJudgment) validationErrors.push("Compliance judgment is required")
-
-      if (formData.adverseEventsPresent === true) {
-        if (adverseEvents.length === 0) {
-          validationErrors.push("Add at least one adverse event")
-        }
-        adverseEvents.forEach((event, index) => {
-          if (!event.aeTerm.trim()) validationErrors.push(`AE #${index + 1}: term is required`)
-          if (!event.onsetDate) validationErrors.push(`AE #${index + 1}: onset date is required`)
-          if (!event.severity) validationErrors.push(`AE #${index + 1}: severity is required`)
-          if (!event.serious) validationErrors.push(`AE #${index + 1}: serious selection is required`)
-          if (!event.actionTaken) validationErrors.push(`AE #${index + 1}: action taken is required`)
-          if (!event.outcome) validationErrors.push(`AE #${index + 1}: outcome is required`)
-          if (event.stopDate && event.onsetDate && event.stopDate < event.onsetDate) {
-            validationErrors.push(`AE #${index + 1}: stop date cannot be before onset date`)
-          }
-          if (event.actionTaken === "Other" && !event.actionTakenOther?.trim()) {
-            validationErrors.push(`AE #${index + 1}: specify action taken for Other`)
-          }
-        })
-      }
-
-      if (validationErrors.length > 0) {
-        toast({
-          variant: "destructive",
-          title: "Missing required fields",
-          description: validationErrors.slice(0, 3).join(", ") + (validationErrors.length > 3 ? ` and ${validationErrors.length - 3} more` : ""),
-        })
+      if (validationIssues.length > 0) {
+        abortValidation(validationIssues, "Missing required fields")
         return
       }
 
@@ -488,6 +440,10 @@ export const FollowUpForm = memo(function FollowUpForm({
         formData.dataAsRoutinePractice !== true ||
         formData.patientIdentityMapping !== true
       ) {
+        abortValidation(
+          [{ fieldId: "field-dataPrivacy", message: "Check all Data Privacy & Confidentiality options." }],
+          "Data privacy required"
+        )
         setMandatoryPopup({
           open: true,
           title: "Data Privacy Mandatory",
@@ -497,6 +453,10 @@ export const FollowUpForm = memo(function FollowUpForm({
       }
 
       if (formData.physicianConfirmation !== true) {
+        abortValidation(
+          [{ fieldId: "field-physicianDeclaration", message: "Confirm the Physician Declaration checkbox." }],
+          "Physician declaration required"
+        )
         setMandatoryPopup({
           open: true,
           title: "Physician Declaration Mandatory",
@@ -516,52 +476,51 @@ export const FollowUpForm = memo(function FollowUpForm({
       const serumCreatinine = formData.serumCreatinine ? Number.parseFloat(formData.serumCreatinine) : NaN
       const egfr = formData.egfr ? Number.parseFloat(formData.egfr) : NaN
 
-      const rangeErrors: string[] = []
-      
+      const rangeIssues: FormFieldIssue[] = []
+
       if (formData.hba1c && (isNaN(hba1c) || hba1c < ranges.hba1c.min || hba1c > ranges.hba1c.max)) {
-        rangeErrors.push(`HbA1c must be between ${ranges.hba1c.min}-${ranges.hba1c.max}%`)
+        rangeIssues.push({ fieldId: "hba1c", message: `HbA1c must be between ${ranges.hba1c.min}-${ranges.hba1c.max}%.` })
       }
       if (formData.fpg && (isNaN(fpg) || fpg < ranges.fpg.min || fpg > ranges.fpg.max)) {
-        rangeErrors.push(`FPG must be between ${ranges.fpg.min}-${ranges.fpg.max} mg/dL`)
+        rangeIssues.push({ fieldId: "fpg", message: `FPG must be between ${ranges.fpg.min}-${ranges.fpg.max} mg/dL.` })
       }
       if (isNaN(ppg) || ppg < ranges.ppg.min || ppg > ranges.ppg.max) {
-        rangeErrors.push(`PPG must be between ${ranges.ppg.min}-${ranges.ppg.max} mg/dL`)
+        rangeIssues.push({ fieldId: "ppg", message: `PPG must be between ${ranges.ppg.min}-${ranges.ppg.max} mg/dL.` })
       }
       if (formData.weight && (isNaN(weight) || weight < ranges.weight.min || weight > ranges.weight.max)) {
-        rangeErrors.push(`Weight must be between ${ranges.weight.min}-${ranges.weight.max} kg`)
+        rangeIssues.push({ fieldId: "weight", message: `Weight must be between ${ranges.weight.min}-${ranges.weight.max} kg.` })
       }
       if (
         formData.bloodPressureSystolic &&
         (isNaN(bpSystolic) || bpSystolic < ranges.bpSystolic.min || bpSystolic > ranges.bpSystolic.max)
       ) {
-        rangeErrors.push(`BP Systolic must be between ${ranges.bpSystolic.min}-${ranges.bpSystolic.max} mmHg`)
+        rangeIssues.push({ fieldId: "bpSys", message: `BP Systolic must be between ${ranges.bpSystolic.min}-${ranges.bpSystolic.max} mmHg.` })
       }
       if (
         formData.bloodPressureDiastolic &&
         (isNaN(bpDiastolic) || bpDiastolic < ranges.bpDiastolic.min || bpDiastolic > ranges.bpDiastolic.max)
       ) {
-        rangeErrors.push(`BP Diastolic must be between ${ranges.bpDiastolic.min}-${ranges.bpDiastolic.max} mmHg`)
+        rangeIssues.push({ fieldId: "bpDia", message: `BP Diastolic must be between ${ranges.bpDiastolic.min}-${ranges.bpDiastolic.max} mmHg.` })
       }
       if (isNaN(heartRate) || heartRate < ranges.heartRate.min || heartRate > ranges.heartRate.max) {
-        rangeErrors.push(`Heart Rate must be between ${ranges.heartRate.min}-${ranges.heartRate.max} bpm`)
+        rangeIssues.push({ fieldId: "heartRate", message: `Heart rate must be between ${ranges.heartRate.min}-${ranges.heartRate.max} bpm.` })
       }
       if (
         isNaN(serumCreatinine) ||
         serumCreatinine < ranges.serumCreatinine.min ||
         serumCreatinine > ranges.serumCreatinine.max
       ) {
-        rangeErrors.push(`Serum Creatinine must be between ${ranges.serumCreatinine.min}-${ranges.serumCreatinine.max} mg/dL`)
+        rangeIssues.push({
+          fieldId: "creatinine",
+          message: `Serum creatinine must be between ${ranges.serumCreatinine.min}-${ranges.serumCreatinine.max} mg/dL.`,
+        })
       }
       if (isNaN(egfr) || egfr < ranges.egfr.min || egfr > ranges.egfr.max) {
-        rangeErrors.push(`eGFR must be between ${ranges.egfr.min}-${ranges.egfr.max} mL/min/1.73m2`)
+        rangeIssues.push({ fieldId: "egfr", message: `eGFR must be between ${ranges.egfr.min}-${ranges.egfr.max} mL/min/1.73m².` })
       }
 
-      if (rangeErrors.length > 0) {
-        toast({
-          variant: "destructive",
-          title: "Invalid Values",
-          description: rangeErrors.join(", "),
-        })
+      if (rangeIssues.length > 0) {
+        abortValidation(rangeIssues, "Invalid values")
         return
       }
 
@@ -718,11 +677,11 @@ export const FollowUpForm = memo(function FollowUpForm({
           buildResult.followups[buildResult.followups.length - 1]
         )
         if (incompleteReasons.length > 0) {
-          toast({
-            variant: "destructive",
-            title: "Follow-up incomplete",
-            description: `Missing or invalid: ${incompleteReasons.slice(0, 4).join(", ")}`,
-          })
+          const issues = incompleteReasons.map((reason) => ({
+            fieldId: followUpReasonToFieldId(reason),
+            message: `${reason.replace(/\./g, " ")} is required.`,
+          }))
+          abortValidation(issues, "Follow-up incomplete")
           return
         }
 
@@ -791,6 +750,7 @@ export const FollowUpForm = memo(function FollowUpForm({
         return
       }
 
+      clearAllHighlights()
       toast({
         title: "✓ Follow-up assessment saved",
         description: "Week 12 assessment has been recorded.",
@@ -858,7 +818,17 @@ export const FollowUpForm = memo(function FollowUpForm({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => onNavigateToSection?.("patient-info")}
+                  onClick={() => {
+                    const highlightFieldIds = prerequisiteIssuesToFieldIds(
+                      "patient-info",
+                      patientInfoPrerequisiteIssues
+                    )
+                    onNavigateToSection?.(
+                      "patient-info",
+                      highlightFieldIds[0],
+                      highlightFieldIds
+                    )
+                  }}
                 >
                   Go to Patient Info
                 </Button>
@@ -868,7 +838,17 @@ export const FollowUpForm = memo(function FollowUpForm({
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => onNavigateToSection?.("baseline")}
+                  onClick={() => {
+                    const highlightFieldIds = prerequisiteIssuesToFieldIds(
+                      "baseline",
+                      baselinePrerequisiteIssues
+                    )
+                    onNavigateToSection?.(
+                      "baseline",
+                      highlightFieldIds[0],
+                      highlightFieldIds
+                    )
+                  }}
                 >
                   Go to Baseline
                 </Button>
@@ -881,7 +861,12 @@ export const FollowUpForm = memo(function FollowUpForm({
             {lockMessage}
           </div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
+          {showHighlightBanner && (
+            <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Fields marked in <span className="font-semibold">red</span> must be corrected before saving.
+            </div>
+          )}
           <fieldset disabled={loading || (isSectionLocked && !canOverrideLock)} className="space-y-6">
           {/* SECTION H - Follow-up Visit Date */}
           <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -1049,7 +1034,7 @@ export const FollowUpForm = memo(function FollowUpForm({
             </div>
 
             {/* Urinalysis with radio buttons and conditional text input */}
-            <div className="space-y-3">
+            <div id="field-urinalysis" className="space-y-3">
               <Label>Urinalysis *</Label>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -1095,7 +1080,7 @@ export const FollowUpForm = memo(function FollowUpForm({
           {/* SECTION I - Glycemic Response Assessment */}
           <div className="space-y-4 pt-4 border-t">
             <h3 className="font-semibold text-lg">Glycemic Response Assessment</h3>
-            <div className="space-y-3">
+            <div id="field-hba1cResponse" className="space-y-3">
               <Label className="text-base font-medium">HbA1c Response Category (tick one): *</Label>
               <div className="space-y-2 ml-2">
                 <div className="flex items-center gap-2">
@@ -1150,7 +1135,7 @@ export const FollowUpForm = memo(function FollowUpForm({
           <div className="space-y-4 pt-4 border-t">
             <h3 className="font-semibold text-lg">Weight, BP & Renal Outcomes</h3>
             
-            <div className="space-y-3">
+            <div id="field-weightChange" className="space-y-3">
               <Label className="text-base font-medium">Weight change: *</Label>
               <div className="space-y-2 ml-2">
                 <div className="flex items-center gap-2">
@@ -1200,7 +1185,7 @@ export const FollowUpForm = memo(function FollowUpForm({
               </div>
             </div>
 
-            <div className="space-y-3 pt-4">
+            <div id="field-renalOutcome" className="space-y-3 pt-4">
               <Label className="text-base font-medium">Renal outcome: *</Label>
               <div className="space-y-2 ml-2">
                 <div className="flex items-center gap-2">
@@ -1250,7 +1235,7 @@ export const FollowUpForm = memo(function FollowUpForm({
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div id="field-bpControlAchieved" className="space-y-3">
               <Label className="text-base font-medium">Blood pressure control achieved (as per physician)? *</Label>
               <div className="flex gap-6 ml-2">
                 <Label className="flex items-center gap-2 cursor-pointer">
@@ -1281,7 +1266,7 @@ export const FollowUpForm = memo(function FollowUpForm({
           <div className="space-y-4 pt-4 border-t">
             <h3 className="font-semibold text-lg">Adherence & Treatment Durability</h3>
             
-            <div className="space-y-3">
+            <div id="field-patientContinuingTreatment" className="space-y-3">
               <Label className="text-base font-medium">Patient continuing KC MeSempa at Week 12? *</Label>
               <div className="flex gap-6 ml-2">
                 <Label className="flex items-center gap-2 cursor-pointer">
@@ -1380,7 +1365,7 @@ export const FollowUpForm = memo(function FollowUpForm({
               </div>
             )}
 
-            <div className="space-y-3">
+            <div id="field-missedDoses" className="space-y-3">
               <Label className="text-base font-medium">Missed doses in last 7 days: *</Label>
               <div className="space-y-2 ml-2">
                 <div className="flex items-center gap-2">
@@ -1430,7 +1415,7 @@ export const FollowUpForm = memo(function FollowUpForm({
               </div>
             </div>
 
-            <div className="space-y-3">
+            <div id="field-addOnTherapy" className="space-y-3">
               <Label className="text-base font-medium">Any add-on / change in anti-diabetic therapy?</Label>
               <div className="flex gap-6 ml-2">
                 <Label className="flex items-center gap-2 cursor-pointer">
@@ -1474,7 +1459,7 @@ export const FollowUpForm = memo(function FollowUpForm({
           <div className="space-y-4 pt-4 border-t">
             <h3 className="font-semibold text-lg">Safety & Adverse Events</h3>
             
-            <div className="space-y-3">
+            <div id="field-adverseEventsPresent" className="space-y-3">
               <Label className="text-base font-medium">Any adverse event during study period?</Label>
               <div className="flex gap-6 ml-2">
                 <Label className="flex items-center gap-2 cursor-pointer">
@@ -1509,7 +1494,7 @@ export const FollowUpForm = memo(function FollowUpForm({
             </div>
 
             {formData.adverseEventsPresent === true && (
-              <div className="space-y-4 ml-6 border-l-2 border-blue-200 pl-4">
+              <div id="field-adverseEvents" className="space-y-4 ml-6 border-l-2 border-blue-200 pl-4">
                 {adverseEvents.map((event, index) => (
                   <div key={event.id} className="space-y-4 rounded-lg border p-4 bg-muted/30">
                     <div className="flex items-center justify-between">
@@ -1644,7 +1629,7 @@ export const FollowUpForm = memo(function FollowUpForm({
               </div>
             )}
 
-            <div className="space-y-3 border-t pt-4">
+            <div id="field-eventsOfSpecialInterest" className="space-y-3 border-t pt-4">
               <Label className="text-base font-medium">Events of Special Interest * (tick all that apply, or None)</Label>
               <div className="space-y-2 ml-2">
                 <Label className="flex items-center gap-2 cursor-pointer">
@@ -1829,7 +1814,7 @@ export const FollowUpForm = memo(function FollowUpForm({
               </div>
             </div>
 
-            <div className="space-y-3 pt-4 border-t">
+            <div id="field-preferLongTerm" className="space-y-3 pt-4 border-t">
               <Label className="text-base font-medium">Would you prefer KC MeSempa for long-term therapy? *</Label>
               <div className="flex gap-6 ml-2">
                 <Label className="flex items-center gap-2 cursor-pointer">
@@ -1855,7 +1840,7 @@ export const FollowUpForm = memo(function FollowUpForm({
               </div>
             </div>
 
-            <div className="space-y-2 border-t pt-4">
+            <div id="field-preferredProfiles" className="space-y-2 border-t pt-4">
               <Label className="font-semibold">Patient profiles where KC MeSempa is preferred: *</Label>
               <div className="space-y-2 ml-6">
                 <Label className="flex items-center gap-2 cursor-pointer">
@@ -1925,7 +1910,7 @@ export const FollowUpForm = memo(function FollowUpForm({
           </div>
 
           {/* SECTION O - Data Privacy & Confidentiality */}
-          <div className="space-y-4 pt-4 border-t bg-gray-50 p-4 rounded-lg">
+          <div id="field-dataPrivacy" className="space-y-4 pt-4 border-t bg-gray-50 p-4 rounded-lg">
             <h3 className="font-semibold text-lg">Data Privacy & Confidentiality *</h3>
             <p className="text-sm text-gray-600">Please confirm the following statements (all are mandatory):</p>
             
@@ -1958,7 +1943,7 @@ export const FollowUpForm = memo(function FollowUpForm({
           </div>
 
           {/* SECTION P - Physician Declaration */}
-          <div className="space-y-4 pt-4 border-t bg-blue-50 p-4 rounded-lg">
+          <div id="field-physicianDeclaration" className="space-y-4 pt-4 border-t bg-blue-50 p-4 rounded-lg">
             <h3 className="font-semibold text-lg">Physician Declaration *</h3>
             
             <Label className="flex items-start gap-2 cursor-pointer">

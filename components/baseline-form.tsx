@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, memo, useEffect, useRef } from "react"
+import { useState, memo, useEffect, useRef, useMemo, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { doc, writeBatch, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
@@ -32,6 +32,8 @@ import {
 } from "@/lib/study-dates"
 import { isBaselineComplete } from "@/lib/baseline-validation"
 import { buildBaselineSavePatch } from "@/lib/patient-save"
+import { reportFormFieldIssues, type FormFieldIssue } from "@/lib/form-field-navigation"
+import { usePersistentFieldHighlights } from "@/hooks/use-persistent-field-highlights"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
 import { useAdminAuth } from "@/contexts/admin-auth-context"
 
@@ -44,6 +46,9 @@ interface BaselineFormProps {
   isSectionLocked?: boolean
   lockMessage?: string
   canOverrideLock?: boolean
+  focusFieldId?: string
+  highlightFieldIds?: string[]
+  onFocusFieldHandled?: () => void
   onSuccess: () => void
 }
 
@@ -56,6 +61,9 @@ export const BaselineForm = memo(function BaselineForm({
   isSectionLocked = false,
   lockMessage = "Locked. You cannot edit this section.",
   canOverrideLock = false,
+  focusFieldId,
+  highlightFieldIds,
+  onFocusFieldHandled,
   onSuccess,
 }: BaselineFormProps) {
   const { toast } = useToast()
@@ -64,6 +72,7 @@ export const BaselineForm = memo(function BaselineForm({
   const [loading, setLoading] = useState(false)
   const [ranges, setRanges] = useState<ClinicalValidationRanges>(DEFAULT_CLINICAL_VALIDATION_RANGES)
   const submitLockRef = useRef(false)
+  const formRef = useRef<HTMLFormElement>(null)
   const lastSyncedBaselineAtRef = useRef<string | null>(null)
 
   const initialUrinalysis = parseUrinalysisFields(existingData?.urinalysis)
@@ -158,6 +167,71 @@ export const BaselineForm = memo(function BaselineForm({
     hydrationAdvice: (existingData as any)?.counseling?.hydrationAdvice ?? false,
   })
 
+  const externalHighlightIds = useMemo(() => {
+    if (highlightFieldIds?.length) return highlightFieldIds
+    if (focusFieldId) return [focusFieldId]
+    return undefined
+  }, [focusFieldId, highlightFieldIds])
+
+  const isBaselineFieldValid = useCallback(
+    (fieldId: string): boolean => {
+      const inRange = (value: string, min: number, max: number) => {
+        const parsed = Number.parseFloat(value)
+        return !!value && Number.isFinite(parsed) && parsed >= min && parsed <= max
+      }
+
+      switch (fieldId) {
+        case "hba1c":
+          return inRange(formData.hba1c, ranges.hba1c.min, ranges.hba1c.max)
+        case "fpg":
+          return inRange(formData.fpg, ranges.fpg.min, ranges.fpg.max)
+        case "ppg":
+          return inRange(formData.ppg, ranges.ppg.min, ranges.ppg.max)
+        case "weight":
+          return inRange(formData.weight, ranges.weight.min, ranges.weight.max)
+        case "baselineVisitDate":
+          return (
+            !!formData.baselineVisitDate &&
+            !validateBaselineVisitDate(formData.baselineVisitDate, formData.treatmentInitiationDate)
+          )
+        case "bpSys":
+          return inRange(formData.bloodPressureSystolic, ranges.bpSystolic.min, ranges.bpSystolic.max)
+        case "bpDia":
+          return inRange(formData.bloodPressureDiastolic, ranges.bpDiastolic.min, ranges.bpDiastolic.max)
+        case "heartRate":
+          return inRange(formData.heartRate, ranges.heartRate.min, ranges.heartRate.max)
+        case "creatinine":
+          return inRange(formData.serumCreatinine, ranges.serumCreatinine.min, ranges.serumCreatinine.max)
+        case "egfr":
+          return inRange(formData.egfr, ranges.egfr.min, ranges.egfr.max)
+        case "field-urinalysis":
+          return (
+            !!formData.urinalysisType &&
+            (formData.urinalysisType !== "Abnormal" || !!formData.urinalysisSpecify.trim())
+          )
+        case "dose":
+          return !!formData.dosePrescribed
+        case "initDate":
+          return (
+            !!formData.treatmentInitiationDate &&
+            !validateTreatmentInitiationDate(formData.treatmentInitiationDate, formData.baselineVisitDate)
+          )
+        case "field-counseling":
+          return hasAtLeastOneTrue(counseling)
+        default:
+          return true
+      }
+    },
+    [counseling, formData, ranges]
+  )
+
+  const { showHighlightBanner, setValidationIssues, clearAllHighlights } = usePersistentFieldHighlights({
+    formRef,
+    externalFieldIds: externalHighlightIds,
+    isFieldValid: isBaselineFieldValid,
+    onExternalHandled: onFocusFieldHandled,
+  })
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -190,44 +264,47 @@ export const BaselineForm = memo(function BaselineForm({
     setLoading(true)
     const startTime = Date.now()
 
-    const validationErrors: string[] = []
+    const abortValidation = (issues: FormFieldIssue[], title?: string) => {
+      setValidationIssues(issues)
+      reportFormFieldIssues(issues, toast, title, { skipHighlight: true })
+      setLoading(false)
+      submitLockRef.current = false
+    }
+
+    const validationIssues: FormFieldIssue[] = []
+    const addIssue = (fieldId: string, message: string) => validationIssues.push({ fieldId, message })
 
     try {
-      // VALIDATION PHASE 1: Check required fields (shared with Firestore rules)
-      if (!formData.hba1c) validationErrors.push("HbA1c is required")
-      if (!formData.fpg) validationErrors.push("FPG is required")
-      if (!formData.ppg) validationErrors.push("PPG is required")
-      if (!formData.weight) validationErrors.push("Weight is required")
-      if (!formData.baselineVisitDate) validationErrors.push("Baseline visit date is required")
+      if (!formData.hba1c) addIssue("hba1c", "HbA1c (%) is required.")
+      if (!formData.fpg) addIssue("fpg", "FPG (mg/dL) is required.")
+      if (!formData.ppg) addIssue("ppg", "PPG (mg/dL) is required.")
+      if (!formData.weight) addIssue("weight", "Weight (kg) is required.")
+      if (!formData.baselineVisitDate) addIssue("baselineVisitDate", "Baseline visit date is required.")
       const baselineDateError = validateBaselineVisitDate(
         formData.baselineVisitDate,
         formData.treatmentInitiationDate
       )
-      if (baselineDateError) validationErrors.push(baselineDateError)
-      if (!formData.bloodPressureSystolic) validationErrors.push("BP Systolic is required")
-      if (!formData.bloodPressureDiastolic) validationErrors.push("BP Diastolic is required")
-      if (!formData.heartRate) validationErrors.push("Heart Rate is required")
-      if (!formData.serumCreatinine) validationErrors.push("Serum Creatinine is required")
-      if (!formData.egfr) validationErrors.push("eGFR is required")
-      if (!formData.urinalysisType) validationErrors.push("Urinalysis is required")
-      if (!formData.dosePrescribed) validationErrors.push("Dose prescribed is required")
-      if (!formData.treatmentInitiationDate) validationErrors.push("Treatment initiation date is required")
+      if (baselineDateError) addIssue("baselineVisitDate", baselineDateError)
+      if (!formData.bloodPressureSystolic) addIssue("bpSys", "BP Systolic (mmHg) is required.")
+      if (!formData.bloodPressureDiastolic) addIssue("bpDia", "BP Diastolic (mmHg) is required.")
+      if (!formData.heartRate) addIssue("heartRate", "Heart rate (bpm) is required.")
+      if (!formData.serumCreatinine) addIssue("creatinine", "Serum creatinine is required.")
+      if (!formData.egfr) addIssue("egfr", "eGFR is required.")
+      if (!formData.urinalysisType) addIssue("field-urinalysis", "Select urinalysis result: Normal or Abnormal.")
+      if (!formData.dosePrescribed) addIssue("dose", "Select the KC MeSempa dose prescribed.")
+      if (!formData.treatmentInitiationDate) addIssue("initDate", "Treatment initiation date is required.")
       if (!hasAtLeastOneTrue(counseling)) {
-        validationErrors.push("At least one counseling option must be selected")
+        addIssue("field-counseling", "Select at least one counseling option.")
       }
 
       const treatmentDateError = validateTreatmentInitiationDate(
         formData.treatmentInitiationDate,
         formData.baselineVisitDate
       )
-      if (treatmentDateError) validationErrors.push(treatmentDateError)
+      if (treatmentDateError) addIssue("initDate", treatmentDateError)
 
-      if (validationErrors.length > 0) {
-        toast({
-          variant: "destructive",
-          title: "Missing required fields",
-          description: validationErrors.join(", "),
-        })
+      if (validationIssues.length > 0) {
+        abortValidation(validationIssues, "Missing required fields")
         return
       }
 
@@ -242,50 +319,49 @@ export const BaselineForm = memo(function BaselineForm({
       const serumCreatinine = formData.serumCreatinine ? Number.parseFloat(formData.serumCreatinine) : NaN
       const egfr = formData.egfr ? Number.parseFloat(formData.egfr) : NaN
 
-      const rangeErrors: string[] = []
-      
+      const rangeIssues: FormFieldIssue[] = []
+
       if (isNaN(hba1c) || hba1c < ranges.hba1c.min || hba1c > ranges.hba1c.max) {
-        rangeErrors.push(`HbA1c must be between ${ranges.hba1c.min}-${ranges.hba1c.max}%`)
+        rangeIssues.push({ fieldId: "hba1c", message: `HbA1c must be between ${ranges.hba1c.min}-${ranges.hba1c.max}%.` })
       }
       if (isNaN(fpg) || fpg < ranges.fpg.min || fpg > ranges.fpg.max) {
-        rangeErrors.push(`FPG must be between ${ranges.fpg.min}-${ranges.fpg.max} mg/dL`)
+        rangeIssues.push({ fieldId: "fpg", message: `FPG must be between ${ranges.fpg.min}-${ranges.fpg.max} mg/dL.` })
       }
       if (isNaN(ppg) || ppg < ranges.ppg.min || ppg > ranges.ppg.max) {
-        rangeErrors.push(`PPG must be between ${ranges.ppg.min}-${ranges.ppg.max} mg/dL`)
+        rangeIssues.push({ fieldId: "ppg", message: `PPG must be between ${ranges.ppg.min}-${ranges.ppg.max} mg/dL.` })
       }
       if (isNaN(weight) || weight < ranges.weight.min || weight > ranges.weight.max) {
-        rangeErrors.push(`Weight must be between ${ranges.weight.min}-${ranges.weight.max} kg`)
+        rangeIssues.push({ fieldId: "weight", message: `Weight must be between ${ranges.weight.min}-${ranges.weight.max} kg.` })
       }
       if (isNaN(bpSystolic) || bpSystolic < ranges.bpSystolic.min || bpSystolic > ranges.bpSystolic.max) {
-        rangeErrors.push(`BP Systolic must be between ${ranges.bpSystolic.min}-${ranges.bpSystolic.max} mmHg`)
+        rangeIssues.push({ fieldId: "bpSys", message: `BP Systolic must be between ${ranges.bpSystolic.min}-${ranges.bpSystolic.max} mmHg.` })
       }
       if (isNaN(bpDiastolic) || bpDiastolic < ranges.bpDiastolic.min || bpDiastolic > ranges.bpDiastolic.max) {
-        rangeErrors.push(`BP Diastolic must be between ${ranges.bpDiastolic.min}-${ranges.bpDiastolic.max} mmHg`)
+        rangeIssues.push({ fieldId: "bpDia", message: `BP Diastolic must be between ${ranges.bpDiastolic.min}-${ranges.bpDiastolic.max} mmHg.` })
       }
       if (isNaN(heartRate) || heartRate < ranges.heartRate.min || heartRate > ranges.heartRate.max) {
-        rangeErrors.push(`Heart Rate must be between ${ranges.heartRate.min}-${ranges.heartRate.max} bpm`)
+        rangeIssues.push({ fieldId: "heartRate", message: `Heart rate must be between ${ranges.heartRate.min}-${ranges.heartRate.max} bpm.` })
       }
       if (
         isNaN(serumCreatinine) ||
         serumCreatinine < ranges.serumCreatinine.min ||
         serumCreatinine > ranges.serumCreatinine.max
       ) {
-        rangeErrors.push(`Serum Creatinine must be between ${ranges.serumCreatinine.min}-${ranges.serumCreatinine.max} mg/dL`)
+        rangeIssues.push({
+          fieldId: "creatinine",
+          message: `Serum creatinine must be between ${ranges.serumCreatinine.min}-${ranges.serumCreatinine.max} mg/dL.`,
+        })
       }
       if (isNaN(egfr) || egfr < ranges.egfr.min || egfr > ranges.egfr.max) {
-        rangeErrors.push(`eGFR must be between ${ranges.egfr.min}-${ranges.egfr.max} mL/min/1.73m2`)
+        rangeIssues.push({ fieldId: "egfr", message: `eGFR must be between ${ranges.egfr.min}-${ranges.egfr.max} mL/min/1.73m².` })
       }
 
       if (formData.urinalysisType === "Abnormal" && !formData.urinalysisSpecify.trim()) {
-        rangeErrors.push("Please specify abnormality for urinalysis")
+        rangeIssues.push({ fieldId: "field-urinalysis", message: "Specify the urinalysis abnormality." })
       }
 
-      if (rangeErrors.length > 0) {
-        toast({
-          variant: "destructive",
-          title: "Invalid Values",
-          description: rangeErrors.join(", "),
-        })
+      if (rangeIssues.length > 0) {
+        abortValidation(rangeIssues, "Invalid values")
         return
       }
 
@@ -378,6 +454,7 @@ export const BaselineForm = memo(function BaselineForm({
         return
       }
 
+      clearAllHighlights()
       toast({
         title: "✓ Baseline data saved",
         description: "Week 0 assessment has been recorded.",
@@ -422,7 +499,12 @@ export const BaselineForm = memo(function BaselineForm({
             {lockMessage}
           </div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-6">
+        {showHighlightBanner && (
+          <div className="mb-4 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            Fields marked in <span className="font-semibold">red</span> below must be corrected before saving.
+          </div>
+        )}
+        <form ref={formRef} onSubmit={handleSubmit} className="space-y-6">
           <fieldset disabled={loading || (isSectionLocked && !canOverrideLock)} className="space-y-6">
           <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
             <h3 className="font-semibold text-lg">Baseline Visit</h3>
@@ -580,7 +662,7 @@ export const BaselineForm = memo(function BaselineForm({
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div id="field-urinalysis" className="space-y-2">
               <Label htmlFor="urinalysis">Urinalysis *</Label>
               <div className="space-y-2">
                 <div className="flex items-center space-x-2">
@@ -652,7 +734,7 @@ export const BaselineForm = memo(function BaselineForm({
               />
             </div>
 
-            <div className="space-y-3">
+            <div id="field-counseling" className="space-y-3">
               <Label className="text-base font-semibold">Counseling Provided * (select at least one)</Label>
               <div className="space-y-2 pl-4">
                 <div className="flex items-center gap-2">

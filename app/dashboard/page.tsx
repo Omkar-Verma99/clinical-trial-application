@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import Link from "next/link"
 import { hasDoctorSessionCookies } from "@/lib/doctor-session"
+import { useLockViewportScroll } from "@/hooks/use-lock-viewport"
 
 interface PatientWithStatus extends Patient {
   id: string
@@ -271,6 +272,8 @@ export default function DashboardPage() {
     []
   )
 
+  useLockViewportScroll(Boolean(user))
+
   // Debounced pagination handler
   const debounce = (func: Function, delay: number) => {
     let timeoutId: NodeJS.Timeout
@@ -432,8 +435,8 @@ export default function DashboardPage() {
       .join("") || "DR"
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
-      <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
+    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-gradient-to-br from-background via-muted/30 to-background">
+      <header className="shrink-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 flex-shrink-0">
             <Image
@@ -485,7 +488,8 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
+      <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+        <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-3xl font-bold text-balance">Participant Data Management</h1>
@@ -645,6 +649,7 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   )

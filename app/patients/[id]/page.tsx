@@ -20,6 +20,7 @@ import { isBaselineReadyStrict, isReadyForFollowUp } from "@/lib/patient-readine
 import { shouldUpdatePatientState } from "@/lib/patient-snapshot"
 import { followupSectionKey, getDoctorLockMessage, isSectionLocked, SectionLockMap } from "@/lib/section-locks"
 import { hasDoctorSessionCookies } from "@/lib/doctor-session"
+import { useLockViewportScroll } from "@/hooks/use-lock-viewport"
 
 // OPTIMIZED: Memoize form components to prevent unnecessary re-renders
 const MemoizedBaselineForm = memo(BaselineForm)
@@ -68,6 +69,8 @@ export default function PatientDetailPage({ params }: Props) {
   }
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState("overview")
+  const [focusFieldId, setFocusFieldId] = useState<string | undefined>()
+  const [highlightFieldIds, setHighlightFieldIds] = useState<string[] | undefined>()
   const [exporting, setExporting] = useState(false)
   // Note: selectedFollowUp removed - now using dynamic visit tabs from followUps array
   const doctorForExports: Doctor | undefined = doctor ?? undefined
@@ -80,6 +83,22 @@ export default function PatientDetailPage({ params }: Props) {
   const baselineLocked = isSectionLocked(sectionLocks, "baseline")
   const patientInfoLockMessage = getDoctorLockMessage(sectionLocks, "patient_info")
   const baselineLockMessage = getDoctorLockMessage(sectionLocks, "baseline")
+
+  useLockViewportScroll(Boolean(user))
+
+  const handleNavigateToSection = useCallback(
+    (section: "patient-info" | "baseline", fieldId?: string, fieldIds?: string[]) => {
+      const ids = fieldIds?.length ? fieldIds : fieldId ? [fieldId] : undefined
+      setHighlightFieldIds(ids)
+      setFocusFieldId(ids?.[0])
+      setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
+    },
+    []
+  )
+
+  const handleFocusFieldHandled = useCallback(() => {
+    setFocusFieldId(undefined)
+  }, [])
 
   // Auth guard: redirect to login if not authenticated
   useEffect(() => {
@@ -270,8 +289,8 @@ export default function PatientDetailPage({ params }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
-        <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
+      <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-gradient-to-br from-background via-muted/30 to-background">
+        <header className="shrink-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
           <div className="container mx-auto px-4 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <Button variant="ghost" size="sm" disabled>← Back</Button>
@@ -283,7 +302,7 @@ export default function PatientDetailPage({ params }: Props) {
           </div>
         </header>
 
-        <main className="container mx-auto px-4 py-8">
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden container mx-auto px-4 py-8">
           {/* Patient Info Skeleton */}
           <Card className="mb-8">
             <CardHeader>
@@ -336,8 +355,8 @@ export default function PatientDetailPage({ params }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-muted/30 to-background">
-      <header className="sticky top-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
+    <div className="flex h-dvh max-h-dvh flex-col overflow-hidden bg-gradient-to-br from-background via-muted/30 to-background">
+      <header className="shrink-0 z-50 border-b border-border/40 bg-white dark:bg-slate-950">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4 flex-shrink-0">
             <Link href="/dashboard">
@@ -375,7 +394,8 @@ export default function PatientDetailPage({ params }: Props) {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8 max-w-6xl">
+      <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-balance">Patient: {patient.patientCode}</h1>
           <p className="text-muted-foreground mt-1">
@@ -583,9 +603,12 @@ export default function PatientDetailPage({ params }: Props) {
                 existingData={baseline}
                 patientBaselineVisitDate={patient.baselineVisitDate}
                 patientWeight={typeof patient.weight === "number" ? patient.weight : null}
+                focusFieldId={activeTab === "baseline" ? focusFieldId : undefined}
+                highlightFieldIds={activeTab === "baseline" ? highlightFieldIds : undefined}
+                onFocusFieldHandled={handleFocusFieldHandled}
                 isSectionLocked={baselineLocked}
                 lockMessage={baselineLockMessage}
-                onSuccess={() => {}}
+                onSuccess={() => setHighlightFieldIds(undefined)}
               />
             </TabsContent>
           )}
@@ -595,9 +618,12 @@ export default function PatientDetailPage({ params }: Props) {
             <PatientFormPage
               presetEditPatientId={patient.id}
               forceEmbedded={true}
+              focusFieldId={activeTab === "patient-info" ? focusFieldId : undefined}
+              highlightFieldIds={activeTab === "patient-info" ? highlightFieldIds : undefined}
+              onFocusFieldHandled={handleFocusFieldHandled}
               isSectionLocked={patientInfoLocked}
               lockMessage={patientInfoLockMessage}
-              onSaved={() => {}}
+              onSaved={() => setHighlightFieldIds(undefined)}
             />
             )}
           </TabsContent>
@@ -612,9 +638,7 @@ export default function PatientDetailPage({ params }: Props) {
                   <MemoizedFollowUpForm
                     patientId={patient.id}
                     patientSnapshot={patient}
-                    onNavigateToSection={(section) =>
-                      setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
-                    }
+                    onNavigateToSection={handleNavigateToSection}
                     existingData={Object.keys(visit).length === 0 ? null : visit}
                     baselineDate={patient.baselineVisitDate}
                     followUpIndex={visitIndex}
@@ -677,9 +701,7 @@ export default function PatientDetailPage({ params }: Props) {
                   <MemoizedFollowUpForm
                     patientId={patient.id}
                     patientSnapshot={patient}
-                    onNavigateToSection={(section) =>
-                      setActiveTab(section === "patient-info" ? "patient-info" : "baseline")
-                    }
+                    onNavigateToSection={handleNavigateToSection}
                     existingData={null}
                     baselineDate={patient.baselineVisitDate}
                     followUpIndex={followUps.length}
@@ -759,6 +781,7 @@ export default function PatientDetailPage({ params }: Props) {
             </TabsContent>
           )}
         </Tabs>
+      </div>
       </main>
     </div>
   )
