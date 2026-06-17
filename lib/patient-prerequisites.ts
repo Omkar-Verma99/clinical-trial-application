@@ -42,7 +42,7 @@ export function getFollowUpPrerequisiteIssues(
     issues.push({ section: "patient-info", message: baselineVisitDateError })
   }
 
-  for (const message of getBaselineValidationErrors(patient.baseline)) {
+  for (const message of getBaselineValidationErrors(patient.baseline, { patient })) {
     issues.push({ section: "baseline", message })
   }
 

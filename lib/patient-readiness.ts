@@ -34,7 +34,7 @@ export function isPatientInfoReadyForBaseline(patient: Patient | null | undefine
 /** Baseline clinical + treatment fields valid (strict — ignores baselineComplete flag). */
 export function isBaselineReadyStrict(patient: Patient | null | undefined): boolean {
   if (!patient) return false
-  if (getBaselineValidationErrors(patient.baseline).length > 0) return false
+  if (getBaselineValidationErrors(patient.baseline, { patient }).length > 0) return false
 
   const baselineVisitDate = resolvePatientBaselineVisitDate(
     patient as unknown as Record<string, unknown>
@@ -69,7 +69,7 @@ export function getPatientInfoReadinessIssues(patient: Patient | null | undefine
 
 export function getBaselineReadinessIssues(patient: Patient | null | undefined): string[] {
   if (!patient) return ["Patient record not found"]
-  const issues = [...getBaselineValidationErrors(patient.baseline)]
+  const issues = [...getBaselineValidationErrors(patient.baseline, { patient })]
   const baselineVisitDate = resolvePatientBaselineVisitDate(
     patient as unknown as Record<string, unknown>
   )

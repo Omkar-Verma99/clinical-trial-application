@@ -416,7 +416,9 @@ export default function AdminPatientDetailPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="patient-info" forceMount>
+        <TabsContent value="patient-info">
+          {activeTab === "patient-info" && (
+            <>
           {canManageSectionLocks && (
             <div className="mb-4 flex justify-end">
               <Button
@@ -437,9 +439,13 @@ export default function AdminPatientDetailPage() {
             canOverrideLock
             onSaved={() => {}}
           />
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="baseline">
+          {activeTab === "baseline" && (
+          <>
           {canManageSectionLocks && (
             <div className="mb-4 flex justify-end">
               <Button
@@ -462,10 +468,14 @@ export default function AdminPatientDetailPage() {
             canOverrideLock
             onSuccess={() => {}}
           />
+          </>
+          )}
         </TabsContent>
 
         {followupsWithDefault.map((followup, index) => (
           <TabsContent key={`visit-content-${index}`} value={`visit-${index}`}>
+            {activeTab === `visit-${index}` && (
+            <>
             {canManageSectionLocks && (
               <div className="mb-4 flex justify-end">
                 <Button
@@ -493,11 +503,14 @@ export default function AdminPatientDetailPage() {
               canOverrideLock
               onSuccess={() => {}}
             />
+            </>
+            )}
           </TabsContent>
         ))}
 
         {creatingFollowUp && (
           <TabsContent value="new-followup">
+            {activeTab === "new-followup" && (
             <FollowUpForm
               patientId={patient.id}
               patientSnapshot={patient}
@@ -516,6 +529,7 @@ export default function AdminPatientDetailPage() {
                 setActiveTab(`visit-${followups.length}`);
               }}
             />
+            )}
           </TabsContent>
         )}
 

@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
 import { useAuth } from "@/contexts/auth-context"
+import { useAdminAuth } from "@/contexts/admin-auth-context"
 import { writeBatch, doc, collection, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
@@ -65,6 +66,7 @@ export function PatientFormPage({
   onSaved,
 }: PatientFormPageProps = {}) {
   const { user, doctor } = useAuth()
+  const { isAuthenticated: isAdminAuthenticated } = useAdminAuth()
   const router = useRouter()
   const [editPatientId, setEditPatientId] = useState<string | null>(presetEditPatientId ?? null)
   const [isEmbedded, setIsEmbedded] = useState(Boolean(forceEmbedded))
@@ -407,7 +409,7 @@ export function PatientFormPage({
     if (submitLockRef.current) return
     submitLockRef.current = true
     setLoading(true)
-    if (!user || !user.uid || !db) {
+    if (!db || ((!user || !user.uid) && !isAdminAuthenticated)) {
       toast({
         variant: "destructive",
         title: "Error",
@@ -601,7 +603,20 @@ export function PatientFormPage({
       return
     }
 
+    const authUid = user?.uid || ""
+
     if (!isEditMode) {
+      if (!authUid) {
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: "Doctor session required to enroll a new patient.",
+        })
+        setLoading(false)
+        submitLockRef.current = false
+        return
+      }
+
       const newParticipantNumber = Number.parseInt(normalizedPatientCode.slice(0, 3), 10)
 
       if (!Number.isFinite(newParticipantNumber)) {
@@ -615,7 +630,7 @@ export function PatientFormPage({
         return
       }
 
-      const existingPatientsQuery = query(collection(db, "patients"), where("doctorId", "==", user.uid))
+      const existingPatientsQuery = query(collection(db, "patients"), where("doctorId", "==", authUid))
       const existingPatientsSnapshot = await getDocs(existingPatientsQuery)
       const existingNumbers = new Set<number>()
       let duplicateCodeFound = false
@@ -753,7 +768,7 @@ export function PatientFormPage({
       const sanitizedFormData = sanitizeObject(formData, ['patientCode', 'studySiteCode', 'investigatorName', 'smokingStatus', 'alcoholIntake', 'physicalActivityLevel'])
 
       const patientData = {
-        doctorId: isEditMode && allowAnyDoctorEdit ? ownerDoctorId || user.uid : user.uid,
+        doctorId: isEditMode && allowAnyDoctorEdit ? ownerDoctorId || authUid : authUid,
         patientCode: normalizedPatientCode,
         studySiteCode: sanitizedFormData.studySiteCode,
         investigatorName: sanitizedFormData.investigatorName,
@@ -944,7 +959,13 @@ export function PatientFormPage({
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-background via-muted/30 to-background ${isEmbedded ? "px-0" : ""}`}>
+    <div
+      className={
+        isEmbedded
+          ? "w-full"
+          : "min-h-screen bg-gradient-to-br from-background via-muted/30 to-background"
+      }
+    >
       {!isEmbedded && (
       <header className="sticky top-0 z-50 border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center gap-4">
@@ -961,7 +982,7 @@ export function PatientFormPage({
       </header>
       )}
 
-      <main className={`${isEmbedded ? "w-full p-4" : "container mx-auto px-4 py-8 max-w-4xl"}`}>
+      <main className={isEmbedded ? "w-full" : "container mx-auto px-4 py-8 max-w-4xl"}>
         <Card>
           <CardHeader>
             <CardTitle className="text-2xl">{isEditMode ? "Edit Patient Information" : "Enroll Patient in RWE Study"}</CardTitle>

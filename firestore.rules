@@ -26,6 +26,39 @@ service cloud.firestore {
       );
     }
 
+    function baselineVisitDateFromPatient(data) {
+      return data.baselineVisitDate is string && data.baselineVisitDate.size() > 0
+        ? data.baselineVisitDate
+        : (
+            data.baseline != null &&
+            data.baseline.baselineVisitDate is string &&
+            data.baseline.baselineVisitDate.size() > 0
+          )
+          ? data.baseline.baselineVisitDate
+          : '';
+    }
+
+    function baselineCoreComplete(data) {
+      return data.baseline != null &&
+        data.baseline.hba1c is number &&
+        data.baseline.fpg is number &&
+        data.baseline.ppg is number &&
+        data.baseline.weight is number &&
+        data.baseline.bloodPressureSystolic is number &&
+        data.baseline.bloodPressureDiastolic is number &&
+        data.baseline.heartRate is number &&
+        data.baseline.serumCreatinine is number &&
+        data.baseline.egfr is number &&
+        data.baseline.urinalysis is string &&
+        data.baseline.urinalysis.size() > 0 &&
+        data.baseline.dosePrescribed is string &&
+        data.baseline.dosePrescribed.size() > 0 &&
+        data.baseline.treatmentInitiationDate is string &&
+        data.baseline.treatmentInitiationDate.size() > 0 &&
+        baselineVisitDateFromPatient(data).size() > 0 &&
+        baselineCounselingOk(data.baseline);
+    }
+
     function baselineIsComplete(baseline) {
       return baseline != null &&
         baseline.keys().hasAll([
@@ -64,7 +97,7 @@ service cloud.firestore {
     }
 
     function baselineCompleteForFollowup(data) {
-      return data.baselineComplete == true || baselineIsComplete(data.baseline);
+      return data.baselineComplete == true || baselineIsComplete(data.baseline) || baselineCoreComplete(data);
     }
 
     function checkboxGroupHasSelection(map) {

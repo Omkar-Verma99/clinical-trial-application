@@ -62,6 +62,7 @@ export function getFirestoreSaveErrorMessage(
     lockMessage?: string
     isSectionLocked?: boolean
     canOverrideLock?: boolean
+    guardIssues?: string[]
   }
 ): string {
   const code =
@@ -72,6 +73,9 @@ export function getFirestoreSaveErrorMessage(
   if (code === "permission-denied") {
     if (options?.isSectionLocked && !options?.canOverrideLock) {
       return options.lockMessage || doctorLockedMessage()
+    }
+    if (options?.guardIssues?.length) {
+      return options.guardIssues.join(" ")
     }
     return "Firestore rejected this save. Ensure baseline and patient info are complete, then try again. If this section is locked, ask an admin to unlock it."
   }

@@ -40,6 +40,8 @@ import {
   type PrerequisiteSection,
 } from "@/lib/patient-prerequisites"
 import { buildFollowUpsForSave, buildFollowUpSavePatch } from "@/lib/patient-save"
+import { getFollowUpFirestoreGuardIssues } from "@/lib/firestore-guards"
+import { auth } from "@/lib/firebase"
 import { hasAtLeastOneCheckbox, hasDuplicateVisitDate } from "@/lib/form-validation"
 import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import { todayIsoDate, validateFollowUpVisitDate } from "@/lib/study-dates"
@@ -720,6 +722,25 @@ export const FollowUpForm = memo(function FollowUpForm({
             variant: "destructive",
             title: "Follow-up incomplete",
             description: `Missing or invalid: ${incompleteReasons.slice(0, 4).join(", ")}`,
+          })
+          return
+        }
+
+        const guardIssues = getFollowUpFirestoreGuardIssues(patientDoc, buildResult.followups)
+        if (guardIssues.length > 0) {
+          toast({
+            variant: "destructive",
+            title: "Cannot save follow-up yet",
+            description: guardIssues.join(" "),
+          })
+          return
+        }
+
+        if (!auth?.currentUser?.uid) {
+          toast({
+            variant: "destructive",
+            title: "Session expired",
+            description: "Your Firebase session is missing. Sign out and sign in again, then retry.",
           })
           return
         }

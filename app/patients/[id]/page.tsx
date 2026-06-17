@@ -590,7 +590,8 @@ export default function PatientDetailPage({ params }: Props) {
             </TabsContent>
           )}
 
-          <TabsContent value="patient-info" forceMount>
+          <TabsContent value="patient-info">
+            {activeTab === "patient-info" && (
             <PatientFormPage
               presetEditPatientId={patient.id}
               forceEmbedded={true}
@@ -598,12 +599,14 @@ export default function PatientDetailPage({ params }: Props) {
               lockMessage={patientInfoLockMessage}
               onSaved={() => {}}
             />
+            )}
           </TabsContent>
 
           {/* Dynamic Visit Tabs */}
           {followUpsWithDefault.map((visit, visitIndex) => (
             <TabsContent key={`visit-content-${visitIndex}`} value={`visit-${visitIndex}`}>
-              {baselineComplete ? (
+              {activeTab === `visit-${visitIndex}` && (
+                baselineComplete ? (
                 <div className="space-y-6">
                   {/* Form for this visit */}
                   <MemoizedFollowUpForm
@@ -645,13 +648,15 @@ export default function PatientDetailPage({ params }: Props) {
                     Go to Baseline
                   </Button>
                 </Card>
+              )
               )}
             </TabsContent>
           ))}
 
           {creatingFollowUp && (
             <TabsContent value="new-followup">
-              {baselineComplete ? (
+              {activeTab === "new-followup" && (
+              baselineComplete ? (
                 <div className="space-y-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -695,6 +700,7 @@ export default function PatientDetailPage({ params }: Props) {
                     Go to Baseline
                   </Button>
                 </Card>
+              )
               )}
             </TabsContent>
           )}

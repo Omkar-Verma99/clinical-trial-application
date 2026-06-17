@@ -1,4 +1,5 @@
 import { hasAtLeastOneTrue } from "@/lib/form-validation"
+import { resolvePatientBaselineVisitDate } from "@/lib/study-dates"
 import type { BaselineData, Patient } from "@/lib/types"
 
 const REQUIRED_BASELINE_NUMBERS = [
@@ -60,7 +61,10 @@ export function isBaselineCompleteForPatient(
 export const BASELINE_INCOMPLETE_MESSAGE =
   "Complete the baseline assessment (all required clinical and treatment fields) before adding or saving follow-ups."
 
-export function getBaselineValidationErrors(baseline: unknown): string[] {
+export function getBaselineValidationErrors(
+  baseline: unknown,
+  options?: { patient?: Pick<Patient, "baselineVisitDate" | "baseline"> | null }
+): string[] {
   if (!baseline || typeof baseline !== "object") {
     return ["Baseline assessment is required"]
   }
@@ -72,7 +76,14 @@ export function getBaselineValidationErrors(baseline: unknown): string[] {
   if (!isValidNumber(record.fpg)) errors.push("FPG is required")
   if (!isValidNumber(record.ppg)) errors.push("PPG is required")
   if (!isValidNumber(record.weight)) errors.push("Weight is required")
-  if (!isNonEmptyString(record.baselineVisitDate)) errors.push("Baseline visit date is required")
+
+  const resolvedVisitDate =
+    isNonEmptyString(record.baselineVisitDate)
+      ? record.baselineVisitDate
+      : options?.patient
+        ? resolvePatientBaselineVisitDate(options.patient as unknown as Record<string, unknown>)
+        : ""
+  if (!isNonEmptyString(resolvedVisitDate)) errors.push("Baseline visit date is required")
   if (!isValidNumber(record.bloodPressureSystolic)) errors.push("BP Systolic is required")
   if (!isValidNumber(record.bloodPressureDiastolic)) errors.push("BP Diastolic is required")
   if (!isValidNumber(record.heartRate)) errors.push("Heart Rate is required")
