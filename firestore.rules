@@ -100,6 +100,12 @@ service cloud.firestore {
       return data.baselineComplete == true || baselineIsComplete(data.baseline) || baselineCoreComplete(data);
     }
 
+    function otherFieldHasText(other) {
+      return (other is list && other.size() > 0 &&
+        other[0] is string && other[0].size() > 0 && other[0] != 'NA') ||
+        (other is string && other.size() > 0 && other != 'NA');
+    }
+
     function checkboxGroupHasSelection(map) {
       return map != null && (
         map.hypertension == true ||
@@ -125,15 +131,23 @@ service cloud.firestore {
         map.highPillBurden == true ||
         map.poorAdherence == true ||
         map.costConsiderations == true ||
-        map.physicianClinicalJudgment == true
+        map.physicianClinicalJudgment == true ||
+        map.otherSelected == true
       );
     }
 
     function reasonForKcMeSempaOk(reasons) {
       return reasons != null && (
         checkboxGroupHasSelection(reasons) ||
-        (reasons.other is list && reasons.other.size() > 0) ||
-        (reasons.other is string && reasons.other.size() > 0)
+        otherFieldHasText(reasons.other)
+      );
+    }
+
+    function drugClassesOk(classes) {
+      return classes != null && (
+        classes.none == true ||
+        checkboxGroupHasSelection(classes) ||
+        otherFieldHasText(classes.other)
       );
     }
 
@@ -141,7 +155,8 @@ service cloud.firestore {
       return comorbidities != null &&
         (
           comorbidities.none == true ||
-          checkboxGroupHasSelection(comorbidities)
+          checkboxGroupHasSelection(comorbidities) ||
+          otherFieldHasText(comorbidities.other)
         ) &&
         (
           comorbidities.chronicKidneyDisease != true ||
@@ -167,7 +182,7 @@ service cloud.firestore {
         data.previousTreatmentType is string && data.previousTreatmentType.size() > 0 &&
         checkboxGroupHasSelection(data.diabetesComplications) &&
         comorbiditiesOk(data.comorbidities) &&
-        checkboxGroupHasSelection(data.previousDrugClasses) &&
+        drugClassesOk(data.previousDrugClasses) &&
         reasonForKcMeSempaOk(data.reasonForTripleFDC);
     }
 
@@ -195,7 +210,8 @@ service cloud.firestore {
         profiles.ckdPatients == true ||
         profiles.htnPlusT2dm == true ||
         profiles.elderlyPatients == true ||
-        profiles.other == true
+        profiles.other == true ||
+        otherFieldHasText(profiles.otherDetails)
       ) && (
         profiles.other != true ||
         (

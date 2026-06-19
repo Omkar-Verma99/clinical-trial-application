@@ -56,6 +56,7 @@ export interface Patient {
     heartFailure: boolean
     chronicKidneyDisease: boolean
     none?: boolean
+    otherSelected?: boolean
     ckdEgfrCategory?: "≥90" | "60–89" | "45–59" | "30–44"
     other: string[]
   }
@@ -70,6 +71,7 @@ export interface Patient {
     tzd: boolean
     insulin: boolean
     none?: boolean
+    otherSelected?: boolean
     other: string[]
   }
   
@@ -82,6 +84,7 @@ export interface Patient {
     poorAdherence: boolean
     costConsiderations: boolean
     physicianClinicalJudgment: boolean
+    otherSelected?: boolean
     other: string[]
   }
   

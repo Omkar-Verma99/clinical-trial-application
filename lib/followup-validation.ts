@@ -1,4 +1,4 @@
-import { hasAtLeastOneCheckbox } from "@/lib/form-validation"
+import { hasAtLeastOneCheckbox, hasCheckboxOrOtherSelection } from "@/lib/form-validation"
 import type { FollowUpData } from "@/lib/types"
 
 function isNonEmptyString(value: unknown): value is string {
@@ -32,14 +32,17 @@ type PreferredPatientProfiles = NonNullable<
 function preferredProfilesOk(profiles: PreferredPatientProfiles | undefined): boolean {
   if (!profiles || typeof profiles !== "object") return false
   const p = profiles as Record<string, boolean | string | undefined>
-  const hasProfile = hasAtLeastOneCheckbox({
-    uncontrolledT2dm: p.uncontrolledT2dm === true,
-    obeseT2dm: p.obeseT2dm === true,
-    ckdPatients: p.ckdPatients === true,
-    htnPlusT2dm: p.htnPlusT2dm === true,
-    elderlyPatients: p.elderlyPatients === true,
-    other: p.other === true,
-  })
+  const hasProfile = hasCheckboxOrOtherSelection(
+    {
+      uncontrolledT2dm: p.uncontrolledT2dm === true,
+      obeseT2dm: p.obeseT2dm === true,
+      ckdPatients: p.ckdPatients === true,
+      htnPlusT2dm: p.htnPlusT2dm === true,
+      elderlyPatients: p.elderlyPatients === true,
+      other: p.other === true,
+    },
+    p.otherDetails
+  )
   if (!hasProfile) return false
   if (p.other === true) {
     const details = p.otherDetails

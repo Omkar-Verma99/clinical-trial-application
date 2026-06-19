@@ -1,4 +1,4 @@
-import { hasAtLeastOneCheckbox, hasDuplicateVisitDate } from "@/lib/form-validation"
+import { hasAtLeastOneCheckbox, hasDuplicateVisitDate, hasCheckboxOrOtherSelection } from "@/lib/form-validation"
 import type { FormFieldIssue } from "@/lib/form-field-navigation"
 import type { FollowUpData, StructuredAdverseEvent } from "@/lib/types"
 import { validateFollowUpVisitDate } from "@/lib/study-dates"
@@ -72,6 +72,7 @@ export function collectFollowUpFormIssues(params: {
     add("comments", "Additional comments are required (enter clinical notes in the text box).")
   }
 
+  const profileOtherText = String(formData.profileOtherText || "").trim()
   const profileChecks = {
     uncontrolledT2dm: formData.uncontrolledT2dm === true,
     obeseT2dm: formData.obeseT2dm === true,
@@ -80,10 +81,10 @@ export function collectFollowUpFormIssues(params: {
     elderlyPatients: formData.elderlyPatients === true,
     other: formData.profileOther === true,
   }
-  if (!hasAtLeastOneCheckbox(profileChecks)) {
+  if (!hasCheckboxOrOtherSelection(profileChecks, profileOtherText)) {
     add("field-preferredProfiles", "Select at least one preferred patient profile (or Other).")
   }
-  if (formData.profileOther === true && !String(formData.profileOtherText || "").trim()) {
+  if (formData.profileOther === true && !profileOtherText) {
     add("field-preferredProfiles", "Specify the other preferred patient profile.")
   }
 

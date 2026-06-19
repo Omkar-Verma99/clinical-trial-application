@@ -23,6 +23,24 @@ export function hasAtLeastOneCheckbox(
   return Object.entries(values).some(([key, value]) => !excludeKeys.includes(key) && value)
 }
 
+/** True when an "other" field has meaningful user text (string or string[]). */
+export function otherFieldHasText(other: unknown): boolean {
+  if (Array.isArray(other)) {
+    return other.some((v) => typeof v === "string" && v.trim().length > 0 && v !== NA_VALUE)
+  }
+  return typeof other === "string" && other.trim().length > 0 && other !== NA_VALUE
+}
+
+/** Checkbox group is valid when any option is checked or other text is provided. */
+export function hasCheckboxOrOtherSelection(
+  checkboxes: Record<string, boolean>,
+  other?: unknown,
+  excludeKeys: string[] = []
+): boolean {
+  if (other !== undefined && otherFieldHasText(other)) return true
+  return hasAtLeastOneCheckbox(checkboxes, excludeKeys)
+}
+
 export function parseUrinalysisFields(urinalysis?: string): {
   urinalysisType: "Normal" | "Abnormal" | ""
   urinalysisSpecify: string

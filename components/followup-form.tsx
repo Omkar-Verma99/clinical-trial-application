@@ -606,10 +606,11 @@ export const FollowUpForm = memo(function FollowUpForm({
             ckdPatients: formData.ckdPatients,
             htnPlusT2dm: formData.htnT2dm,
             elderlyPatients: formData.elderlyPatients,
-            other: formData.profileOther,
-            otherDetails: formData.profileOther
-              ? DOMPurify.sanitize(formData.profileOtherText)
-              : "NA",
+            other: formData.profileOther || Boolean(formData.profileOtherText.trim()),
+            otherDetails:
+              formData.profileOther || formData.profileOtherText.trim()
+                ? DOMPurify.sanitize(formData.profileOtherText)
+                : "NA",
           },
         },
         dataPrivacy: {
@@ -1876,16 +1877,19 @@ export const FollowUpForm = memo(function FollowUpForm({
                   />
                   Other
                 </Label>
-                {formData.profileOther && (
-                  <Input
-                    type="text"
-                    placeholder="Specify other patient profile..."
-                    value={formData.profileOtherText}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, profileOtherText: e.target.value }))}
-                    className="ml-6"
-                    required
-                  />
-                )}
+                <Input
+                  type="text"
+                  placeholder="Specify other patient profile..."
+                  value={formData.profileOtherText}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      profileOtherText: e.target.value,
+                      profileOther: e.target.value.trim() ? true : prev.profileOther,
+                    }))
+                  }
+                  className="ml-6"
+                />
               </div>
             </div>
           </div>

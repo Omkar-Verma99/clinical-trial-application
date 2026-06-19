@@ -28,7 +28,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { sanitizeInput, sanitizeObject } from "@/lib/sanitize"
 import { logError } from "@/lib/error-tracking"
-import { hasAtLeastOneCheckbox, normalizeOtherArray } from "@/lib/form-validation"
+import { hasAtLeastOneCheckbox, normalizeOtherArray, hasCheckboxOrOtherSelection, otherFieldHasText } from "@/lib/form-validation"
 import { isBaselineCompleteForPatient } from "@/lib/baseline-validation"
 import { isPatientInfoComplete } from "@/lib/patient-info-validation"
 import {
@@ -142,6 +142,7 @@ export function PatientFormPage({
     heartFailure: false,
     chronicKidneyDisease: false,
     none: false,
+    otherSelected: false,
     other: "",
     ckdEgfrCategory: "",
   })
@@ -156,6 +157,7 @@ export function PatientFormPage({
     tzd: false,
     insulin: false,
     none: false,
+    otherSelected: false,
     other: "",
   })
 
@@ -167,6 +169,7 @@ export function PatientFormPage({
     poorAdherence: false,
     costConsiderations: false,
     physicianClinicalJudgment: false,
+    otherSelected: false,
     other: "",
   })
 
@@ -204,14 +207,19 @@ export function PatientFormPage({
 
   const hasReasonForKcMeSempa = useMemo(
     () =>
-      reasonForTripleFDC.inadequateGlycemicControl ||
-      reasonForTripleFDC.weightConcerns ||
-      reasonForTripleFDC.hypoglycemiaOnPriorTherapy ||
-      reasonForTripleFDC.highPillBurden ||
-      reasonForTripleFDC.poorAdherence ||
-      reasonForTripleFDC.costConsiderations ||
-      reasonForTripleFDC.physicianClinicalJudgment ||
-      Boolean(reasonForTripleFDC.other.trim()),
+      hasCheckboxOrOtherSelection(
+        {
+          inadequateGlycemicControl: reasonForTripleFDC.inadequateGlycemicControl,
+          weightConcerns: reasonForTripleFDC.weightConcerns,
+          hypoglycemiaOnPriorTherapy: reasonForTripleFDC.hypoglycemiaOnPriorTherapy,
+          highPillBurden: reasonForTripleFDC.highPillBurden,
+          poorAdherence: reasonForTripleFDC.poorAdherence,
+          costConsiderations: reasonForTripleFDC.costConsiderations,
+          physicianClinicalJudgment: reasonForTripleFDC.physicianClinicalJudgment,
+          otherSelected: reasonForTripleFDC.otherSelected,
+        },
+        reasonForTripleFDC.other
+      ),
     [reasonForTripleFDC]
   )
 
@@ -258,27 +266,35 @@ export function PatientFormPage({
         case "field-diabetesComplications":
           return hasAtLeastOneCheckbox(diabetesComplications)
         case "field-comorbidities":
-          return hasAtLeastOneCheckbox({
-            hypertension: comorbidities.hypertension,
-            dyslipidemia: comorbidities.dyslipidemia,
-            obesity: comorbidities.obesity,
-            ascvd: comorbidities.ascvd,
-            heartFailure: comorbidities.heartFailure,
-            chronicKidneyDisease: comorbidities.chronicKidneyDisease,
-            none: comorbidities.none,
-          })
+          return hasCheckboxOrOtherSelection(
+            {
+              hypertension: comorbidities.hypertension,
+              dyslipidemia: comorbidities.dyslipidemia,
+              obesity: comorbidities.obesity,
+              ascvd: comorbidities.ascvd,
+              heartFailure: comorbidities.heartFailure,
+              chronicKidneyDisease: comorbidities.chronicKidneyDisease,
+              none: comorbidities.none,
+              otherSelected: comorbidities.otherSelected,
+            },
+            comorbidities.other
+          )
         case "field-ckdEgfrCategory":
           return !comorbidities.chronicKidneyDisease || !!comorbidities.ckdEgfrCategory
         case "field-previousDrugClasses":
-          return hasAtLeastOneCheckbox({
-            metformin: previousDrugClasses.metformin,
-            sulfonylurea: previousDrugClasses.sulfonylurea,
-            dpp4Inhibitor: previousDrugClasses.dpp4Inhibitor,
-            sglt2Inhibitor: previousDrugClasses.sglt2Inhibitor,
-            tzd: previousDrugClasses.tzd,
-            insulin: previousDrugClasses.insulin,
-            none: previousDrugClasses.none,
-          })
+          return hasCheckboxOrOtherSelection(
+            {
+              metformin: previousDrugClasses.metformin,
+              sulfonylurea: previousDrugClasses.sulfonylurea,
+              dpp4Inhibitor: previousDrugClasses.dpp4Inhibitor,
+              sglt2Inhibitor: previousDrugClasses.sglt2Inhibitor,
+              tzd: previousDrugClasses.tzd,
+              insulin: previousDrugClasses.insulin,
+              none: previousDrugClasses.none,
+              otherSelected: previousDrugClasses.otherSelected,
+            },
+            previousDrugClasses.other
+          )
         case "field-reasonForTripleFDC":
           return hasReasonForKcMeSempa
         default:
@@ -367,10 +383,14 @@ export function PatientFormPage({
       const otherText = Array.isArray(otherRaw)
         ? otherRaw.filter((v) => v && v !== "NA").join(", ")
         : (otherRaw as string) || ""
+      const otherSelected =
+        (patientData.comorbidities as { otherSelected?: boolean }).otherSelected === true ||
+        otherFieldHasText(otherRaw)
       setComorbidities((prev) => ({
         ...prev,
         ...patientData.comorbidities,
         none: (patientData.comorbidities as { none?: boolean }).none === true,
+        otherSelected,
         other: otherText,
         ckdEgfrCategory: patientData.comorbidities?.ckdEgfrCategory || "",
       }))
@@ -386,10 +406,14 @@ export function PatientFormPage({
       const drugOtherText = Array.isArray(drugOtherRaw)
         ? drugOtherRaw.filter((v) => v && v !== "NA").join(", ")
         : (drugOtherRaw as string) || ""
+      const otherSelected =
+        (patientData.previousDrugClasses as { otherSelected?: boolean }).otherSelected === true ||
+        otherFieldHasText(drugOtherRaw)
       setPreviousDrugClasses((prev) => ({
         ...prev,
         ...patientData.previousDrugClasses,
         none: (patientData.previousDrugClasses as { none?: boolean }).none === true,
+        otherSelected,
         other: drugOtherText,
       }))
     }
@@ -399,9 +423,13 @@ export function PatientFormPage({
       const reasonOtherText = Array.isArray(reasonOtherRaw)
         ? reasonOtherRaw.filter((v) => v && v !== "NA").join(", ")
         : (reasonOtherRaw as string) || ""
+      const otherSelected =
+        (patientData.reasonForTripleFDC as { otherSelected?: boolean }).otherSelected === true ||
+        otherFieldHasText(reasonOtherRaw)
       setReasonForTripleFDC((prev) => ({
         ...prev,
         ...patientData.reasonForTripleFDC,
+        otherSelected,
         other: reasonOtherText,
       }))
     }
@@ -628,8 +656,9 @@ export function PatientFormPage({
       heartFailure: comorbidities.heartFailure,
       chronicKidneyDisease: comorbidities.chronicKidneyDisease,
       none: comorbidities.none,
+      otherSelected: comorbidities.otherSelected,
     }
-    if (!hasAtLeastOneCheckbox(comorbidityChecks)) {
+    if (!hasCheckboxOrOtherSelection(comorbidityChecks, comorbidities.other)) {
       abortValidation(
         [{ fieldId: "field-comorbidities", message: "Select at least one comorbidity (or None)." }],
         "Missing selection"
@@ -653,8 +682,9 @@ export function PatientFormPage({
       tzd: previousDrugClasses.tzd,
       insulin: previousDrugClasses.insulin,
       none: previousDrugClasses.none,
+      otherSelected: previousDrugClasses.otherSelected,
     }
-    if (!hasAtLeastOneCheckbox(drugClassChecks)) {
+    if (!hasCheckboxOrOtherSelection(drugClassChecks, previousDrugClasses.other)) {
       abortValidation(
         [{ fieldId: "field-previousDrugClasses", message: "Select at least one previously used drug class (or None)." }],
         "Missing selection"
@@ -863,6 +893,8 @@ export function PatientFormPage({
           heartFailure: comorbidities.heartFailure,
           chronicKidneyDisease: comorbidities.chronicKidneyDisease,
           none: comorbidities.none,
+          otherSelected:
+            comorbidities.otherSelected || Boolean(comorbidities.other.trim()),
           ckdEgfrCategory: comorbidities.ckdEgfrCategory || null,
           other: comorbidityOtherEntries,
         },
@@ -877,6 +909,8 @@ export function PatientFormPage({
           tzd: previousDrugClasses.tzd,
           insulin: previousDrugClasses.insulin,
           none: previousDrugClasses.none,
+          otherSelected:
+            previousDrugClasses.otherSelected || Boolean(previousDrugClasses.other.trim()),
           other: drugClassOtherEntries,
         },
         
@@ -889,6 +923,8 @@ export function PatientFormPage({
           poorAdherence: reasonForTripleFDC.poorAdherence,
           costConsiderations: reasonForTripleFDC.costConsiderations,
           physicianClinicalJudgment: reasonForTripleFDC.physicianClinicalJudgment,
+          otherSelected:
+            reasonForTripleFDC.otherSelected || Boolean(reasonForTripleFDC.other.trim()),
           other: reasonOtherEntries,
         },
         
@@ -1398,6 +1434,7 @@ export function PatientFormPage({
                           heartFailure: false,
                           chronicKidneyDisease: false,
                           none: true,
+                          otherSelected: false,
                           other: "",
                           ckdEgfrCategory: "",
                         })
@@ -1405,6 +1442,24 @@ export function PatientFormPage({
                     />
                     <Label htmlFor="comorbidity-none" className="cursor-pointer font-normal">
                       None
+                    </Label>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Checkbox
+                      id="comorbidity-other-selected"
+                      checked={comorbidities.otherSelected}
+                      onCheckedChange={(checked) => {
+                        const isChecked = checked === true
+                        setComorbidities((prev) => ({
+                          ...prev,
+                          otherSelected: isChecked,
+                          none: isChecked ? false : prev.none,
+                          other: isChecked ? prev.other : "",
+                        }))
+                      }}
+                    />
+                    <Label htmlFor="comorbidity-other-selected" className="cursor-pointer font-normal">
+                      Other
                     </Label>
                   </div>
                 </div>
@@ -1428,12 +1483,19 @@ export function PatientFormPage({
                 )}
 
                 <div className="space-y-2 mt-4">
-                  <Label htmlFor="otherComorbidity">Other Comorbidities</Label>
+                  <Label htmlFor="otherComorbidity">Specify other comorbidities</Label>
                   <Input
                     id="otherComorbidity"
                     placeholder="Specify other conditions"
                     value={comorbidities.other}
-                    onChange={(e) => setComorbidities({ ...comorbidities, other: e.target.value })}
+                    onChange={(e) =>
+                      setComorbidities((prev) => ({
+                        ...prev,
+                        other: e.target.value,
+                        otherSelected: e.target.value.trim() ? true : prev.otherSelected,
+                        none: e.target.value.trim() ? false : prev.none,
+                      }))
+                    }
                   />
                 </div>
               </div>
@@ -1499,12 +1561,31 @@ export function PatientFormPage({
                             tzd: false,
                             insulin: false,
                             none: true,
+                            otherSelected: false,
                             other: "",
                           })
                         }}
                       />
                       <Label htmlFor="drug-class-none" className="cursor-pointer font-normal">
                         None
+                      </Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="drug-class-other-selected"
+                        checked={previousDrugClasses.otherSelected}
+                        onCheckedChange={(checked) => {
+                          const isChecked = checked === true
+                          setPreviousDrugClasses((prev) => ({
+                            ...prev,
+                            otherSelected: isChecked,
+                            none: isChecked ? false : prev.none,
+                            other: isChecked ? prev.other : "",
+                          }))
+                        }}
+                      />
+                      <Label htmlFor="drug-class-other-selected" className="cursor-pointer font-normal">
+                        Other
                       </Label>
                     </div>
                   </div>
@@ -1515,6 +1596,7 @@ export function PatientFormPage({
                       setPreviousDrugClasses((prev) => ({
                         ...prev,
                         other: e.target.value,
+                        otherSelected: e.target.value.trim() ? true : prev.otherSelected,
                         none: e.target.value ? false : prev.none,
                       }))
                     }
@@ -1546,11 +1628,34 @@ export function PatientFormPage({
                         </Label>
                       </div>
                     ))}
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id="reason-other-selected"
+                        checked={reasonForTripleFDC.otherSelected}
+                        onCheckedChange={(checked) => {
+                          const isChecked = checked === true
+                          setReasonForTripleFDC((prev) => ({
+                            ...prev,
+                            otherSelected: isChecked,
+                            other: isChecked ? prev.other : "",
+                          }))
+                        }}
+                      />
+                      <Label htmlFor="reason-other-selected" className="cursor-pointer font-normal">
+                        Other
+                      </Label>
+                    </div>
                   </div>
                   <Input
                     placeholder="Other reasons"
                     value={reasonForTripleFDC.other}
-                    onChange={(e) => setReasonForTripleFDC({ ...reasonForTripleFDC, other: e.target.value })}
+                    onChange={(e) =>
+                      setReasonForTripleFDC((prev) => ({
+                        ...prev,
+                        other: e.target.value,
+                        otherSelected: e.target.value.trim() ? true : prev.otherSelected,
+                      }))
+                    }
                   />
                 </div>
               </div>

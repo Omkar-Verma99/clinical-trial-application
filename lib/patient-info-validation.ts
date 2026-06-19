@@ -1,4 +1,4 @@
-import { hasAtLeastOneCheckbox } from "@/lib/form-validation"
+import { hasAtLeastOneCheckbox, hasCheckboxOrOtherSelection } from "@/lib/form-validation"
 import type { Patient } from "@/lib/types"
 
 function isNonEmptyString(value: unknown): value is string {
@@ -14,31 +14,63 @@ function mapHasAnyTrue(map: Record<string, boolean> | undefined | null): boolean
   return hasAtLeastOneCheckbox(map)
 }
 
-const COMORBIDITY_CONDITION_KEYS = [
-  "hypertension",
-  "dyslipidemia",
-  "obesity",
-  "ascvd",
-  "heartFailure",
-  "chronicKidneyDisease",
-] as const
-
-function comorbidityOtherHasText(other: unknown): boolean {
-  if (Array.isArray(other)) {
-    return other.some((v) => typeof v === "string" && v.trim().length > 0 && v !== "NA")
+function comorbidityCheckboxes(comorbidities: Record<string, unknown>): Record<string, boolean> {
+  return {
+    hypertension: comorbidities.hypertension === true,
+    dyslipidemia: comorbidities.dyslipidemia === true,
+    obesity: comorbidities.obesity === true,
+    ascvd: comorbidities.ascvd === true,
+    heartFailure: comorbidities.heartFailure === true,
+    chronicKidneyDisease: comorbidities.chronicKidneyDisease === true,
+    none: comorbidities.none === true,
+    otherSelected: comorbidities.otherSelected === true,
   }
-  return typeof other === "string" && other.trim().length > 0 && other !== "NA"
 }
 
 /** Requires explicit none, a selected condition, or other text — empty/legacy maps are missing. */
 export function comorbiditySelectionOk(comorbidities: Record<string, unknown> | undefined): boolean {
   if (!comorbidities) return false
-  if (comorbidities.none === true) return true
+  return hasCheckboxOrOtherSelection(comorbidityCheckboxes(comorbidities), comorbidities.other)
+}
 
-  const hasSelectedCondition = COMORBIDITY_CONDITION_KEYS.some((key) => comorbidities[key] === true)
-  if (hasSelectedCondition) return true
+function previousDrugClassCheckboxes(drugClasses: Record<string, unknown>): Record<string, boolean> {
+  return {
+    metformin: drugClasses.metformin === true,
+    sulfonylurea: drugClasses.sulfonylurea === true,
+    dpp4Inhibitor: drugClasses.dpp4Inhibitor === true,
+    sglt2Inhibitor: drugClasses.sglt2Inhibitor === true,
+    tzd: drugClasses.tzd === true,
+    insulin: drugClasses.insulin === true,
+    none: drugClasses.none === true,
+    otherSelected: drugClasses.otherSelected === true,
+  }
+}
 
-  return comorbidityOtherHasText(comorbidities.other)
+export function previousDrugClassesSelectionOk(
+  drugClasses: Record<string, unknown> | undefined
+): boolean {
+  if (!drugClasses) return false
+  return hasCheckboxOrOtherSelection(previousDrugClassCheckboxes(drugClasses), drugClasses.other)
+}
+
+function reasonForTripleFDCCheckboxes(reasons: Record<string, unknown>): Record<string, boolean> {
+  return {
+    inadequateGlycemicControl: reasons.inadequateGlycemicControl === true,
+    weightConcerns: reasons.weightConcerns === true,
+    hypoglycemiaOnPriorTherapy: reasons.hypoglycemiaOnPriorTherapy === true,
+    highPillBurden: reasons.highPillBurden === true,
+    poorAdherence: reasons.poorAdherence === true,
+    costConsiderations: reasons.costConsiderations === true,
+    physicianClinicalJudgment: reasons.physicianClinicalJudgment === true,
+    otherSelected: reasons.otherSelected === true,
+  }
+}
+
+export function reasonForTripleFDCSelectionOk(
+  reasons: Record<string, unknown> | undefined
+): boolean {
+  if (!reasons) return false
+  return hasCheckboxOrOtherSelection(reasonForTripleFDCCheckboxes(reasons), reasons.other)
 }
 
 /** True when all mandatory patient-info (sections A–E) fields are present. */
@@ -72,24 +104,13 @@ export function isPatientInfoComplete(patient: unknown): boolean {
     return false
   }
 
-  const drugClasses = data.previousDrugClasses as Record<string, boolean> | undefined
-  if (!mapHasAnyTrue(drugClasses)) return false
+  const drugClasses = data.previousDrugClasses as Record<string, unknown> | undefined
+  if (!previousDrugClassesSelectionOk(drugClasses)) return false
 
   const reasons = data.reasonForTripleFDC as Record<string, unknown> | undefined
-  if (!reasons) return false
-  const hasReason =
-    reasons.inadequateGlycemicControl === true ||
-    reasons.weightConcerns === true ||
-    reasons.hypoglycemiaOnPriorTherapy === true ||
-    reasons.highPillBurden === true ||
-    reasons.poorAdherence === true ||
-    reasons.costConsiderations === true ||
-    reasons.physicianClinicalJudgment === true ||
-    (Array.isArray(reasons.other)
-      ? reasons.other.some((v) => typeof v === "string" && v.trim() && v !== "NA")
-      : typeof reasons.other === "string" && reasons.other.trim().length > 0)
+  if (!reasonForTripleFDCSelectionOk(reasons)) return false
 
-  return hasReason
+  return true
 }
 
 export function isPatientInfoCompleteForPatient(
@@ -147,29 +168,14 @@ export function getPatientInfoValidationErrors(patient: unknown): string[] {
     errors.push("CKD eGFR category is required when Chronic Kidney Disease is selected")
   }
 
-  const drugClasses = data.previousDrugClasses as Record<string, boolean> | undefined
-  if (!mapHasAnyTrue(drugClasses)) {
+  const drugClasses = data.previousDrugClasses as Record<string, unknown> | undefined
+  if (!previousDrugClassesSelectionOk(drugClasses)) {
     errors.push("At least one previous drug class (or None) is required")
   }
 
   const reasons = data.reasonForTripleFDC as Record<string, unknown> | undefined
-  if (!reasons) {
+  if (!reasonForTripleFDCSelectionOk(reasons)) {
     errors.push("At least one reason for KC MeSempa is required")
-  } else {
-    const hasReason =
-      reasons.inadequateGlycemicControl === true ||
-      reasons.weightConcerns === true ||
-      reasons.hypoglycemiaOnPriorTherapy === true ||
-      reasons.highPillBurden === true ||
-      reasons.poorAdherence === true ||
-      reasons.costConsiderations === true ||
-      reasons.physicianClinicalJudgment === true ||
-      (Array.isArray(reasons.other)
-        ? reasons.other.some((v) => typeof v === "string" && v.trim() && v !== "NA")
-        : typeof reasons.other === "string" && reasons.other.trim().length > 0)
-    if (!hasReason) {
-      errors.push("At least one reason for KC MeSempa is required")
-    }
   }
 
   return errors

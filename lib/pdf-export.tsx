@@ -561,6 +561,7 @@ const PatientCRFDocument: React.FC<PatientCRFDocumentProps> = ({
 	             <CheckboxItem label="ASCVD" checked={!!patient.comorbidities.ascvd} />
 	             <CheckboxItem label="Heart Failure" checked={!!patient.comorbidities.heartFailure} />
 	             <CheckboxItem label="CKD" checked={!!patient.comorbidities.chronicKidneyDisease} />
+	             <CheckboxItem label="Other" checked={!!(patient.comorbidities.otherSelected || (patient.comorbidities.other && patient.comorbidities.other.length > 0 && patient.comorbidities.other[0] !== 'NA'))} />
 	           </View>
 	           {patient.comorbidities.chronicKidneyDisease && (
 	             <>

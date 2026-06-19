@@ -1,4 +1,5 @@
 import type { BaselineData, FollowUpData, Patient } from "@/lib/types"
+import { otherFieldHasText } from "@/lib/form-validation"
 
 export const FLAT_EXPORT_COLUMNS: string[] = [
   "patient_patientCode",
@@ -27,6 +28,7 @@ export const FLAT_EXPORT_COLUMNS: string[] = [
   "patient_comorbidities_heartFailure",
   "patient_comorbidities_chronicKidneyDisease",
   "patient_comorbidities_ckdEgfrCategory",
+  "patient_comorbidities_otherSelected",
   "patient_comorbidities_other",
   "patient_previousTreatmentType",
   "patient_previousDrugClasses_metformin",
@@ -35,6 +37,7 @@ export const FLAT_EXPORT_COLUMNS: string[] = [
   "patient_previousDrugClasses_sglt2Inhibitor",
   "patient_previousDrugClasses_tzd",
   "patient_previousDrugClasses_insulin",
+  "patient_previousDrugClasses_otherSelected",
   "patient_previousDrugClasses_other",
   "patient_reasonForTripleFDC_inadequateGlycemicControl",
   "patient_reasonForTripleFDC_weightConcerns",
@@ -43,6 +46,7 @@ export const FLAT_EXPORT_COLUMNS: string[] = [
   "patient_reasonForTripleFDC_poorAdherence",
   "patient_reasonForTripleFDC_costConsiderations",
   "patient_reasonForTripleFDC_physicianClinicalJudgment",
+  "patient_reasonForTripleFDC_otherSelected",
   "patient_reasonForTripleFDC_other",
   "patient_previousTherapy",
   "patient_createdAt",
@@ -251,7 +255,8 @@ function getPatientBaseRow(patient: Patient, baseline: BaselineData | null): Exp
     patient_comorbidities_heartFailure: patient.comorbidities?.heartFailure,
     patient_comorbidities_chronicKidneyDisease: patient.comorbidities?.chronicKidneyDisease,
     patient_comorbidities_ckdEgfrCategory: patient.comorbidities?.ckdEgfrCategory,
-    patient_comorbidities_other: patient.comorbidities?.other,
+    patient_comorbidities_otherSelected: resolveOtherSelected(patient.comorbidities),
+    patient_comorbidities_other: joinOtherValue(patient.comorbidities?.other),
     patient_previousTreatmentType: patient.previousTreatmentType,
     patient_previousDrugClasses_metformin: patient.previousDrugClasses?.metformin,
     patient_previousDrugClasses_sulfonylurea: patient.previousDrugClasses?.sulfonylurea,
@@ -259,7 +264,8 @@ function getPatientBaseRow(patient: Patient, baseline: BaselineData | null): Exp
     patient_previousDrugClasses_sglt2Inhibitor: patient.previousDrugClasses?.sglt2Inhibitor,
     patient_previousDrugClasses_tzd: patient.previousDrugClasses?.tzd,
     patient_previousDrugClasses_insulin: patient.previousDrugClasses?.insulin,
-    patient_previousDrugClasses_other: patient.previousDrugClasses?.other,
+    patient_previousDrugClasses_otherSelected: resolveOtherSelected(patient.previousDrugClasses),
+    patient_previousDrugClasses_other: joinOtherValue(patient.previousDrugClasses?.other),
     patient_reasonForTripleFDC_inadequateGlycemicControl: patient.reasonForTripleFDC?.inadequateGlycemicControl,
     patient_reasonForTripleFDC_weightConcerns: patient.reasonForTripleFDC?.weightConcerns,
     patient_reasonForTripleFDC_hypoglycemiaOnPriorTherapy: patient.reasonForTripleFDC?.hypoglycemiaOnPriorTherapy,
@@ -267,7 +273,8 @@ function getPatientBaseRow(patient: Patient, baseline: BaselineData | null): Exp
     patient_reasonForTripleFDC_poorAdherence: patient.reasonForTripleFDC?.poorAdherence,
     patient_reasonForTripleFDC_costConsiderations: patient.reasonForTripleFDC?.costConsiderations,
     patient_reasonForTripleFDC_physicianClinicalJudgment: patient.reasonForTripleFDC?.physicianClinicalJudgment,
-    patient_reasonForTripleFDC_other: patient.reasonForTripleFDC?.other,
+    patient_reasonForTripleFDC_otherSelected: resolveOtherSelected(patient.reasonForTripleFDC),
+    patient_reasonForTripleFDC_other: joinOtherValue(patient.reasonForTripleFDC?.other),
     patient_previousTherapy: patient.previousTherapy,
     patient_createdAt: patient.createdAt,
     patient_updatedAt: (patient as any).updatedAt,
@@ -811,6 +818,14 @@ function joinOtherValue(value: unknown): string {
   return String(value)
 }
 
+function resolveOtherSelected(
+  record: { otherSelected?: boolean; other?: unknown } | null | undefined
+): boolean {
+  if (!record) return false
+  if (record.otherSelected === true) return true
+  return otherFieldHasText(record.other)
+}
+
 function numericDiff(current: unknown, baseline: unknown): string {
   const n1 = Number(current)
   const n2 = Number(baseline)
@@ -975,7 +990,10 @@ function buildQaDynamicRow(
     none: "None",
   })
   row["Comorbidities (Selected)"] = joinSelectedOptions(
-    patient.comorbidities,
+    {
+      ...(patient.comorbidities || {}),
+      otherSelected: resolveOtherSelected(patient.comorbidities),
+    },
     {
       hypertension: "Hypertension",
       dyslipidemia: "Dyslipidemia",
@@ -983,6 +1001,7 @@ function buildQaDynamicRow(
       ascvd: "ASCVD",
       heartFailure: "Heart Failure",
       chronicKidneyDisease: "Chronic Kidney Disease",
+      otherSelected: "Other",
     },
     ["ckdEgfrCategory", "other"]
   )
@@ -990,7 +1009,10 @@ function buildQaDynamicRow(
   row["Comorbidities Other"] = joinOtherValue(patient.comorbidities?.other)
   row["Previous Treatment Type"] = patient.previousTreatmentType || ""
   row["Previous Drug Classes (Selected)"] = joinSelectedOptions(
-    patient.previousDrugClasses,
+    {
+      ...(patient.previousDrugClasses || {}),
+      otherSelected: resolveOtherSelected(patient.previousDrugClasses),
+    },
     {
       metformin: "Metformin",
       sulfonylurea: "Sulfonylurea",
@@ -998,12 +1020,16 @@ function buildQaDynamicRow(
       sglt2Inhibitor: "SGLT2 Inhibitor",
       tzd: "TZD",
       insulin: "Insulin",
+      otherSelected: "Other",
     },
     ["other"]
   )
   row["Previous Drug Classes Other"] = joinOtherValue(patient.previousDrugClasses?.other)
   row["Reason for Triple FDC (Selected)"] = joinSelectedOptions(
-    patient.reasonForTripleFDC,
+    {
+      ...(patient.reasonForTripleFDC || {}),
+      otherSelected: resolveOtherSelected(patient.reasonForTripleFDC),
+    },
     {
       inadequateGlycemicControl: "Inadequate Glycemic Control",
       weightConcerns: "Weight Concerns",
@@ -1012,6 +1038,7 @@ function buildQaDynamicRow(
       poorAdherence: "Poor Adherence",
       costConsiderations: "Cost Considerations",
       physicianClinicalJudgment: "Physician Clinical Judgment",
+      otherSelected: "Other",
     },
     ["other"]
   )
