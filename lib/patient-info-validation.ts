@@ -1,4 +1,4 @@
-import { hasAtLeastOneCheckbox, hasCheckboxOrOtherSelection } from "@/lib/form-validation"
+import { hasAtLeastOneCheckbox, hasCheckboxOrOtherSelection, otherFieldHasText } from "@/lib/form-validation"
 import type { Patient } from "@/lib/types"
 
 function isNonEmptyString(value: unknown): value is string {
@@ -27,9 +27,15 @@ function comorbidityCheckboxes(comorbidities: Record<string, unknown>): Record<s
   }
 }
 
+function otherCheckboxHasRequiredText(record: Record<string, unknown> | undefined): boolean {
+  if (!record || record.otherSelected !== true) return true
+  return otherFieldHasText(record.other)
+}
+
 /** Requires explicit none, a selected condition, or other text — empty/legacy maps are missing. */
 export function comorbiditySelectionOk(comorbidities: Record<string, unknown> | undefined): boolean {
   if (!comorbidities) return false
+  if (!otherCheckboxHasRequiredText(comorbidities)) return false
   return hasCheckboxOrOtherSelection(comorbidityCheckboxes(comorbidities), comorbidities.other)
 }
 
@@ -50,6 +56,7 @@ export function previousDrugClassesSelectionOk(
   drugClasses: Record<string, unknown> | undefined
 ): boolean {
   if (!drugClasses) return false
+  if (!otherCheckboxHasRequiredText(drugClasses)) return false
   return hasCheckboxOrOtherSelection(previousDrugClassCheckboxes(drugClasses), drugClasses.other)
 }
 
@@ -70,6 +77,7 @@ export function reasonForTripleFDCSelectionOk(
   reasons: Record<string, unknown> | undefined
 ): boolean {
   if (!reasons) return false
+  if (!otherCheckboxHasRequiredText(reasons)) return false
   return hasCheckboxOrOtherSelection(reasonForTripleFDCCheckboxes(reasons), reasons.other)
 }
 

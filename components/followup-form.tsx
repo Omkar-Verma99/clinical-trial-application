@@ -1877,19 +1877,20 @@ export const FollowUpForm = memo(function FollowUpForm({
                   />
                   Other
                 </Label>
-                <Input
-                  type="text"
-                  placeholder="Specify other patient profile..."
-                  value={formData.profileOtherText}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      profileOtherText: e.target.value,
-                      profileOther: e.target.value.trim() ? true : prev.profileOther,
-                    }))
-                  }
-                  className="ml-6"
-                />
+                {formData.profileOther && (
+                  <Input
+                    type="text"
+                    placeholder="Specify other patient profile..."
+                    value={formData.profileOtherText}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        profileOtherText: e.target.value,
+                      }))
+                    }
+                    className="ml-6"
+                  />
+                )}
               </div>
             </div>
           </div>

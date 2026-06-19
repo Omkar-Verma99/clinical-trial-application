@@ -216,10 +216,12 @@ export function PatientFormPage({
           poorAdherence: reasonForTripleFDC.poorAdherence,
           costConsiderations: reasonForTripleFDC.costConsiderations,
           physicianClinicalJudgment: reasonForTripleFDC.physicianClinicalJudgment,
-          otherSelected: reasonForTripleFDC.otherSelected,
+          otherSelected:
+            reasonForTripleFDC.otherSelected && Boolean(reasonForTripleFDC.other.trim()),
         },
         reasonForTripleFDC.other
-      ),
+      ) &&
+      (!reasonForTripleFDC.otherSelected || Boolean(reasonForTripleFDC.other.trim())),
     [reasonForTripleFDC]
   )
 
@@ -266,34 +268,42 @@ export function PatientFormPage({
         case "field-diabetesComplications":
           return hasAtLeastOneCheckbox(diabetesComplications)
         case "field-comorbidities":
-          return hasCheckboxOrOtherSelection(
-            {
-              hypertension: comorbidities.hypertension,
-              dyslipidemia: comorbidities.dyslipidemia,
-              obesity: comorbidities.obesity,
-              ascvd: comorbidities.ascvd,
-              heartFailure: comorbidities.heartFailure,
-              chronicKidneyDisease: comorbidities.chronicKidneyDisease,
-              none: comorbidities.none,
-              otherSelected: comorbidities.otherSelected,
-            },
-            comorbidities.other
+          return (
+            hasCheckboxOrOtherSelection(
+              {
+                hypertension: comorbidities.hypertension,
+                dyslipidemia: comorbidities.dyslipidemia,
+                obesity: comorbidities.obesity,
+                ascvd: comorbidities.ascvd,
+                heartFailure: comorbidities.heartFailure,
+                chronicKidneyDisease: comorbidities.chronicKidneyDisease,
+                none: comorbidities.none,
+                otherSelected:
+                  comorbidities.otherSelected && Boolean(comorbidities.other.trim()),
+              },
+              comorbidities.other
+            ) && (!comorbidities.otherSelected || Boolean(comorbidities.other.trim()))
           )
         case "field-ckdEgfrCategory":
           return !comorbidities.chronicKidneyDisease || !!comorbidities.ckdEgfrCategory
         case "field-previousDrugClasses":
-          return hasCheckboxOrOtherSelection(
-            {
-              metformin: previousDrugClasses.metformin,
-              sulfonylurea: previousDrugClasses.sulfonylurea,
-              dpp4Inhibitor: previousDrugClasses.dpp4Inhibitor,
-              sglt2Inhibitor: previousDrugClasses.sglt2Inhibitor,
-              tzd: previousDrugClasses.tzd,
-              insulin: previousDrugClasses.insulin,
-              none: previousDrugClasses.none,
-              otherSelected: previousDrugClasses.otherSelected,
-            },
-            previousDrugClasses.other
+          return (
+            hasCheckboxOrOtherSelection(
+              {
+                metformin: previousDrugClasses.metformin,
+                sulfonylurea: previousDrugClasses.sulfonylurea,
+                dpp4Inhibitor: previousDrugClasses.dpp4Inhibitor,
+                sglt2Inhibitor: previousDrugClasses.sglt2Inhibitor,
+                tzd: previousDrugClasses.tzd,
+                insulin: previousDrugClasses.insulin,
+                none: previousDrugClasses.none,
+                otherSelected:
+                  previousDrugClasses.otherSelected &&
+                  Boolean(previousDrugClasses.other.trim()),
+              },
+              previousDrugClasses.other
+            ) &&
+            (!previousDrugClasses.otherSelected || Boolean(previousDrugClasses.other.trim()))
           )
         case "field-reasonForTripleFDC":
           return hasReasonForKcMeSempa
@@ -656,12 +666,20 @@ export function PatientFormPage({
       heartFailure: comorbidities.heartFailure,
       chronicKidneyDisease: comorbidities.chronicKidneyDisease,
       none: comorbidities.none,
-      otherSelected: comorbidities.otherSelected,
+      otherSelected:
+        comorbidities.otherSelected && Boolean(comorbidities.other.trim()),
     }
     if (!hasCheckboxOrOtherSelection(comorbidityChecks, comorbidities.other)) {
       abortValidation(
         [{ fieldId: "field-comorbidities", message: "Select at least one comorbidity (or None)." }],
         "Missing selection"
+      )
+      return
+    }
+    if (comorbidities.otherSelected && !comorbidities.other.trim()) {
+      abortValidation(
+        [{ fieldId: "field-comorbidities", message: "Specify other comorbidities when Other is selected." }],
+        "Missing other details"
       )
       return
     }
@@ -682,12 +700,20 @@ export function PatientFormPage({
       tzd: previousDrugClasses.tzd,
       insulin: previousDrugClasses.insulin,
       none: previousDrugClasses.none,
-      otherSelected: previousDrugClasses.otherSelected,
+      otherSelected:
+        previousDrugClasses.otherSelected && Boolean(previousDrugClasses.other.trim()),
     }
     if (!hasCheckboxOrOtherSelection(drugClassChecks, previousDrugClasses.other)) {
       abortValidation(
         [{ fieldId: "field-previousDrugClasses", message: "Select at least one previously used drug class (or None)." }],
         "Missing selection"
+      )
+      return
+    }
+    if (previousDrugClasses.otherSelected && !previousDrugClasses.other.trim()) {
+      abortValidation(
+        [{ fieldId: "field-previousDrugClasses", message: "Specify other drug classes when Other is selected." }],
+        "Missing other details"
       )
       return
     }
@@ -805,6 +831,13 @@ export function PatientFormPage({
       abortValidation(
         [{ fieldId: "field-reasonForTripleFDC", message: "Select at least one reason for KC MeSempa initiation." }],
         "Missing selection"
+      )
+      return
+    }
+    if (reasonForTripleFDC.otherSelected && !reasonForTripleFDC.other.trim()) {
+      abortValidation(
+        [{ fieldId: "field-reasonForTripleFDC", message: "Specify other reasons when Other is selected." }],
+        "Missing other details"
       )
       return
     }
@@ -1482,22 +1515,23 @@ export function PatientFormPage({
                   </div>
                 )}
 
-                <div className="space-y-2 mt-4">
-                  <Label htmlFor="otherComorbidity">Specify other comorbidities</Label>
-                  <Input
-                    id="otherComorbidity"
-                    placeholder="Specify other conditions"
-                    value={comorbidities.other}
-                    onChange={(e) =>
-                      setComorbidities((prev) => ({
-                        ...prev,
-                        other: e.target.value,
-                        otherSelected: e.target.value.trim() ? true : prev.otherSelected,
-                        none: e.target.value.trim() ? false : prev.none,
-                      }))
-                    }
-                  />
-                </div>
+                {comorbidities.otherSelected && (
+                  <div className="space-y-2 mt-4">
+                    <Label htmlFor="otherComorbidity">Specify other comorbidities</Label>
+                    <Input
+                      id="otherComorbidity"
+                      placeholder="Specify other conditions"
+                      value={comorbidities.other}
+                      onChange={(e) =>
+                        setComorbidities((prev) => ({
+                          ...prev,
+                          other: e.target.value,
+                          none: e.target.value.trim() ? false : prev.none,
+                        }))
+                      }
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Prior Anti-Diabetic Therapy */}
@@ -1589,18 +1623,19 @@ export function PatientFormPage({
                       </Label>
                     </div>
                   </div>
-                  <Input
-                    placeholder="Other drug classes (comma-separated)"
-                    value={previousDrugClasses.other}
-                    onChange={(e) =>
-                      setPreviousDrugClasses((prev) => ({
-                        ...prev,
-                        other: e.target.value,
-                        otherSelected: e.target.value.trim() ? true : prev.otherSelected,
-                        none: e.target.value ? false : prev.none,
-                      }))
-                    }
-                  />
+                  {previousDrugClasses.otherSelected && (
+                    <Input
+                      placeholder="Other drug classes (comma-separated)"
+                      value={previousDrugClasses.other}
+                      onChange={(e) =>
+                        setPreviousDrugClasses((prev) => ({
+                          ...prev,
+                          other: e.target.value,
+                          none: e.target.value ? false : prev.none,
+                        }))
+                      }
+                    />
+                  )}
                 </div>
 
                 <div id="field-reasonForTripleFDC" className="space-y-3">
@@ -1646,17 +1681,18 @@ export function PatientFormPage({
                       </Label>
                     </div>
                   </div>
-                  <Input
-                    placeholder="Other reasons"
-                    value={reasonForTripleFDC.other}
-                    onChange={(e) =>
-                      setReasonForTripleFDC((prev) => ({
-                        ...prev,
-                        other: e.target.value,
-                        otherSelected: e.target.value.trim() ? true : prev.otherSelected,
-                      }))
-                    }
-                  />
+                  {reasonForTripleFDC.otherSelected && (
+                    <Input
+                      placeholder="Other reasons"
+                      value={reasonForTripleFDC.other}
+                      onChange={(e) =>
+                        setReasonForTripleFDC((prev) => ({
+                          ...prev,
+                          other: e.target.value,
+                        }))
+                      }
+                    />
+                  )}
                 </div>
               </div>
 

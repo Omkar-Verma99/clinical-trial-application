@@ -136,15 +136,21 @@ service cloud.firestore {
       );
     }
 
+    function otherCheckboxHasRequiredText(map) {
+      return map == null || map.otherSelected != true || otherFieldHasText(map.other);
+    }
+
     function reasonForKcMeSempaOk(reasons) {
-      return reasons != null && (
+      return reasons != null &&
+        otherCheckboxHasRequiredText(reasons) && (
         checkboxGroupHasSelection(reasons) ||
         otherFieldHasText(reasons.other)
       );
     }
 
     function drugClassesOk(classes) {
-      return classes != null && (
+      return classes != null &&
+        otherCheckboxHasRequiredText(classes) && (
         classes.none == true ||
         checkboxGroupHasSelection(classes) ||
         otherFieldHasText(classes.other)
@@ -153,6 +159,7 @@ service cloud.firestore {
 
     function comorbiditiesOk(comorbidities) {
       return comorbidities != null &&
+        otherCheckboxHasRequiredText(comorbidities) &&
         (
           comorbidities.none == true ||
           checkboxGroupHasSelection(comorbidities) ||
