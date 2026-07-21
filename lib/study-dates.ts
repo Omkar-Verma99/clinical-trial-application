@@ -116,6 +116,52 @@ export function validateBaselineVisitDate(
   return null
 }
 
+/** Saved pair has treatment after baseline, in the future, or otherwise invalid. */
+export function hasLegacyInvertedStudyDates(
+  baselineVisitDate?: string,
+  treatmentInitiationDate?: string
+): boolean {
+  const baseline = normalizeStudyDate(baselineVisitDate)
+  const treatment = normalizeStudyDate(treatmentInitiationDate)
+  if (!baseline || !treatment) return false
+  if (compareIsoDates(treatment, baseline) > 0) return true
+  if (!isNotFutureDate(treatment)) return true
+  if (compareIsoDates(treatment, TREATMENT_INITIATION_MIN) < 0) return true
+  return false
+}
+
+/** Edit-mode baseline validation: skip cross-date block when fixing a legacy bad saved pair. */
+export function validateBaselineVisitDateForEdit(
+  value: string,
+  treatmentInitiationDate?: string,
+  legacyPair?: { baseline?: string; treatment?: string }
+): string | null {
+  if (
+    legacyPair?.baseline &&
+    legacyPair?.treatment &&
+    hasLegacyInvertedStudyDates(legacyPair.baseline, legacyPair.treatment)
+  ) {
+    return validateBaselineVisitDate(value, undefined)
+  }
+  return validateBaselineVisitDate(value, treatmentInitiationDate)
+}
+
+/** Edit-mode treatment validation: skip cross-date block when fixing a legacy bad saved pair. */
+export function validateTreatmentInitiationDateForEdit(
+  value: string,
+  baselineVisitDate?: string,
+  legacyPair?: { baseline?: string; treatment?: string }
+): string | null {
+  if (
+    legacyPair?.baseline &&
+    legacyPair?.treatment &&
+    hasLegacyInvertedStudyDates(legacyPair.baseline, legacyPair.treatment)
+  ) {
+    return validateTreatmentInitiationDate(value, undefined)
+  }
+  return validateTreatmentInitiationDate(value, baselineVisitDate)
+}
+
 export function validateTreatmentInitiationDate(
   value: string,
   baselineVisitDate?: string

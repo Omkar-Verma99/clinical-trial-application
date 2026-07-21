@@ -32,7 +32,7 @@ import { hasAtLeastOneCheckbox, normalizeOtherArray, hasCheckboxOrOtherSelection
 import { isBaselineCompleteForPatient } from "@/lib/baseline-validation"
 import { isPatientInfoComplete } from "@/lib/patient-info-validation"
 import {
-  validateBaselineVisitDate,
+  validateBaselineVisitDateForEdit,
   BASELINE_VISIT_MIN,
   BASELINE_VISIT_MAX,
   normalizeStudyDate,
@@ -637,9 +637,13 @@ export function PatientFormPage({
         }
       }
 
-      const baselineDateError = validateBaselineVisitDate(
+      const baselineDateError = validateBaselineVisitDateForEdit(
         normalizedBaselineVisitDate,
-        latestTreatmentDate || undefined
+        latestTreatmentDate || undefined,
+        {
+          baseline: originalBaselineVisitDateRef.current,
+          treatment: latestTreatmentDate,
+        }
       )
       if (baselineDateError) {
         abortValidation(

@@ -27,8 +27,9 @@ import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import {
   TREATMENT_INITIATION_MIN,
   todayIsoDate,
-  validateBaselineVisitDate,
-  validateTreatmentInitiationDate,
+  normalizeStudyDate,
+  validateBaselineVisitDateForEdit,
+  validateTreatmentInitiationDateForEdit,
 } from "@/lib/study-dates"
 import { isBaselineComplete } from "@/lib/baseline-validation"
 import { buildBaselineSavePatch } from "@/lib/patient-save"
@@ -191,6 +192,14 @@ export const BaselineForm = memo(function BaselineForm({
         return !!value && Number.isFinite(parsed) && parsed >= min && parsed <= max
       }
 
+      const baselineForCompare =
+        normalizeStudyDate(patientBaselineVisitDate) ||
+        normalizeStudyDate(formData.baselineVisitDate)
+      const legacyPair = {
+        baseline: baselineForCompare,
+        treatment: normalizeStudyDate(existingData?.treatmentInitiationDate),
+      }
+
       switch (fieldId) {
         case "hba1c":
           return inRange(formData.hba1c, ranges.hba1c.min, ranges.hba1c.max)
@@ -203,7 +212,11 @@ export const BaselineForm = memo(function BaselineForm({
         case "baselineVisitDate":
           return (
             !!formData.baselineVisitDate &&
-            !validateBaselineVisitDate(formData.baselineVisitDate, formData.treatmentInitiationDate)
+            !validateBaselineVisitDateForEdit(
+              formData.baselineVisitDate,
+              formData.treatmentInitiationDate,
+              legacyPair
+            )
           )
         case "bpSys":
           return inRange(formData.bloodPressureSystolic, ranges.bpSystolic.min, ranges.bpSystolic.max)
@@ -225,7 +238,11 @@ export const BaselineForm = memo(function BaselineForm({
         case "initDate":
           return (
             !!formData.treatmentInitiationDate &&
-            !validateTreatmentInitiationDate(formData.treatmentInitiationDate, formData.baselineVisitDate)
+            !validateTreatmentInitiationDateForEdit(
+              formData.treatmentInitiationDate,
+              baselineForCompare,
+              legacyPair
+            )
           )
         case "field-counseling":
           return hasAtLeastOneTrue(counseling)
@@ -291,11 +308,15 @@ export const BaselineForm = memo(function BaselineForm({
       if (!formData.ppg) addIssue("ppg", "PPG (mg/dL) is required.")
       if (!formData.weight) addIssue("weight", "Weight (kg) is required.")
       if (!formData.baselineVisitDate) addIssue("baselineVisitDate", "Baseline visit date is required.")
-      const baselineDateError = validateBaselineVisitDate(
-        formData.baselineVisitDate,
-        formData.treatmentInitiationDate
-      )
-      if (baselineDateError) addIssue("baselineVisitDate", baselineDateError)
+
+      const baselineForCompare =
+        normalizeStudyDate(patientBaselineVisitDate) ||
+        normalizeStudyDate(formData.baselineVisitDate)
+      const legacyPair = {
+        baseline: baselineForCompare,
+        treatment: normalizeStudyDate(existingData?.treatmentInitiationDate),
+      }
+
       if (!formData.bloodPressureSystolic) addIssue("bpSys", "BP Systolic (mmHg) is required.")
       if (!formData.bloodPressureDiastolic) addIssue("bpDia", "BP Diastolic (mmHg) is required.")
       if (!formData.heartRate) addIssue("heartRate", "Heart rate (bpm) is required.")
@@ -308,9 +329,10 @@ export const BaselineForm = memo(function BaselineForm({
         addIssue("field-counseling", "Select at least one counseling option.")
       }
 
-      const treatmentDateError = validateTreatmentInitiationDate(
+      const treatmentDateError = validateTreatmentInitiationDateForEdit(
         formData.treatmentInitiationDate,
-        formData.baselineVisitDate
+        baselineForCompare || undefined,
+        legacyPair
       )
       if (treatmentDateError) addIssue("initDate", treatmentDateError)
 
