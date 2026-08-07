@@ -434,9 +434,9 @@ service cloud.firestore {
 
       function immutableGovernanceGuard() {
         // Doctors must never mutate lock metadata from client writes.
-        // Missing map fields compare unequal to null in rules; treat both-absent as unchanged.
-        return (!('sectionLocks' in resource.data) && !('sectionLocks' in request.resource.data)) ||
-          request.resource.data.sectionLocks == resource.data.sectionLocks;
+        // Use changedKeys only — full map equality fails when sectionLocks nests nulls
+        // (e.g. lockedAt: null), which blocked every follow-up save on locked-metadata patients.
+        return !changedKeys().hasAny(['sectionLocks']);
       }
 
       function immutableOwnershipGuard() {
