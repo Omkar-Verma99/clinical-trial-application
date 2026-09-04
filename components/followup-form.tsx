@@ -51,7 +51,7 @@ import {
 } from "@/lib/form-field-navigation"
 import { usePersistentFieldHighlights } from "@/hooks/use-persistent-field-highlights"
 import { auth } from "@/lib/firebase"
-import { hasAtLeastOneCheckbox, hasDuplicateVisitDate } from "@/lib/form-validation"
+import { hasAtLeastOneCheckbox, hasDuplicateVisitDate, otherFieldHasText } from "@/lib/form-validation"
 import { preserveScrollPosition } from "@/lib/scroll-preserve"
 import { todayIsoDate, validateFollowUpVisitDate } from "@/lib/study-dates"
 import { getFirestoreSaveErrorMessage } from "@/lib/section-locks"
@@ -260,8 +260,12 @@ export const FollowUpForm = memo(function FollowUpForm({
     htnT2dm: existingData?.physicianAssessment?.preferredPatientProfiles?.htnPlusT2dm ?? false,
     elderlyPatients: existingData?.physicianAssessment?.preferredPatientProfiles?.elderlyPatients ?? false,
     profileOther: (existingData?.physicianAssessment?.preferredPatientProfiles as { other?: boolean })?.other ?? false,
-    profileOtherText:
-      (existingData?.physicianAssessment?.preferredPatientProfiles as { otherDetails?: string })?.otherDetails || "",
+    profileOtherText: (() => {
+      const details =
+        (existingData?.physicianAssessment?.preferredPatientProfiles as { otherDetails?: string })?.otherDetails || ""
+      // Stored placeholder "NA" must not load as typed Other text (breaks re-save validation).
+      return details.trim() && details.trim() !== "NA" ? details : ""
+    })(),
     noPersonalIdentifiers: existingData?.dataPrivacy?.noPersonalIdentifiersRecorded ?? false,
     dataAsRoutinePractice: existingData?.dataPrivacy?.dataCollectedAsRoutineClinicalPractice ?? false,
     patientIdentityMapping: existingData?.dataPrivacy?.patientIdentityMappingAtClinicOnly ?? false,
@@ -606,11 +610,11 @@ export const FollowUpForm = memo(function FollowUpForm({
             ckdPatients: formData.ckdPatients,
             htnPlusT2dm: formData.htnT2dm,
             elderlyPatients: formData.elderlyPatients,
-            other: formData.profileOther || Boolean(formData.profileOtherText.trim()),
-            otherDetails:
-              formData.profileOther || formData.profileOtherText.trim()
-                ? DOMPurify.sanitize(formData.profileOtherText)
-                : "NA",
+            // Treat placeholder "NA" as empty — Boolean("NA") was wrongly marking Other selected.
+            other: formData.profileOther === true || otherFieldHasText(formData.profileOtherText),
+            otherDetails: otherFieldHasText(formData.profileOtherText)
+              ? DOMPurify.sanitize(formData.profileOtherText.trim())
+              : "NA",
           },
         },
         dataPrivacy: {
@@ -633,11 +637,15 @@ export const FollowUpForm = memo(function FollowUpForm({
 
       const followUpComplete = isFollowUpComplete(data)
       if (!followUpComplete) {
-        toast({
-          variant: "destructive",
-          title: "Follow-up incomplete",
-          description: FOLLOWUP_INCOMPLETE_MESSAGE,
-        })
+        const incompleteReasons = getFollowUpIncompleteReasons(data)
+        const issues = incompleteReasons.map((reason) => ({
+          fieldId: followUpReasonToFieldId(reason),
+          message: `${reason.replace(/\./g, " ")} needs attention.`,
+        }))
+        abortValidation(
+          issues.length > 0 ? issues : [{ fieldId: "comments", message: FOLLOWUP_INCOMPLETE_MESSAGE }],
+          "Follow-up incomplete"
+        )
         return
       }
 
